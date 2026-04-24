@@ -461,9 +461,19 @@ export async function fetchLoop() {
 
 const JORTT_BASE = "https://api.jortt.nl";
 const JORTT_TOKEN_URL = "https://app.jortt.nl/oauth-provider/oauth/token";
-const JORTT_SCOPES = "invoices:read expenses:read reports:read organizations:read";
 
-async function getJorttToken(): Promise<string | null> {
+// Jortt's client_credentials flow only allows ONE scope per token request.
+// Fetch a separate token per scope and cache it for its lifetime.
+type JorttScope =
+  | "invoices:read"
+  | "expenses:read"
+  | "reports:read"
+  | "organizations:read"
+  | "customers:read";
+
+const jorttTokenCache = new Map<JorttScope, { token: string; expiresAt: number }>();
+
+async function getJorttToken(scope: JorttScope): Promise<string | null> {
   const clientId = process.env.JORTT_CLIENT_ID;
   const clientSecret = process.env.JORTT_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -471,8 +481,13 @@ async function getJorttToken(): Promise<string | null> {
     return null;
   }
 
+  // Reuse cached token if still valid (with 60s buffer)
+  const cached = jorttTokenCache.get(scope);
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.token;
+  }
+
   try {
-    // Per Jortt docs, use HTTP Basic auth with the token endpoint.
     const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     const res = await fetch(JORTT_TOKEN_URL, {
       method: "POST",
@@ -483,18 +498,26 @@ async function getJorttToken(): Promise<string | null> {
       },
       body: new URLSearchParams({
         grant_type: "client_credentials",
-        scope: JORTT_SCOPES,
+        scope,
       }).toString(),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      console.error(`[jortt] Token request failed ${res.status}: ${text.slice(0, 300)}`);
+      console.error(`[jortt] Token request failed for scope "${scope}" ${res.status}: ${text.slice(0, 300)}`);
       return null;
     }
     const json = await res.json();
-    return json.access_token ?? null;
+    const token: string | null = json.access_token ?? null;
+    const expiresIn: number = typeof json.expires_in === "number" ? json.expires_in : 7200;
+    if (token) {
+      jorttTokenCache.set(scope, {
+        token,
+        expiresAt: Date.now() + expiresIn * 1000,
+      });
+    }
+    return token;
   } catch (err) {
-    console.error("[jortt] Token request error:", err);
+    console.error(`[jortt] Token request error for scope "${scope}":`, err);
     return null;
   }
 }
