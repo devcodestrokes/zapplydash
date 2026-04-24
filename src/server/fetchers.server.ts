@@ -563,105 +563,115 @@ const parseAmount = (a: any): number => {
 };
 
 export async function fetchJortt() {
-  const token = await getJorttToken();
-  if (!token) return null;
+  // Fetch separate tokens per scope (Jortt allows only ONE scope per token).
+  // expenses:read may not be enabled on the app — handle gracefully.
+  const [invoicesToken, expensesToken] = await Promise.all([
+    getJorttToken("invoices:read"),
+    getJorttToken("expenses:read"),
+  ]);
 
-  try {
-    // ─ Revenue: paid/sent invoices via v2 API ────────────────────────────────
-    const [sent, paid] = await Promise.all([
-      jorttFetchAll("/v2/invoices?invoice_status=sent", token),
-      jorttFetchAll("/v2/invoices?invoice_status=paid", token),
-    ]);
-    // Dedupe by id (an invoice may show up in multiple status filters)
-    const invoiceMap = new Map<string, any>();
-    for (const inv of [...sent, ...paid]) {
-      if (inv?.id) invoiceMap.set(inv.id, inv);
-    }
-    const invoices = Array.from(invoiceMap.values());
-
-    const revenueByMonth: Record<string, number> = {};
-    let revenueInvoiceCount = 0;
-    for (const inv of invoices) {
-      const dateStr =
-        inv.invoice_date ??
-        inv.delivery_period ??
-        inv.created_at ??
-        "";
-      if (!dateStr) continue;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) continue;
-      const total = parseAmount(inv.invoice_total ?? inv.total ?? inv.amount);
-      if (total <= 0) continue;
-      const mk = monthKey(d);
-      revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
-      revenueInvoiceCount++;
-    }
-
-    // ─ OpEx: cost-type expenses via v3 API ──────────────────────────────────
-    const expenses = await jorttFetchAll("/v3/expenses?expense_type=cost", token);
-
-    // Aggregate opex by month and by ledger account name (for breakdown)
-    const opexMonthMap: Record<string, number> = {};
-    const opexDetail: Record<string, Record<string, number>> = {}; // month -> { category: amount }
-
-    for (const exp of expenses) {
-      const dateStr =
-        exp.delivery_period ??
-        exp.vat_date ??
-        exp.expense_date ??
-        exp.created_at ??
-        "";
-      if (!dateStr) continue;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) continue;
-
-      const total = parseAmount(
-        exp.raw_total_amount ?? exp.total_amount ?? exp.amount ?? exp.total,
-      );
-      if (total <= 0) continue;
-
-      const mk = monthKey(d);
-      opexMonthMap[mk] = (opexMonthMap[mk] ?? 0) + total;
-
-      const category =
-        exp.ledger_account_name ??
-        exp.ledger_account?.name ??
-        exp.description ??
-        "Other";
-      opexDetail[mk] = opexDetail[mk] ?? {};
-      opexDetail[mk][category] = (opexDetail[mk][category] ?? 0) + total;
-    }
-
-    // Convert to ordered array (chronological)
-    const opexByMonth = Object.entries(opexMonthMap)
-      .map(([month, total]) => ({ month, total: Math.round(total) }))
-      .sort((a, b) => {
-        // Sort by parsing "Jan '24" style key
-        const parse = (s: string) => {
-          const [m, y] = s.split(" '");
-          return new Date(`${m} 1, 20${y}`).getTime();
-        };
-        return parse(a.month) - parse(b.month);
-      });
-
-    const live = Object.keys(revenueByMonth).length > 0 || opexByMonth.length > 0;
-
-    console.log(
-      `[jortt] Loaded ${invoices.length} invoices (${revenueInvoiceCount} with revenue), ${expenses.length} expenses. Live=${live}`,
-    );
-
-    return {
-      opexByMonth,
-      opexDetail,
-      revenueByMonth,
-      invoiceCount: revenueInvoiceCount,
-      expenseCount: expenses.length,
-      live,
-    };
-  } catch (err) {
-    console.error("[jortt] fetchJortt error:", err);
+  if (!invoicesToken && !expensesToken) {
+    console.warn("[jortt] No usable tokens for any scope — Jortt disabled");
     return null;
   }
+
+  const revenueByMonth: Record<string, number> = {};
+  let revenueInvoiceCount = 0;
+  let invoicesLoaded = 0;
+
+  // ─ Revenue: paid/sent invoices via v2 API ────────────────────────────────
+  if (invoicesToken) {
+    try {
+      const [sent, paid] = await Promise.all([
+        jorttFetchAll("/v2/invoices?invoice_status=sent", invoicesToken),
+        jorttFetchAll("/v2/invoices?invoice_status=paid", invoicesToken),
+      ]);
+      const invoiceMap = new Map<string, any>();
+      for (const inv of [...sent, ...paid]) {
+        if (inv?.id) invoiceMap.set(inv.id, inv);
+      }
+      const invoices = Array.from(invoiceMap.values());
+      invoicesLoaded = invoices.length;
+
+      for (const inv of invoices) {
+        const dateStr = inv.invoice_date ?? inv.delivery_period ?? inv.created_at ?? "";
+        if (!dateStr) continue;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) continue;
+        const total = parseAmount(inv.invoice_total ?? inv.total ?? inv.amount);
+        if (total <= 0) continue;
+        const mk = monthKey(d);
+        revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
+        revenueInvoiceCount++;
+      }
+    } catch (err) {
+      console.error("[jortt] invoices fetch error:", err);
+    }
+  }
+
+  // ─ OpEx: cost-type expenses via v3 API ──────────────────────────────────
+  const opexMonthMap: Record<string, number> = {};
+  const opexDetail: Record<string, Record<string, number>> = {};
+  let expensesLoaded = 0;
+
+  if (expensesToken) {
+    try {
+      const expenses = await jorttFetchAll("/v3/expenses?expense_type=cost", expensesToken);
+      expensesLoaded = expenses.length;
+
+      for (const exp of expenses) {
+        const dateStr =
+          exp.delivery_period ?? exp.vat_date ?? exp.expense_date ?? exp.created_at ?? "";
+        if (!dateStr) continue;
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) continue;
+
+        const total = parseAmount(
+          exp.raw_total_amount ?? exp.total_amount ?? exp.amount ?? exp.total,
+        );
+        if (total <= 0) continue;
+
+        const mk = monthKey(d);
+        opexMonthMap[mk] = (opexMonthMap[mk] ?? 0) + total;
+
+        const category =
+          exp.ledger_account_name ?? exp.ledger_account?.name ?? exp.description ?? "Other";
+        opexDetail[mk] = opexDetail[mk] ?? {};
+        opexDetail[mk][category] = (opexDetail[mk][category] ?? 0) + total;
+      }
+    } catch (err) {
+      console.error("[jortt] expenses fetch error:", err);
+    }
+  } else {
+    console.warn(
+      "[jortt] expenses:read scope not granted — OpEx unavailable. Enable it on your Jortt app.",
+    );
+  }
+
+  const opexByMonth = Object.entries(opexMonthMap)
+    .map(([month, total]) => ({ month, total: Math.round(total) }))
+    .sort((a, b) => {
+      const parse = (s: string) => {
+        const [m, y] = s.split(" '");
+        return new Date(`${m} 1, 20${y}`).getTime();
+      };
+      return parse(a.month) - parse(b.month);
+    });
+
+  const live = Object.keys(revenueByMonth).length > 0 || opexByMonth.length > 0;
+
+  console.log(
+    `[jortt] Loaded ${invoicesLoaded} invoices (${revenueInvoiceCount} with revenue), ${expensesLoaded} expenses. Live=${live}`,
+  );
+
+  return {
+    opexByMonth,
+    opexDetail,
+    revenueByMonth,
+    invoiceCount: revenueInvoiceCount,
+    expenseCount: expensesLoaded,
+    live,
+  };
 }
 
 // ─── Connections summary (from DB + env vars) ────────────────────────────────
