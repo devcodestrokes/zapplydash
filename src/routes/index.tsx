@@ -64,7 +64,7 @@ function HomePage() {
   useEffect(() => {
     if (session === undefined) return;
     if (!session) {
-      navigate({ to: "/login", search: {} });
+      navigate({ to: "/login", search: { error: undefined } });
       return;
     }
     if (!previewBypass) {
