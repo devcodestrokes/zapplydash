@@ -1379,22 +1379,176 @@ const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail,
    VIEW: PILLAR 4 — BALANCE SHEET
    ========================================================================= */
 
-const BalanceView = () => (
-  <>
-    <div>
-      <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
-      <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
-      <p className="mt-1 text-[13px] text-neutral-500">Financial position · assets, liabilities, equity.</p>
-    </div>
-    <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
-      <Scale size={32} className="text-neutral-300" />
-      <div className="mt-4 text-[15px] font-semibold text-neutral-700">Accounting integration required</div>
-      <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-        Balance sheet requires Xero (or Jortt with full purchase invoice scope). Connect Xero to unlock cash positions, accounts payable, VAT liabilities, and equity rollup.
+const BalanceView = ({ jorttData = null } = {}) => {
+  const hasJortt = !!jorttData?.live;
+
+  // Derive YTD figures from Jortt data
+  const parseMonth = (s) => {
+    const [m, y] = s.split(" '");
+    return new Date(`${m} 1, 20${y}`);
+  };
+
+  const currentYear = new Date().getFullYear();
+  const currentMonthKey = new Date()
+    .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+    .replace(" ", " '");
+
+  const revenueByMonth = jorttData?.revenueByMonth ?? {};
+  const opexByMonth = jorttData?.opexByMonth ?? [];
+
+  let ytdRevenue = 0;
+  let mtdRevenue = 0;
+  for (const [mk, val] of Object.entries(revenueByMonth)) {
+    const d = parseMonth(mk);
+    if (d.getFullYear() === currentYear) ytdRevenue += val;
+    if (mk === currentMonthKey) mtdRevenue += val;
+  }
+
+  let ytdOpex = 0;
+  let mtdOpex = 0;
+  for (const row of opexByMonth) {
+    const d = parseMonth(row.month);
+    if (d.getFullYear() === currentYear) ytdOpex += row.total;
+    if (row.month === currentMonthKey) mtdOpex += row.total;
+  }
+
+  const ytdNet = ytdRevenue - ytdOpex;
+  const mtdNet = mtdRevenue - mtdOpex;
+
+  const fmt = (n) => `€${Math.round(n).toLocaleString()}`;
+
+  const expensesScopeMissing = hasJortt && (!jorttData?.expenseCount || jorttData.expenseCount === 0);
+
+  return (
+    <>
+      <div>
+        <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
+        <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
+        <p className="mt-1 text-[13px] text-neutral-500">
+          Financial position · derived from Jortt invoices &amp; expenses.
+        </p>
       </div>
-    </div>
-  </>
-)
+
+      {!hasJortt ? (
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
+          <Scale size={32} className="text-neutral-300" />
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">Jortt not connected</div>
+          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
+            Connect Jortt to unlock revenue, OpEx, and derived equity rollup. Full asset/liability detail requires Xero or Jortt with the purchase-invoice scope.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Bridge notice */}
+          <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <Scale size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
+            <div className="flex-1 text-[12px]">
+              <div className="font-semibold text-neutral-900">Derived view — Jortt bridge mode</div>
+              <div className="mt-0.5 text-neutral-600">
+                Showing YTD revenue and OpEx from Jortt. Full balance sheet (cash, AR, AP, VAT) requires
+                Xero or the Jortt <code className="rounded bg-neutral-100 px-1">purchase_invoices:read</code> scope.
+              </div>
+            </div>
+          </div>
+
+          {/* KPI strip */}
+          <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Card className="p-5">
+              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
+                <BrandIcon brand="jortt" size={14} /> Revenue YTD
+              </div>
+              <div className="text-[28px] font-semibold tabular-nums">{fmt(ytdRevenue)}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">
+                {jorttData?.invoiceCount ?? 0} invoices · {currentYear}
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
+                <BrandIcon brand="jortt" size={14} /> OpEx YTD
+              </div>
+              <div className="text-[28px] font-semibold tabular-nums">
+                {expensesScopeMissing ? "—" : fmt(ytdOpex)}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-400">
+                {expensesScopeMissing
+                  ? "expenses:read scope not granted"
+                  : `${jorttData?.expenseCount ?? 0} expenses · ${currentYear}`}
+              </div>
+            </Card>
+            <Card className={`p-5 ${ytdNet >= 0 ? "border-emerald-200 bg-emerald-50/20" : "border-rose-200 bg-rose-50/20"}`}>
+              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
+                <Scale size={14} /> Net retained (YTD)
+              </div>
+              <div className={`text-[28px] font-semibold tabular-nums ${ytdNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {expensesScopeMissing ? "—" : fmt(ytdNet)}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-400">Revenue − OpEx (Jortt-derived)</div>
+            </Card>
+          </section>
+
+          {/* MTD snapshot */}
+          <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Card className="p-5">
+              <div className="text-[12px] font-medium text-neutral-500 mb-2">Revenue MTD</div>
+              <div className="text-[22px] font-semibold tabular-nums">{fmt(mtdRevenue)}</div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-[12px] font-medium text-neutral-500 mb-2">OpEx MTD</div>
+              <div className="text-[22px] font-semibold tabular-nums">
+                {expensesScopeMissing ? "—" : fmt(mtdOpex)}
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-[12px] font-medium text-neutral-500 mb-2">Net MTD</div>
+              <div className={`text-[22px] font-semibold tabular-nums ${mtdNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {expensesScopeMissing ? "—" : fmt(mtdNet)}
+              </div>
+            </Card>
+          </section>
+
+          {/* Monthly breakdown */}
+          {Object.keys(revenueByMonth).length > 0 && (
+            <Card className="mt-3 p-5">
+              <div className="mb-4 text-[13px] font-semibold">Monthly position (Jortt)</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-neutral-200 text-neutral-500">
+                      <th className="py-2 text-left font-medium">Month</th>
+                      <th className="py-2 text-right font-medium">Revenue</th>
+                      <th className="py-2 text-right font-medium">OpEx</th>
+                      <th className="py-2 text-right font-medium">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(revenueByMonth)
+                      .sort(([a], [b]) => parseMonth(a).getTime() - parseMonth(b).getTime())
+                      .map(([month, rev]) => {
+                        const op = opexByMonth.find((o) => o.month === month)?.total ?? 0;
+                        const net = rev - op;
+                        return (
+                          <tr key={month} className="border-b border-neutral-100 last:border-0">
+                            <td className="py-2 font-medium text-neutral-700">{month}</td>
+                            <td className="py-2 text-right tabular-nums">{fmt(rev)}</td>
+                            <td className="py-2 text-right tabular-nums text-neutral-500">
+                              {expensesScopeMissing ? "—" : fmt(op)}
+                            </td>
+                            <td className={`py-2 text-right tabular-nums font-medium ${net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                              {expensesScopeMissing ? "—" : fmt(net)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
+    </>
+  );
+};
 
 /* =========================================================================
    VIEW: PILLAR 5 — FORECAST
