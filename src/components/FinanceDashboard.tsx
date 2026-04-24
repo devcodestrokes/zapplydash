@@ -1367,7 +1367,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const liveSources       = [shopifyLive, jorttLive, twLive, loopLive].filter(Boolean).length;
 
   async function handleLogout() {
-    await fetch("/auth/logout", { method: "POST" });
+    const { supabase } = await import("@/integrations/supabase/client");
+    await supabase.auth.signOut();
     window.location.href = "/login";
   }
 
