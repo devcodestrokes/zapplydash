@@ -1,4 +1,3 @@
-﻿'use client';
 // @ts-nocheck
 import React, { useEffect, useState, useMemo } from "react";
 import SyncView from "./SyncView";
