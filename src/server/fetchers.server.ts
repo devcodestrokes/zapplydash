@@ -48,6 +48,8 @@ async function getShopifyToken(store: string): Promise<string | null> {
   }
 
   // 2. fresh client_credentials grant
+  let access_token: string | null = null;
+  let expires_in: number | undefined;
   try {
     const res = await fetch(`https://${store}/admin/oauth/access_token`, {
       method: "POST",
@@ -65,11 +67,20 @@ async function getShopifyToken(store: string): Promise<string | null> {
       return null;
     }
 
-    const { access_token, expires_in } = await res.json();
-    if (!access_token) return null;
+    const json = await res.json();
+    access_token = json.access_token ?? null;
+    expires_in = json.expires_in;
+  } catch (err) {
+    console.error(`Shopify token request ${store}:`, (err as Error).message);
+    return null;
+  }
 
+  if (!access_token) return null;
+
+  // 3. best-effort cache write — never let this swallow a valid token
+  try {
     const expiresAt = new Date(Date.now() + ((expires_in ?? 86400) - 600) * 1000).toISOString();
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("integrations")
       .upsert(
         {
@@ -81,12 +92,12 @@ async function getShopifyToken(store: string): Promise<string | null> {
         },
         { onConflict: "provider" },
       );
-
-    return access_token;
+    if (error) console.error(`Shopify token cache ${store}:`, error.message);
   } catch (err) {
-    console.error(`Shopify token refresh ${store}:`, (err as Error).message);
-    return null;
+    console.error(`Shopify token cache ${store}:`, (err as Error).message);
   }
+
+  return access_token;
 }
 
 const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null) => `{
