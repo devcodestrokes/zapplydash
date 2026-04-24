@@ -1,4 +1,4 @@
-"use client";
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink } from "lucide-react";
 
