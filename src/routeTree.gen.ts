@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
+import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -34,17 +35,24 @@ const ApiShopifyInstallRoute = ApiShopifyInstallRouteImport.update({
   path: '/api/shopify/install',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiShopifyCallbackRoute = ApiShopifyCallbackRouteImport.update({
+  id: '/api/shopify/callback',
+  path: '/api/shopify/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,38 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/auth/callback' | '/api/shopify/install'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/auth/callback'
+    | '/api/shopify/callback'
+    | '/api/shopify/install'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/auth/callback' | '/api/shopify/install'
-  id: '__root__' | '/' | '/login' | '/auth/callback' | '/api/shopify/install'
+  to:
+    | '/'
+    | '/login'
+    | '/auth/callback'
+    | '/api/shopify/callback'
+    | '/api/shopify/install'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/auth/callback'
+    | '/api/shopify/callback'
+    | '/api/shopify/install'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
 }
 
@@ -99,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiShopifyInstallRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/shopify/callback': {
+      id: '/api/shopify/callback'
+      path: '/api/shopify/callback'
+      fullPath: '/api/shopify/callback'
+      preLoaderRoute: typeof ApiShopifyCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,6 +139,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
 }
 export const routeTree = rootRouteImport
