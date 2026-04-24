@@ -15,6 +15,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
+import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -46,11 +47,17 @@ const ApiJorttConnectRoute = ApiJorttConnectRouteImport.update({
   path: '/api/jortt/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiJorttCallbackRoute = ApiJorttCallbackRouteImport.update({
+  id: '/api/jortt/callback',
+  path: '/api/jortt/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/auth/callback'
+    | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/auth/callback'
+    | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/auth/callback'
+    | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  ApiJorttCallbackRoute: typeof ApiJorttCallbackRoute
   ApiJorttConnectRoute: typeof ApiJorttConnectRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiJorttConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/jortt/callback': {
+      id: '/api/jortt/callback'
+      path: '/api/jortt/callback'
+      fullPath: '/api/jortt/callback'
+      preLoaderRoute: typeof ApiJorttCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  ApiJorttCallbackRoute: ApiJorttCallbackRoute,
   ApiJorttConnectRoute: ApiJorttConnectRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
