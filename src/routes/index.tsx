@@ -73,8 +73,9 @@ function HomePage() {
       null,
   };
 
+  const Dashboard = FinanceDashboard as unknown as React.FC<any>;
   return (
-    <FinanceDashboard
+    <Dashboard
       user={user}
       liveData={{
         shopifyMarkets: data.shopifyMarkets,
