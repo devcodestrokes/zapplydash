@@ -14,7 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      data_cache: {
+        Row: {
+          cache_key: string
+          fetched_at: string | null
+          payload: Json
+          provider: string
+        }
+        Insert: {
+          cache_key: string
+          fetched_at?: string | null
+          payload: Json
+          provider: string
+        }
+        Update: {
+          cache_key?: string
+          fetched_at?: string | null
+          payload?: Json
+          provider?: string
+        }
+        Relationships: []
+      }
+      integrations: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          provider: string
+          refresh_token: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          provider: string
+          refresh_token?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          provider?: string
+          refresh_token?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
