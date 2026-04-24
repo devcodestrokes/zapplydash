@@ -15,6 +15,10 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+function startOfDay(): string {
+  return `${today()}T00:00:00Z`;
+}
+
 // ─── Shopify ─────────────────────────────────────────────────────────────────
 
 const SHOPIFY_STORES = [
@@ -121,6 +125,7 @@ async function fetchShopifyAllOrders(store: string, token: string, since: string
     currency = "EUR";
   const customerIds = new Set<string>();
   const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
+  const hourlySums: Record<string, { revenue: number; orders: number; refunds: number; discounts: number }> = {};
   let cursor: string | null = null;
   let hasNextPage = true;
   let page = 0;
@@ -161,6 +166,14 @@ async function fetchShopifyAllOrders(store: string, token: string, since: string
       monthlySums[mk].revenue += r;
       monthlySums[mk].refunds += rf;
       monthlySums[mk].orders += 1;
+
+      const createdAt = new Date(o.createdAt);
+      const hourKey = `${String(createdAt.getUTCHours()).padStart(2, "0")}:00`;
+      if (!hourlySums[hourKey]) hourlySums[hourKey] = { revenue: 0, orders: 0, refunds: 0, discounts: 0 };
+      hourlySums[hourKey].revenue += r;
+      hourlySums[hourKey].refunds += rf;
+      hourlySums[hourKey].discounts += dc;
+      hourlySums[hourKey].orders += 1;
     }
   }
 
@@ -172,6 +185,7 @@ async function fetchShopifyAllOrders(store: string, token: string, since: string
     currency,
     uniqueCustomers: customerIds.size,
     monthlySums,
+    hourlySums,
     truncated: hasNextPage,
   };
 }
@@ -240,6 +254,55 @@ export async function fetchShopifyMonthly() {
   } catch {
     return null;
   }
+}
+
+export async function fetchShopifyHourly() {
+  const since = startOfDay();
+
+  const hourlyTotals: Record<string, { revenue: number; orders: number; refunds: number; discounts: number }> = {};
+
+  const results = await Promise.all(
+    SHOPIFY_STORES.map(async ({ storeKey }: any) => {
+      const store = process.env[storeKey];
+      if (!store) return null;
+
+      const token = await getShopifyToken(store);
+      if (!token) return null;
+
+      try {
+        return await fetchShopifyAllOrders(store, token, since, 20);
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  for (const result of results) {
+    if (!result?.hourlySums) continue;
+    for (const [hour, values] of Object.entries(result.hourlySums)) {
+      if (!hourlyTotals[hour]) hourlyTotals[hour] = { revenue: 0, orders: 0, refunds: 0, discounts: 0 };
+      hourlyTotals[hour].revenue += values.revenue;
+      hourlyTotals[hour].orders += values.orders;
+      hourlyTotals[hour].refunds += values.refunds;
+      hourlyTotals[hour].discounts += values.discounts;
+    }
+  }
+
+  const currentHour = new Date().getUTCHours();
+  const rows = Array.from({ length: currentHour + 1 }, (_, hour) => {
+    const key = `${String(hour).padStart(2, "0")}:00`;
+    return {
+      hour: key,
+      revenue: hourlyTotals[key]?.revenue ?? 0,
+      orders: hourlyTotals[key]?.orders ?? 0,
+      refunds: hourlyTotals[key]?.refunds ?? 0,
+      discounts: hourlyTotals[key]?.discounts ?? 0,
+    };
+  });
+
+  return rows.some((row) => row.revenue > 0 || row.orders > 0 || row.refunds > 0 || row.discounts > 0)
+    ? rows
+    : [];
 }
 
 // ─── Triple Whale ────────────────────────────────────────────────────────────

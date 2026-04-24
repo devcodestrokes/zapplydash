@@ -741,22 +741,106 @@ const ReconciliationView = ({ shopifyMarkets = null, jorttData = null }) => {
    VIEW: PILLAR 1 — DAILY P&L
    ========================================================================= */
 
-const DailyPnLView = () => (
-  <>
-    <div>
-      <div className="text-[12px] font-medium text-neutral-400">Pillar 1</div>
-      <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&L Tracker</h1>
-      <p className="mt-1 text-[13px] text-neutral-500">Live intraday revenue with full profit & loss breakdown.</p>
-    </div>
-    <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
-      <Clock size={32} className="text-neutral-300" />
-      <div className="mt-4 text-[15px] font-semibold text-neutral-700">Hourly data not available</div>
-      <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-        Intraday P&L requires a webhook pipeline. The Shopify Admin API returns historical orders only — real-time streaming is not available without order webhooks.
+const DailyPnLView = ({ hourlyData = [], liveMarkets = null, twData = [], jorttData = null } = {}) => {
+  const activeHours = hourlyData?.filter(Boolean) ?? [];
+  const totalRevenue = activeHours.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
+  const totalOrders = activeHours.reduce((sum, row) => sum + (row.orders ?? 0), 0);
+  const totalRefunds = activeHours.reduce((sum, row) => sum + (row.refunds ?? 0), 0);
+  const totalDiscounts = activeHours.reduce((sum, row) => sum + (row.discounts ?? 0), 0);
+  const adSpend = twData?.filter(t => t.live).reduce((sum, row) => sum + (row.adSpend ?? 0), 0) ?? 0;
+  const grossProfit = twData?.filter(t => t.live).reduce((sum, row) => sum + (row.grossProfit ?? 0), 0) ?? 0;
+  const estCogs = totalRevenue > 0 && grossProfit > 0
+    ? Math.max(totalRevenue - grossProfit, 0)
+    : totalRevenue * 0.32;
+  const estNetProfit = totalRevenue - totalRefunds - totalDiscounts - adSpend - estCogs;
+  const latestActiveHour = [...activeHours].reverse().find(row => (row.revenue ?? 0) > 0 || (row.orders ?? 0) > 0) ?? activeHours[activeHours.length - 1] ?? null;
+  const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const hasData = activeHours.some(row => (row.revenue ?? 0) > 0 || (row.orders ?? 0) > 0);
+
+  if (!hasData) {
+    return (
+      <>
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 1</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&L Tracker</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">Today&apos;s Shopify revenue and estimated contribution margin.</p>
+        </div>
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
+          <Clock size={32} className="text-neutral-300" />
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">No orders yet today</div>
+          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
+            Shopify is connected, but there are no paid orders for today yet.
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 1</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&amp;L Tracker</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">Today&apos;s Shopify revenue and estimated contribution margin.</p>
+        </div>
+        <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-right">
+          <div className="text-[10px] uppercase tracking-wider text-neutral-400">Latest active hour</div>
+          <div className="mt-1 text-[16px] font-semibold tabular-nums text-neutral-900">{latestActiveHour?.hour ?? "—"} UTC</div>
+        </div>
       </div>
-    </div>
-  </>
-)
+
+      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: "Revenue", value: `€${Math.round(totalRevenue).toLocaleString()}`, sub: `${totalOrders.toLocaleString()} orders` , icon: DollarSign },
+          { label: "AOV", value: totalOrders > 0 ? `€${aov.toFixed(2)}` : "—", sub: "Average order value", icon: Package },
+          { label: "Ad spend", value: `€${Math.round(adSpend).toLocaleString()}`, sub: twData.length > 0 ? "Triple Whale blended" : "Estimated as 0", icon: Target },
+          { label: "Est. net profit", value: `${estNetProfit >= 0 ? "+" : "-"}€${Math.round(Math.abs(estNetProfit)).toLocaleString()}`, sub: "Revenue − refunds − discounts − ads − COGS", icon: TrendingUp },
+        ].map((item) => (
+          <Card key={item.label} className="p-5">
+            <div className="flex items-center justify-between text-[12px] font-medium text-neutral-500">
+              <span>{item.label}</span>
+              <item.icon size={14} />
+            </div>
+            <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">{item.value}</div>
+            <div className="mt-1 text-[11px] text-neutral-400">{item.sub}</div>
+          </Card>
+        ))}
+      </section>
+
+      <Card className="mt-3 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-semibold">Hourly revenue today</div>
+            <div className="text-[12px] text-neutral-400">Aggregated across all connected Shopify stores</div>
+          </div>
+          <div className="text-right text-[11px] text-neutral-400">
+            <div>{liveMarkets?.filter(m => m.live).length ?? 0} live market(s)</div>
+            <div>{jorttData?.invoiceCount ? `${jorttData.invoiceCount} Jortt invoices loaded` : "Jortt optional"}</div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {activeHours.map((row) => {
+            const maxRevenue = Math.max(...activeHours.map((item) => item.revenue ?? 0), 1);
+            const width = `${Math.max(((row.revenue ?? 0) / maxRevenue) * 100, row.revenue > 0 ? 6 : 0)}%`;
+            return (
+              <div key={row.hour} className="grid grid-cols-[64px_minmax(0,1fr)_88px_72px] items-center gap-3">
+                <div className="text-[12px] font-medium text-neutral-500">{row.hour}</div>
+                <div className="h-8 overflow-hidden rounded-md bg-neutral-100">
+                  <div className="flex h-full items-center rounded-md bg-neutral-900 px-3 text-[11px] font-medium text-white transition-all" style={{ width }}>
+                    {(row.revenue ?? 0) > 0 ? `€${Math.round(row.revenue).toLocaleString()}` : ""}
+                  </div>
+                </div>
+                <div className="text-right text-[12px] tabular-nums text-neutral-700">{row.orders ?? 0} orders</div>
+                <div className="text-right text-[12px] tabular-nums text-neutral-400">€{Math.round(row.refunds ?? 0)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </>
+  );
+}
 
 /* =========================================================================
    VIEW: PILLAR 2 — MARGIN PER MARKET
@@ -1528,7 +1612,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
 
           {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={liveData?.loop} />}
           {view === "metrics" && <MetricsView twData={twData} />}
-          {view === "daily" && (shopifyLive ? <DailyPnLView /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
+          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={liveData?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={liveData?.jortt} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
           {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={liveData?.shopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
           {view === "balance" && <BalanceView />}

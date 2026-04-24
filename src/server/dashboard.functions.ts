@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   fetchShopifyMarkets,
   fetchShopifyMonthly,
+  fetchShopifyHourly,
   fetchTripleWhale,
   fetchLoop,
   fetchJortt,
@@ -9,14 +10,15 @@ import {
 } from "./fetchers.server";
 
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
-  const [shopifyMarkets, shopifyMonthly, tripleWhale, loop, jortt, connections] = await Promise.all([
+  const [shopifyMarkets, shopifyMonthly, shopifyHourly, tripleWhale, loop, jortt, connections] = await Promise.all([
     fetchShopifyMarkets().catch(() => null),
     fetchShopifyMonthly().catch(() => null),
+    fetchShopifyHourly().catch(() => []),
     fetchTripleWhale().catch(() => null),
     fetchLoop().catch(() => null),
     fetchJortt().catch(() => null),
     fetchConnections().catch(() => ({}) as Record<string, string>),
   ]);
 
-  return { shopifyMarkets, shopifyMonthly, tripleWhale, loop, jortt, connections };
+  return { shopifyMarkets, shopifyMonthly, shopifyHourly, tripleWhale, loop, jortt, connections };
 });

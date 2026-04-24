@@ -111,6 +111,7 @@ function HomePage() {
       liveData={{
         shopifyMarkets: data.shopifyMarkets,
         shopifyMonthly: data.shopifyMonthly,
+        shopifyHourly: data.shopifyHourly,
         tripleWhale: data.tripleWhale,
         loop: data.loop,
         jortt: data.jortt,
