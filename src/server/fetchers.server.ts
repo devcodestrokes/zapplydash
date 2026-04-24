@@ -455,70 +455,188 @@ export async function fetchLoop() {
 }
 
 // ─── Jortt ───────────────────────────────────────────────────────────────────
+// Docs: https://developer.jortt.nl/
+// Auth: client_credentials grant (HTTP Basic on token endpoint).
+// Base API: https://api.jortt.nl  (pagination via response._links.next.href)
+
+const JORTT_BASE = "https://api.jortt.nl";
+const JORTT_TOKEN_URL = "https://app.jortt.nl/oauth-provider/oauth/token";
+const JORTT_SCOPES = "invoices:read expenses:read reports:read organizations:read";
 
 async function getJorttToken(): Promise<string | null> {
   const clientId = process.env.JORTT_CLIENT_ID;
   const clientSecret = process.env.JORTT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
+  if (!clientId || !clientSecret) {
+    console.warn("[jortt] Missing JORTT_CLIENT_ID or JORTT_CLIENT_SECRET");
+    return null;
+  }
 
   try {
-    const res = await fetch("https://app.jortt.nl/oauth-provider/oauth/token", {
+    // Per Jortt docs, use HTTP Basic auth with the token endpoint.
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const res = await fetch(JORTT_TOKEN_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${basic}`,
+        Accept: "application/json",
+      },
       body: new URLSearchParams({
         grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-        scope: "invoices:read",
+        scope: JORTT_SCOPES,
       }).toString(),
     });
-    if (!res.ok) return null;
-    const { access_token } = await res.json();
-    return access_token ?? null;
-  } catch {
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(`[jortt] Token request failed ${res.status}: ${text.slice(0, 300)}`);
+      return null;
+    }
+    const json = await res.json();
+    return json.access_token ?? null;
+  } catch (err) {
+    console.error("[jortt] Token request error:", err);
     return null;
   }
 }
+
+// Walk all pages of a Jortt list endpoint via _links.next.
+async function jorttFetchAll(path: string, token: string, maxPages = 20): Promise<any[]> {
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  let url: string | null = path.startsWith("http") ? path : `${JORTT_BASE}${path}`;
+  const out: any[] = [];
+  let pages = 0;
+  while (url && pages < maxPages) {
+    const res: Response = await fetch(url, { headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(`[jortt] GET ${url} failed ${res.status}: ${text.slice(0, 200)}`);
+      break;
+    }
+    const json: any = await res.json();
+    const data: any[] = Array.isArray(json?.data) ? json.data : [];
+    out.push(...data);
+    const next: string | null = json?._links?.next?.href ?? null;
+    if (!next || data.length === 0) break;
+    url = next;
+    pages++;
+    // Respect 10 req/s rate limit
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  return out;
+}
+
+const monthKey = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+
+const parseAmount = (a: any): number => {
+  if (a == null) return 0;
+  if (typeof a === "number") return a;
+  if (typeof a === "string") return parseFloat(a) || 0;
+  if (typeof a === "object") {
+    if ("value" in a) return parseFloat(a.value) || 0;
+    if ("amount" in a) return parseFloat(a.amount) || 0;
+  }
+  return 0;
+};
 
 export async function fetchJortt() {
   const token = await getJorttToken();
   if (!token) return null;
 
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-  const BASE = "https://api.jortt.nl";
-
   try {
-    const pages = await Promise.all(
-      [1, 2, 3].map((page) =>
-        fetch(`${BASE}/invoices?per_page=100&page=${page}&invoice_status=sent`, { headers })
-          .then((r) => (r.ok ? r.json() : { data: [] }))
-          .then((d) => d.data ?? []),
-      ),
-    );
-    const invoices: any[] = pages.flat();
+    // ─ Revenue: paid/sent invoices via v2 API ────────────────────────────────
+    const [sent, paid] = await Promise.all([
+      jorttFetchAll("/v2/invoices?invoice_status=sent", token),
+      jorttFetchAll("/v2/invoices?invoice_status=paid", token),
+    ]);
+    // Dedupe by id (an invoice may show up in multiple status filters)
+    const invoiceMap = new Map<string, any>();
+    for (const inv of [...sent, ...paid]) {
+      if (inv?.id) invoiceMap.set(inv.id, inv);
+    }
+    const invoices = Array.from(invoiceMap.values());
 
     const revenueByMonth: Record<string, number> = {};
+    let revenueInvoiceCount = 0;
     for (const inv of invoices) {
-      const dateStr = inv.invoice_date ?? "";
+      const dateStr =
+        inv.invoice_date ??
+        inv.delivery_period ??
+        inv.created_at ??
+        "";
       if (!dateStr) continue;
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) continue;
-      const total = parseFloat(inv.invoice_total?.value ?? "0");
+      const total = parseAmount(inv.invoice_total ?? inv.total ?? inv.amount);
       if (total <= 0) continue;
-      const mk = d
-        .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
-        .replace(" ", " '");
+      const mk = monthKey(d);
       revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
+      revenueInvoiceCount++;
     }
 
+    // ─ OpEx: cost-type expenses via v3 API ──────────────────────────────────
+    const expenses = await jorttFetchAll("/v3/expenses?expense_type=cost", token);
+
+    // Aggregate opex by month and by ledger account name (for breakdown)
+    const opexMonthMap: Record<string, number> = {};
+    const opexDetail: Record<string, Record<string, number>> = {}; // month -> { category: amount }
+
+    for (const exp of expenses) {
+      const dateStr =
+        exp.delivery_period ??
+        exp.vat_date ??
+        exp.expense_date ??
+        exp.created_at ??
+        "";
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) continue;
+
+      const total = parseAmount(
+        exp.raw_total_amount ?? exp.total_amount ?? exp.amount ?? exp.total,
+      );
+      if (total <= 0) continue;
+
+      const mk = monthKey(d);
+      opexMonthMap[mk] = (opexMonthMap[mk] ?? 0) + total;
+
+      const category =
+        exp.ledger_account_name ??
+        exp.ledger_account?.name ??
+        exp.description ??
+        "Other";
+      opexDetail[mk] = opexDetail[mk] ?? {};
+      opexDetail[mk][category] = (opexDetail[mk][category] ?? 0) + total;
+    }
+
+    // Convert to ordered array (chronological)
+    const opexByMonth = Object.entries(opexMonthMap)
+      .map(([month, total]) => ({ month, total: Math.round(total) }))
+      .sort((a, b) => {
+        // Sort by parsing "Jan '24" style key
+        const parse = (s: string) => {
+          const [m, y] = s.split(" '");
+          return new Date(`${m} 1, 20${y}`).getTime();
+        };
+        return parse(a.month) - parse(b.month);
+      });
+
+    const live = Object.keys(revenueByMonth).length > 0 || opexByMonth.length > 0;
+
+    console.log(
+      `[jortt] Loaded ${invoices.length} invoices (${revenueInvoiceCount} with revenue), ${expenses.length} expenses. Live=${live}`,
+    );
+
     return {
-      opexByMonth: [],
-      opexDetail: {},
+      opexByMonth,
+      opexDetail,
       revenueByMonth,
-      invoiceCount: invoices.filter((i) => parseFloat(i.invoice_total?.value ?? "0") > 0).length,
-      live: Object.keys(revenueByMonth).length > 0,
+      invoiceCount: revenueInvoiceCount,
+      expenseCount: expenses.length,
+      live,
     };
-  } catch {
+  } catch (err) {
+    console.error("[jortt] fetchJortt error:", err);
     return null;
   }
 }
