@@ -153,18 +153,23 @@ function AccountingPage() {
               )}
             </CardHeader>
             <CardContent>
-              <ul className="space-y-1.5 text-sm">
+              <ul className="space-y-3 text-sm">
                 {syncReports.map((r) => (
-                  <li key={r.key} className="flex items-start gap-2">
-                    {r.ok ? (
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
-                    ) : (
-                      <XCircle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+                  <li key={r.key} className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      {r.ok ? (
+                        <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+                      )}
+                      <span className="font-medium">{r.label}:</span>
+                      <span className={r.ok ? "text-muted-foreground" : "text-destructive"}>
+                        {r.ok ? "OK" : r.reason ?? "failed"}
+                      </span>
+                    </div>
+                    {r.diagnostics && (r.key === "profitAndLoss" || r.key === "balanceSheet") && (
+                      <ReportDiagnostics reportKey={r.key} diagnostics={r.diagnostics} />
                     )}
-                    <span className="font-medium">{r.label}:</span>
-                    <span className={r.ok ? "text-muted-foreground" : "text-destructive"}>
-                      {r.ok ? "OK" : r.reason ?? "failed"}
-                    </span>
                   </li>
                 ))}
               </ul>
