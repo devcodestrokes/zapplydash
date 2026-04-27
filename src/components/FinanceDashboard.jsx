@@ -1,7 +1,7 @@
 ﻿'use client';
 // @ts-nocheck
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter } from "next/navigation";
 import SyncView from "./SyncView";
 import {
   AreaChart,
@@ -1816,39 +1816,47 @@ const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail,
    VIEW: PILLAR 4 — BALANCE SHEET
    ========================================================================= */
 
-const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) => {
-  const hasJortt = !!(jorttData?.live);
+const BalanceView = ({ jorttData = null, xeroData = null, shopifyMarkets = null, twData = [] }) => {
+  // Xero is the primary source; Jortt is fallback
+  const src       = xeroData?.live ? "xero" : jorttData?.live ? "jortt" : null;
+  const hasData   = !!src;
+  const srcLabel  = src === "xero" ? "Xero" : "Jortt";
 
-  // Total revenue from all sent invoices (last 12 months)
-  const totalRevenue = jorttData?.revenueByMonth
-    ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0)
-    : 0;
+  // ── Key figures — Xero first, Jortt fallback ──────────────────────────────
+  const totalAssets       = xeroData?.totalAssets       ?? null;
+  const currentAssets     = xeroData?.currentAssets     ?? null;
+  const fixedAssets       = xeroData?.fixedAssets       ?? null;
+  const totalLiabilities  = xeroData?.totalLiabilities  ?? null;
+  const currentLiabilities = xeroData?.currentLiabilities ?? null;
+  const equity            = xeroData?.equity            ?? null;
+  const cash              = xeroData?.cashBalance        ?? jorttData?.cashBalance ?? null;
+  const accountsReceivable = xeroData?.accountsReceivable ?? jorttData?.accountsReceivable ?? null;
+  const overdueAmount     = xeroData?.overdueAmount      ?? null;
+  const unpaidCount       = xeroData?.unpaidInvoiceCount ?? jorttData?.unpaidInvoiceCount ?? 0;
 
-  // Total expenses from cost invoices (if expenses:read scope granted)
-  const totalExpenses = jorttData?.expensesByMonth
-    ? Object.values(jorttData.expensesByMonth).reduce((s, v) => s + v, 0)
-    : 0;
+  // YTD P&L
+  const ytdRevenue   = xeroData?.ytdRevenue   ?? null;
+  const ytdExpenses  = xeroData?.ytdExpenses  ?? null;
+  const ytdNetProfit = xeroData?.ytdNetProfit ?? null;
 
-  // Derive key balance sheet figures from available data
-  const cash              = jorttData?.cashBalance ?? null;
-  const accountsReceivable = jorttData?.accountsReceivable ?? null;
-  const totalAssets       = (cash ?? 0) + (accountsReceivable ?? 0);
+  // 12-month revenue totals for fallback (Jortt)
+  const jorttRevTotal = jorttData?.revenueByMonth
+    ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0) : 0;
+  const jorttExpTotal = jorttData?.expensesByMonth
+    ? Object.values(jorttData.expensesByMonth).reduce((s, v) => s + v, 0) : 0;
 
-  // Estimates from P&L when reports:read not yet granted
-  const plSummary = jorttData?.plSummary ?? null;
+  // Revenue trend chart data — Xero first
+  const revenueMonths = useMemo(() => {
+    const byMonth = xeroData?.revenueByMonth ?? jorttData?.revenueByMonth ?? {};
+    return Object.entries(byMonth)
+      .filter(([k]) => k)
+      .sort(([a], [b]) => parseMonthKey(a) - parseMonthKey(b))
+      .map(([month, revenue]) => ({ month, revenue: Math.round(revenue) }));
+  }, [xeroData, jorttData]);
 
-  // NL TW for supplementary data
   const nlTW = twData.find(t => t.market === "NL" && t.live);
 
-  // Revenue trend from monthly data for the mini chart
-  const revenueMonths = jorttData?.revenueByMonth
-    ? Object.entries(jorttData.revenueByMonth)
-        .filter(([k]) => k)
-        .sort(([a], [b]) => parseMonthKey(a) - parseMonthKey(b))
-        .map(([month, revenue]) => ({ month, revenue: Math.round(revenue) }))
-    : [];
-
-  if (!hasJortt) {
+  if (!hasData) {
     return (
       <>
         <div>
@@ -1858,9 +1866,9 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
         </div>
         <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
           <Scale size={32} className="text-neutral-300" />
-          <div className="mt-4 text-[15px] font-semibold text-neutral-700">Jortt not yet synced</div>
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">No accounting data yet</div>
           <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-            Click Sync to load Jortt data. Balance sheet populates from your invoice revenue, accounts receivable, and cash position.
+            Click <strong>Sync</strong> to fetch data from Xero. Balance sheet will populate with assets, liabilities, equity, and cash positions from your accounting system.
           </div>
         </div>
       </>
@@ -1874,14 +1882,14 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
         <div>
           <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
           <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
-          <p className="mt-1 text-[13px] text-neutral-500">Financial position · assets, liabilities, equity · via Jortt</p>
+          <p className="mt-1 text-[13px] text-neutral-500">Financial position · assets, liabilities, equity · via {srcLabel}</p>
         </div>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-          Jortt live
+          {srcLabel} live
         </span>
       </div>
 
-      {/* Assets, Liabilities, Equity — top row */}
+      {/* Assets, Liabilities, Equity */}
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
         {/* Assets */}
         <Card className="p-5">
@@ -1892,30 +1900,38 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
             <div className="text-[13px] font-semibold">Assets</div>
           </div>
           <div className="space-y-3">
+            {currentAssets != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Current assets</span>
+                <span className="text-[13px] font-medium tabular-nums">€{currentAssets.toLocaleString()}</span>
+              </div>
+            )}
+            {fixedAssets != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Fixed assets</span>
+                <span className="text-[13px] font-medium tabular-nums">€{fixedAssets.toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-neutral-500">Cash &amp; bank</span>
               <span className="text-[13px] font-medium tabular-nums">
-                {cash != null ? `€${Math.round(cash).toLocaleString()}` : <span className="text-neutral-300 text-[11px]">needs reports:read</span>}
+                {cash != null ? `€${Math.round(cash).toLocaleString()}` : <span className="text-neutral-300 text-[11px]">—</span>}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-neutral-500">Accounts receivable</span>
               <span className="text-[13px] font-medium tabular-nums">
-                {accountsReceivable != null
-                  ? `€${Math.round(accountsReceivable).toLocaleString()}`
-                  : <span className="text-neutral-400 text-[12px]">€0</span>}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] text-neutral-500">Revenue (12mo)</span>
-              <span className="text-[13px] font-medium tabular-nums text-neutral-700">
-                €{Math.round(totalRevenue).toLocaleString()}
+                {accountsReceivable != null ? `€${Math.round(accountsReceivable).toLocaleString()}` : <span className="text-neutral-400 text-[12px]">€0</span>}
               </span>
             </div>
             <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
               <span className="text-[12px] font-semibold text-neutral-700">Total assets</span>
               <span className="text-[14px] font-bold tabular-nums text-emerald-700">
-                {totalAssets > 0 ? `€${Math.round(totalAssets).toLocaleString()}` : `€${Math.round(totalRevenue).toLocaleString()}`}
+                {totalAssets != null
+                  ? `€${totalAssets.toLocaleString()}`
+                  : cash != null || accountsReceivable != null
+                    ? `€${Math.round((cash ?? 0) + (accountsReceivable ?? 0)).toLocaleString()}`
+                    : "—"}
               </span>
             </div>
           </div>
@@ -1930,30 +1946,32 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
             <div className="text-[13px] font-semibold">Liabilities</div>
           </div>
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] text-neutral-500">Operating costs (12mo)</span>
-              <span className="text-[13px] font-medium tabular-nums">
-                {totalExpenses > 0
-                  ? `€${Math.round(totalExpenses).toLocaleString()}`
-                  : <span className="text-neutral-300 text-[11px]">needs expenses:read</span>}
-              </span>
-            </div>
+            {currentLiabilities != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Current liabilities</span>
+                <span className="text-[13px] font-medium tabular-nums text-rose-600">€{currentLiabilities.toLocaleString()}</span>
+              </div>
+            )}
+            {ytdExpenses != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Operating costs (YTD)</span>
+                <span className="text-[13px] font-medium tabular-nums">€{ytdExpenses.toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-[12px] text-neutral-500">Ad spend (TW · NL)</span>
               <span className="text-[13px] font-medium tabular-nums">
                 {nlTW?.adSpend != null ? `€${Math.round(nlTW.adSpend).toLocaleString()}` : "—"}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] text-neutral-500">VAT / BTW</span>
-              <span className="text-neutral-300 text-[11px]">needs reports:read</span>
-            </div>
             <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
-              <span className="text-[12px] font-semibold text-neutral-700">Known costs</span>
+              <span className="text-[12px] font-semibold text-neutral-700">Total liabilities</span>
               <span className="text-[14px] font-bold tabular-nums text-rose-700">
-                {totalExpenses > 0
-                  ? `€${Math.round(totalExpenses + (nlTW?.adSpend ?? 0)).toLocaleString()}`
-                  : nlTW?.adSpend != null ? `€${Math.round(nlTW.adSpend).toLocaleString()}` : "—"}
+                {totalLiabilities != null
+                  ? `€${totalLiabilities.toLocaleString()}`
+                  : currentLiabilities != null
+                    ? `€${currentLiabilities.toLocaleString()}`
+                    : ytdExpenses != null ? `€${ytdExpenses.toLocaleString()}` : "—"}
               </span>
             </div>
           </div>
@@ -1965,60 +1983,89 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-50">
               <TrendingUp size={14} className="text-violet-600" />
             </div>
-            <div className="text-[13px] font-semibold">Net position</div>
+            <div className="text-[13px] font-semibold">Equity &amp; P&amp;L</div>
           </div>
           <div className="space-y-3">
-            {plSummary ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] text-neutral-500">YTD revenue</span>
-                  <span className="text-[13px] font-medium tabular-nums">€{Math.round(plSummary.revenue).toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] text-neutral-500">YTD costs</span>
-                  <span className="text-[13px] font-medium tabular-nums text-rose-600">−€{Math.round(plSummary.costs).toLocaleString()}</span>
-                </div>
-                <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
-                  <span className="text-[12px] font-semibold text-neutral-700">Gross profit</span>
-                  <span className={`text-[14px] font-bold tabular-nums ${plSummary.grossProfit >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                    {plSummary.grossProfit >= 0 ? "+" : "−"}€{Math.abs(Math.round(plSummary.grossProfit)).toLocaleString()}
-                  </span>
-                </div>
-              </>
-            ) : totalRevenue > 0 ? (
+            {equity != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Total equity</span>
+                <span className={`text-[13px] font-medium tabular-nums ${equity >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {equity >= 0 ? "+" : "−"}€{Math.abs(equity).toLocaleString()}
+                </span>
+              </div>
+            )}
+            {ytdRevenue != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">YTD revenue</span>
+                <span className="text-[13px] font-medium tabular-nums">€{ytdRevenue.toLocaleString()}</span>
+              </div>
+            )}
+            {ytdExpenses != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">YTD expenses</span>
+                <span className="text-[13px] font-medium tabular-nums text-rose-600">−€{ytdExpenses.toLocaleString()}</span>
+              </div>
+            )}
+            {ytdRevenue == null && jorttRevTotal > 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] text-neutral-500">Revenue (12mo)</span>
-                  <span className="text-[13px] font-medium tabular-nums">€{Math.round(totalRevenue).toLocaleString()}</span>
+                  <span className="text-[13px] font-medium tabular-nums">€{Math.round(jorttRevTotal).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[12px] text-neutral-500">Costs (12mo)</span>
                   <span className="text-[13px] font-medium tabular-nums text-rose-600">
-                    {totalExpenses > 0 ? `−€${Math.round(totalExpenses).toLocaleString()}` : "—"}
-                  </span>
-                </div>
-                <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
-                  <span className="text-[12px] font-semibold text-neutral-700">Net (estimated)</span>
-                  <span className={`text-[14px] font-bold tabular-nums ${totalRevenue - totalExpenses >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                    {totalExpenses > 0
-                      ? `€${Math.round(totalRevenue - totalExpenses).toLocaleString()}`
-                      : <span className="text-neutral-300 text-[11px]">needs expenses:read</span>}
+                    {jorttExpTotal > 0 ? `−€${Math.round(jorttExpTotal).toLocaleString()}` : "—"}
                   </span>
                 </div>
               </>
-            ) : (
-              <div className="text-[12px] text-neutral-400">No data available</div>
             )}
+            <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-neutral-700">Net profit (YTD)</span>
+              <span className={`text-[14px] font-bold tabular-nums ${(ytdNetProfit ?? 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {ytdNetProfit != null
+                  ? `${ytdNetProfit >= 0 ? "+" : "−"}€${Math.abs(ytdNetProfit).toLocaleString()}`
+                  : jorttRevTotal > 0 && jorttExpTotal > 0
+                    ? `€${Math.round(jorttRevTotal - jorttExpTotal).toLocaleString()}`
+                    : "—"}
+              </span>
+            </div>
           </div>
         </Card>
       </div>
+
+      {/* Bank accounts (Xero only) */}
+      {xeroData?.bankAccounts?.length > 0 && (
+        <Card className="mt-3 p-5">
+          <div className="mb-3 text-[13px] font-semibold">Bank accounts · Xero</div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {xeroData.bankAccounts.map(acc => (
+              <div key={acc.name} className="rounded-lg bg-neutral-50 px-4 py-3">
+                <div className="text-[11px] text-neutral-500 truncate">{acc.name}</div>
+                <div className={`mt-1 text-[18px] font-semibold tabular-nums ${acc.balance < 0 ? "text-rose-600" : "text-neutral-900"}`}>
+                  €{Math.round(Math.abs(acc.balance)).toLocaleString()}
+                </div>
+                {acc.balance < 0 && <div className="text-[10px] text-rose-400">overdrawn</div>}
+              </div>
+            ))}
+          </div>
+          {cash != null && (
+            <div className="mt-3 border-t border-neutral-100 pt-3 flex items-center justify-between">
+              <span className="text-[12px] font-medium text-neutral-500">Total cash position</span>
+              <span className={`text-[15px] font-bold tabular-nums ${cash >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                €{Math.round(Math.abs(cash)).toLocaleString()}
+              </span>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Revenue trend chart */}
       {revenueMonths.length > 0 && (
         <Card className="mt-3 p-5">
           <div className="mb-4">
-            <div className="text-[13px] font-semibold">Invoice revenue trend · 12 months</div>
-            <div className="text-[12px] text-neutral-400">{jorttData.invoiceCount} sent invoices · Jortt</div>
+            <div className="text-[13px] font-semibold">Revenue trend · 12 months</div>
+            <div className="text-[12px] text-neutral-400">{srcLabel} · accounting revenue</div>
           </div>
           <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
@@ -2026,10 +2073,7 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
                 <CartesianGrid stroke="#f4f4f5" vertical={false} />
                 <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
-                  formatter={v => [`€${v.toLocaleString()}`, "Revenue"]}
-                />
+                <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }} formatter={v => [`€${v.toLocaleString()}`, "Revenue"]} />
                 <Bar dataKey="revenue" fill="#171717" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
@@ -2037,13 +2081,13 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
         </Card>
       )}
 
-      {/* Invoice stats */}
+      {/* Key stats row */}
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "Sent invoices (12mo)", value: jorttData.invoiceCount ?? "—", sub: "Jortt" },
-          { label: "Unpaid invoices", value: jorttData.unpaidInvoiceCount ?? 0, sub: accountsReceivable != null ? `€${Math.round(accountsReceivable).toLocaleString()} outstanding` : "outstanding" },
-          { label: "Expense records", value: jorttData.expenseCount > 0 ? jorttData.expenseCount : "—", sub: jorttData.expenseCount > 0 ? "Jortt expenses" : "needs expenses:read" },
-          { label: "Net margin (est.)", value: totalRevenue > 0 && totalExpenses > 0 ? `${(((totalRevenue - totalExpenses) / totalRevenue) * 100).toFixed(1)}%` : "—", sub: "Revenue minus costs" },
+          { label: "Accounts receivable", value: accountsReceivable != null ? `€${Math.round(accountsReceivable).toLocaleString()}` : "€0", sub: `${unpaidCount} unpaid invoice${unpaidCount !== 1 ? "s" : ""}` },
+          { label: "Overdue amount", value: overdueAmount != null ? `€${Math.round(overdueAmount).toLocaleString()}` : "€0", sub: xeroData?.overdueInvoiceCount > 0 ? `${xeroData.overdueInvoiceCount} overdue` : "All current" },
+          { label: "Net margin (YTD)", value: ytdRevenue && ytdNetProfit != null ? `${((ytdNetProfit / ytdRevenue) * 100).toFixed(1)}%` : "—", sub: "Net profit ÷ revenue" },
+          { label: "Equity", value: equity != null ? `€${Math.abs(equity).toLocaleString()}` : "—", sub: equity != null ? (equity >= 0 ? "Positive" : "Negative") : srcLabel },
         ].map(m => (
           <Card key={m.label} className="p-4">
             <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{m.label}</div>
@@ -2052,21 +2096,6 @@ const BalanceView = ({ jorttData = null, shopifyMarkets = null, twData = [] }) =
           </Card>
         ))}
       </div>
-
-      {/* Scope upgrade banner */}
-      {(!cash || totalExpenses === 0) && (
-        <div className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-          <div>
-            <div className="text-[13px] font-semibold text-amber-900">Unlock full balance sheet</div>
-            <div className="mt-0.5 text-[12px] text-amber-700">
-              Add <code className="rounded bg-amber-100 px-1 font-mono">expenses:read</code> and{" "}
-              <code className="rounded bg-amber-100 px-1 font-mono">reports:read</code> scopes in your Jortt OAuth app settings to see
-              operating costs, cash position, VAT liabilities, and the official P&L summary.
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };
@@ -2084,14 +2113,21 @@ function parseMonthKey(mk) {
   return new Date("1 " + mk.replace("'", "20"));
 }
 
-const ForecastView = ({ jorttData = null, shopifyMonthly = null }) => {
-  const hasData = !!(jorttData?.live || shopifyMonthly?.length > 0);
+const ForecastView = ({ jorttData = null, xeroData = null, shopifyMonthly = null }) => {
+  // Xero is primary accounting source; fall back to Jortt then Shopify
+  const hasData = !!(xeroData?.live || jorttData?.live || shopifyMonthly?.length > 0);
+  const acctSrcLabel = xeroData?.live ? "Xero" : jorttData?.live ? "Jortt" : "Shopify";
 
-  // Build sorted historical monthly data merging Jortt + Shopify
+  // Active accounting data (Xero first, Jortt fallback)
+  const acctRevByMonth = xeroData?.revenueByMonth ?? jorttData?.revenueByMonth ?? {};
+  const acctExpByMonth = xeroData?.expensesByMonth ?? jorttData?.expensesByMonth ?? {};
+  const cashBalance    = xeroData?.cashBalance ?? jorttData?.cashBalance ?? null;
+
+  // Build sorted historical monthly data merging accounting + Shopify
   const chartData = useMemo(() => {
     const allMonths = new Set([
-      ...Object.keys(jorttData?.revenueByMonth ?? {}),
-      ...Object.keys(jorttData?.expensesByMonth ?? {}),
+      ...Object.keys(acctRevByMonth),
+      ...Object.keys(acctExpByMonth),
       ...(shopifyMonthly?.map(m => m.month) ?? []),
     ]);
     allMonths.delete("");
@@ -2099,19 +2135,21 @@ const ForecastView = ({ jorttData = null, shopifyMonthly = null }) => {
     return Array.from(allMonths)
       .sort((a, b) => parseMonthKey(a) - parseMonthKey(b))
       .map(month => {
-        const jorttRev  = jorttData?.revenueByMonth?.[month]  ?? 0;
-        const shopRev   = shopifyMonthly?.find(m => m.month === month)?.revenue ?? 0;
-        const expenses  = jorttData?.expensesByMonth?.[month] ?? 0;
-        const revenue   = jorttRev > 0 ? jorttRev : shopRev;
+        const acctRev = acctRevByMonth[month] ?? 0;
+        const shopRev = shopifyMonthly?.find(m => m.month === month)?.revenue ?? 0;
+        // Prefer Xero/Jortt net profit by month if available
+        const acctNet = xeroData?.netProfitByMonth?.[month] ?? null;
+        const expenses = acctExpByMonth[month] ?? 0;
+        const revenue  = acctRev > 0 ? acctRev : shopRev;
         return {
           month,
-          revenue:    Math.round(revenue),
-          expenses:   Math.round(expenses),
-          netProfit:  Math.round(revenue - expenses),
+          revenue:   Math.round(revenue),
+          expenses:  Math.round(expenses),
+          netProfit: acctNet != null ? Math.round(acctNet) : Math.round(revenue - expenses),
         };
       })
       .filter(m => m.revenue > 0 || m.expenses > 0);
-  }, [jorttData, shopifyMonthly]);
+  }, [xeroData, jorttData, shopifyMonthly]);
 
   // Compute growth rate and 6-month projection
   const { allData, growthRatePct } = useMemo(() => {
@@ -2172,7 +2210,7 @@ const ForecastView = ({ jorttData = null, shopifyMonthly = null }) => {
           <Sparkles size={32} className="text-neutral-300" />
           <div className="mt-4 text-[15px] font-semibold text-neutral-700">Forecast not yet available</div>
           <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-            Cash flow forecast builds from connected live data. Connect Jortt (Xero) for revenue & expenses, and allow 3+ months of history to accumulate for trend-based projections.
+            Cash flow forecast builds from connected live data. Connect Xero or Jortt for revenue &amp; expenses, and allow 3+ months of history to accumulate for trend-based projections.
           </div>
         </div>
       </>
@@ -2216,8 +2254,8 @@ const ForecastView = ({ jorttData = null, shopifyMonthly = null }) => {
             },
             {
               label: "Cash position",
-              value: jorttData?.cashBalance != null ? `€${Math.round(jorttData.cashBalance).toLocaleString()}` : "—",
-              sub: jorttData?.cashBalance != null ? "Jortt cash & bank" : "Connect Jortt",
+              value: cashBalance != null ? `€${Math.round(cashBalance).toLocaleString()}` : "—",
+              sub: cashBalance != null ? `${acctSrcLabel} cash & bank` : `Connect ${acctSrcLabel}`,
             },
           ].map(m => (
             <div key={m.label}>
@@ -2379,7 +2417,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
-      router.invalidate(); // soft refresh — re-runs route loader without full page reload
+      router.refresh(); // soft refresh — re-runs server component without full page reload
     } catch (err) {
       setSyncError(err.message);
     } finally {
@@ -2409,6 +2447,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
   const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
   const jorttLive         = !!(liveData?.jortt?.live);
+  const xeroLive          = !!(liveData?.xero?.live);
   const twData            = liveData?.tripleWhale?.filter(m => m.live) ?? [];
   const twLive            = twData.length > 0;
   const juoLive           = liveData?.juo?.some(m => m.live) ?? false;
@@ -2416,7 +2455,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const subLive           = juoLive || loopLive;
   // Combined subscription data: JUO (NL) + Loop (UK/US/EU)
   const allSubData        = [...(liveData?.juo ?? []), ...(liveData?.loop ?? [])].filter(m => m.live);
-  const liveSources       = [shopifyLive, jorttLive, twLive, subLive].filter(Boolean).length;
+  const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
 
   async function handleLogout() {
     await fetch("/auth/logout", { method: "POST" });
@@ -2552,10 +2591,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
               <div className="space-y-1 px-2.5 text-[12px] text-neutral-500">
                 <div className="flex items-center justify-between"><span>Shopify Plus</span><StatusDot status={shopifyLive ? "ok" : "error"} /></div>
                 <div className="flex items-center justify-between"><span>Triple Whale</span><StatusDot status={twLive ? "ok" : "error"} /></div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">Jortt <span className="text-[9px] text-[#13B5EA] font-medium">â†’ Xero</span></span>
-                  <StatusDot status={jorttLive ? "ok" : "error"} />
-                </div>
+                <div className="flex items-center justify-between"><span>Jortt</span><StatusDot status={jorttLive ? "ok" : "error"} /></div>
+                <div className="flex items-center justify-between"><span>Xero</span><StatusDot status={xeroLive ? "ok" : "error"} /></div>
               </div>
             </div>
           </nav>
@@ -2598,8 +2635,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
           {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={liveData?.shopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
-          {view === "balance" && <BalanceView jorttData={liveData?.jortt} shopifyMarkets={activeMarkets} twData={twData} />}
-          {view === "forecast" && <ForecastView jorttData={liveData?.jortt} shopifyMonthly={liveData?.shopifyMonthly} />}
+          {view === "balance" && <BalanceView jorttData={liveData?.jortt} xeroData={liveData?.xero} shopifyMarkets={activeMarkets} twData={twData} />}
+          {view === "forecast" && <ForecastView jorttData={liveData?.jortt} xeroData={liveData?.xero} shopifyMonthly={liveData?.shopifyMonthly} />}
           {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={liveData?.jortt} />}
           {view === "sync" && <SyncView initialConnections={connections} />}
 

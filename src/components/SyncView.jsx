@@ -55,6 +55,8 @@ export default function SyncView({ initialConnections = {} }) {
   const [connections, setConnections] = useState(initialConnections);
   const [syncing, setSyncing] = useState(false);
 
+  const [xeroError, setXeroError] = useState(null);
+
   // Pick up ?connected= or ?error= from OAuth redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -64,6 +66,15 @@ export default function SyncView({ initialConnections = {} }) {
       window.history.replaceState({}, "", "/?view=sync");
     }
     if (params.get("error")) {
+      window.history.replaceState({}, "", "/?view=sync");
+    }
+    // Xero-specific params
+    if (params.get("xero_connected")) {
+      setConnections((c) => ({ ...c, xero: "connected" }));
+      window.history.replaceState({}, "", "/?view=sync");
+    }
+    if (params.get("xero_error")) {
+      setXeroError(params.get("xero_error"));
       window.history.replaceState({}, "", "/?view=sync");
     }
   }, []);
@@ -193,6 +204,59 @@ export default function SyncView({ initialConnections = {} }) {
         </div>
       </div>
 
+      {/* Xero accounting */}
+      <div className="mt-6">
+        <div className="mb-2 text-[12px] font-semibold text-neutral-400 uppercase tracking-wide">Accounting</div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: "#13B5EA18" }}>
+                <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="16" fill="#13B5EA" />
+                  <text x="16" y="21" textAnchor="middle" fill="white" fontSize="13" fontWeight="700" fontFamily="sans-serif">X</text>
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[14px] font-semibold">Xero</span>
+                  <StatusPill status={connections["xero"] ?? "disconnected"} />
+                </div>
+                <div className="mt-0.5 text-[12px] text-neutral-500">P&amp;L, Balance Sheet, Bank accounts, Invoices</div>
+                <div className="mt-0.5 text-[11px] text-neutral-400">OAuth 2.0 · accounting.reports.read · accounting.transactions</div>
+                {xeroError && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700">
+                    <CircleAlert size={11} />
+                    Auth error: {xeroError}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0">
+              {connections["xero"] === "connected" ? (
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+                    Live ✓
+                  </span>
+                  <a
+                    href="/api/auth/xero"
+                    className="text-[11px] text-neutral-400 hover:text-neutral-600 underline"
+                  >
+                    Re-authorize
+                  </a>
+                </div>
+              ) : (
+                <a
+                  href="/api/auth/xero"
+                  className="rounded-lg border border-[#13B5EA] bg-[#13B5EA] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#0fa3d6]"
+                >
+                  Connect Xero
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Data flow diagram */}
       <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-6">
         <div className="mb-4">
@@ -204,7 +268,8 @@ export default function SyncView({ initialConnections = {} }) {
             { label: "Shopify", color: "#95BF47", desc: "4 stores" },
             { label: "Triple Whale", color: "#6366f1", desc: "Ad metrics" },
             { label: "Loop", color: "#7C3AED", desc: "Subscriptions" },
-            { label: "Jortt", color: "#00A6A6", desc: "Accounting", sublabel: "→ Xero soon" },
+            { label: "Jortt", color: "#00A6A6", desc: "Accounting" },
+            { label: "Xero", color: "#13B5EA", desc: "Accounting" },
           ].map((s, i, arr) => (
             <div key={s.label} className="flex items-center gap-2 flex-1 min-w-0">
               <div className="flex flex-col items-center min-w-[90px]">
@@ -250,6 +315,12 @@ export default function SyncView({ initialConnections = {} }) {
         <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-[12px] text-blue-700">
           <div className="font-semibold mb-1">First-time database setup</div>
           Run <code className="rounded bg-blue-100 px-1 py-0.5 font-mono text-[11px]">supabase/migrations/001_integrations.sql</code> in your Supabase SQL editor to create the integrations table.
+        </div>
+        <div className="rounded-xl border border-[#13B5EA30] bg-[#13B5EA08] p-4 text-[12px] text-[#0e8fb5]">
+          <div className="font-semibold mb-1">Xero OAuth setup</div>
+          In your <strong>Xero Developer portal</strong>, add this redirect URI:
+          <code className="ml-1 rounded bg-[#13B5EA15] px-1 py-0.5 font-mono text-[11px]">http://localhost:3001/api/auth/xero/callback</code>
+          <br />Then click <strong>Connect Xero</strong> above. You will be redirected to Xero to authorize, and tokens will be saved automatically.
         </div>
       </div>
     </>
