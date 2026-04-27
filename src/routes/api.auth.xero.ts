@@ -3,7 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 // Initiates the Xero OAuth 2.0 Authorization Code flow.
 // Visit /api/auth/xero while logged in to connect your Xero organization.
 
+// Xero OAuth 2.0 scopes — every scope listed here MUST be enabled in your
+// Xero app at https://developer.xero.com/app/manage. If any scope is not
+// enabled on the app, Xero returns: unauthorized_client / "Invalid scope for client".
+// Allow override via env var so you can quickly trim scopes without redeploying code logic.
 const XERO_SCOPES =
+  process.env.XERO_SCOPES ??
   "openid profile email offline_access accounting.transactions accounting.reports.read accounting.settings.read";
 
 export const Route = createFileRoute("/api/auth/xero")({
