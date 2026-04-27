@@ -686,9 +686,12 @@ async function getXeroTenantId(): Promise<string | null> {
 
 // Parse a numeric cell value from a Xero report
 function xNum(cell: any): number {
-  const v = String(cell?.Value ?? "").replace(/[, ]/g, "");
-  const n = parseFloat(v);
-  return Number.isFinite(n) ? n : 0;
+  const raw = String(cell?.Value ?? "").trim();
+  if (!raw || raw === "-") return 0;
+  const negative = raw.startsWith("-") || /^\(.*\)$/.test(raw);
+  const cleaned = raw.replace(/[(), ]/g, "").replace(/^-/, "");
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? (negative ? -Math.abs(n) : n) : 0;
 }
 
 // Walk report rows recursively. Returns the LAST SummaryRow under any section
@@ -887,6 +890,56 @@ export async function fetchXero() {
         }
       };
       walk(rows);
+
+      // Fallback for Xero P&L variants where the Section title is blank or
+      // generic, but the row label carries the useful name (e.g. "Total Income",
+      // "Sales", "Turnover"). Prefer total/summary rows to avoid double-counting.
+      if (Object.keys(revenueByMonth).length === 0) {
+        const revenueTotals: any[][] = [];
+        const revenueDetails: any[][] = [];
+        const scanRevenueRows = (rs: any[]) => {
+          for (const r of rs) {
+            if ((r.RowType === "Row" || r.RowType === "SummaryRow") && r.Cells?.length) {
+              const label = String(r.Cells[0]?.Value ?? "").toLowerCase();
+              const looksRevenue =
+                /(income|revenue|turnover|sales|fees)/i.test(label) &&
+                !/(cost of sales|cost of goods|cogs|expense|gross|net|liabilit|asset|equity)/i.test(label);
+              if (looksRevenue) {
+                const isTotal = r.RowType === "SummaryRow" || /^total\b/i.test(label);
+                (isTotal ? revenueTotals : revenueDetails).push(r.Cells);
+              }
+            }
+            if (r.Rows) scanRevenueRows(r.Rows);
+          }
+        };
+        scanRevenueRows(rows);
+
+        const candidates = revenueTotals.length > 0
+          ? [revenueTotals[revenueTotals.length - 1]]
+          : revenueDetails;
+        for (const cells of candidates) {
+          const { byMonth, ytd } = extractCols(cells);
+          Object.entries(byMonth).forEach(([m, v]) => {
+            revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v;
+          });
+          ytdRevenue = (ytdRevenue ?? 0) + ytd;
+        }
+      }
+
+      // If Xero returns a valid P&L with only costs/net profit for the period,
+      // keep the month rows visible and treat missing revenue as zero rather
+      // than failing the whole sync.
+      if (Object.keys(revenueByMonth).length === 0) {
+        const plMonths = new Set([
+          ...Object.keys(expensesByMonth),
+          ...Object.keys(grossProfitByMonth),
+          ...Object.keys(netProfitByMonth),
+        ]);
+        if (plMonths.size > 0) {
+          plMonths.forEach((m) => { revenueByMonth[m] = 0; });
+          if (ytdRevenue === null) ytdRevenue = 0;
+        }
+      }
 
       // Fallback YTD calc if not picked up from a YTD column or section
       if (ytdRevenue === null && Object.keys(revenueByMonth).length > 0) {
