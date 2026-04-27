@@ -571,6 +571,278 @@ export const fetchLoopRaw = _fetchLoop;
 export const fetchJuo  = _fetchJuo;
 export const fetchLoop = _fetchLoop;
 
+// ─── Xero ────────────────────────────────────────────────────────────────────
+//
+// OAuth 2.0 Authorization Code flow — one-time browser auth, then refresh tokens
+// Connect once:  GET /api/auth/xero  (redirects to Xero, stores tokens in Supabase)
+// Token refresh: automatic via stored refresh_token (60-day TTL, rotated on each refresh)
+//
+// CONFIRMED WORKING: requires accounting.reports.read + accounting.transactions scopes
+
+async function getXeroToken(): Promise<string | null> {
+  const clientId     = process.env.XERO_CLIENT_ID;
+  const clientSecret = process.env.XERO_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  // Load stored row from Supabase
+  let row: any = null;
+  try {
+    const { data } = await serviceClient()
+      .from("integrations")
+      .select("access_token, expires_at, metadata")
+      .eq("provider", "xero")
+      .single();
+    row = data;
+  } catch { /* no row yet */ }
+
+  if (!row) {
+    console.warn("Xero: no token stored — visit /api/auth/xero to connect");
+    return null;
+  }
+
+  // Return cached access_token if still valid (2-min buffer)
+  const exp = row.expires_at ? new Date(row.expires_at).getTime() : 0;
+  if (row.access_token && exp > Date.now() + 2 * 60 * 1000) {
+    return row.access_token;
+  }
+
+  // Refresh using stored refresh_token
+  const refreshToken = row.metadata?.refresh_token;
+  if (!refreshToken) {
+    console.warn("Xero: access token expired and no refresh_token — reconnect via /api/auth/xero");
+    return null;
+  }
+
+  try {
+    const creds = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const res = await fetch("https://identity.xero.com/connect/token", {
+      method: "POST",
+      headers: { Authorization: `Basic ${creds}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }).toString(),
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.error("Xero token refresh failed:", res.status, (await res.text()).slice(0, 200));
+      return null;
+    }
+
+    const { access_token, refresh_token: new_refresh, expires_in } = await res.json();
+    if (!access_token) return null;
+
+    const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
+    // Always persist the new refresh_token (Xero rotates them)
+    await serviceClient().from("integrations").upsert(
+      {
+        provider: "xero",
+        access_token,
+        expires_at: expiresAt,
+        updated_at: new Date().toISOString(),
+        metadata: { ...row.metadata, refresh_token: new_refresh ?? refreshToken },
+      },
+      { onConflict: "provider" }
+    );
+    return access_token;
+  } catch (err: any) {
+    console.error("Xero token refresh error:", err.message);
+    return null;
+  }
+}
+
+async function getXeroTenantId(): Promise<string | null> {
+  // tenantId is stored in metadata during the OAuth callback
+  try {
+    const { data } = await serviceClient()
+      .from("integrations").select("metadata").eq("provider", "xero").single();
+    return (data?.metadata?.tenant_id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Parse a numeric cell value from a Xero report
+function xNum(cell: any): number {
+  const v = String(cell?.Value ?? "").replace(/[, ]/g, "");
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Walk report rows recursively to find a SummaryRow under the first matching section title
+function xSectionTotal(rows: any[], titleFragment: string, colIdx = 1): number | null {
+  for (const row of rows) {
+    const title = (row.Title ?? "").toLowerCase();
+    if (row.RowType === "Section" && title.includes(titleFragment.toLowerCase())) {
+      // Look for SummaryRow directly or in nested rows
+      const findSummary = (rs: any[]): number | null => {
+        for (const r of rs) {
+          if (r.RowType === "SummaryRow" && r.Cells?.[colIdx] != null) return xNum(r.Cells[colIdx]);
+          if (r.Rows) { const v = findSummary(r.Rows); if (v !== null) return v; }
+        }
+        return null;
+      };
+      const v = findSummary(row.Rows ?? []);
+      if (v !== null) return v;
+    }
+    if (row.Rows) {
+      const v = xSectionTotal(row.Rows, titleFragment, colIdx);
+      if (v !== null) return v;
+    }
+  }
+  return null;
+}
+
+export async function fetchXero() {
+  const [token, tenantId] = await Promise.all([getXeroToken(), getXeroTenantId()]);
+  if (!token) return null;
+  if (!tenantId) {
+    console.error("Xero: no tenantId — visit /api/auth/xero to connect your organization");
+    return null;
+  }
+
+  const h = { Authorization: `Bearer ${token}`, "Xero-tenant-id": tenantId, Accept: "application/json" };
+  const BASE = "https://api.xero.com/api.xro/2.0";
+
+  // 12 months back, monthly breakdown
+  const fromDate = (() => { const d = new Date(); d.setMonth(d.getMonth() - 11); d.setDate(1); return d.toISOString().split("T")[0]; })();
+  const toDateStr = today();
+  const monthStartStr = startOfMonth();
+
+  try {
+    const [plS, balS, cashS, invS] = await Promise.allSettled([
+      fetch(`${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&periods=12&timeframe=MONTH`, { headers: h, cache: "no-store" })
+        .then(r => r.ok ? r.json() : (console.error(`Xero P&L: ${r.status}`), null)).catch(() => null),
+      fetch(`${BASE}/Reports/BalanceSheet?date=${toDateStr}`, { headers: h, cache: "no-store" })
+        .then(r => r.ok ? r.json() : (console.error(`Xero BalanceSheet: ${r.status}`), null)).catch(() => null),
+      fetch(`${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`, { headers: h, cache: "no-store" })
+        .then(r => r.ok ? r.json() : (console.warn(`Xero BankSummary: ${r.status}`), null)).catch(() => null),
+      fetch(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=Type%3D%3D%22ACCREC%22`, { headers: h, cache: "no-store" })
+        .then(r => r.ok ? r.json() : (console.warn(`Xero Invoices: ${r.status}`), null)).catch(() => null),
+    ]);
+
+    const plData  = plS.status  === "fulfilled" ? plS.value  : null;
+    const balData = balS.status === "fulfilled" ? balS.value : null;
+    const cashData = cashS.status === "fulfilled" ? cashS.value : null;
+    const invData  = invS.status === "fulfilled" ? invS.value  : null;
+
+    // ── Parse P&L report ─────────────────────────────────────────────────────
+    const revenueByMonth:     Record<string, number> = {};
+    const expensesByMonth:    Record<string, number> = {};
+    const grossProfitByMonth: Record<string, number> = {};
+    const netProfitByMonth:   Record<string, number> = {};
+    let ytdRevenue: number | null = null;
+    let ytdExpenses: number | null = null;
+    let ytdNetProfit: number | null = null;
+
+    const plReport = plData?.Reports?.[0];
+    if (plReport) {
+      const rows: any[] = plReport.Rows ?? [];
+      const headerRow = rows.find((r: any) => r.RowType === "Header");
+      // colLabels: ["Description", "Apr '25", "May '25", ..., "YTD"]
+      const colLabels: string[] = (headerRow?.Cells ?? []).map((c: any) => String(c.Value ?? ""));
+      const ytdCol = colLabels.indexOf("YTD");
+
+      const extractCols = (summaryRow: any): { byMonth: Record<string, number>; ytd: number } => {
+        const byMonth: Record<string, number> = {};
+        let ytd = 0;
+        (summaryRow.Cells ?? []).forEach((cell: any, i: number) => {
+          if (i === 0) return;
+          if (i === ytdCol) { ytd = xNum(cell); return; }
+          const label = colLabels[i];
+          if (label) byMonth[label] = xNum(cell);
+        });
+        return { byMonth, ytd };
+      };
+
+      for (const section of rows) {
+        if (section.RowType !== "Section") continue;
+        const title = (section.Title ?? "").toLowerCase();
+        const summaryRow = (section.Rows ?? []).find((r: any) => r.RowType === "SummaryRow");
+        if (!summaryRow) continue;
+
+        const { byMonth, ytd } = extractCols(summaryRow);
+
+        if (title.includes("revenue") || title.includes("income") || title.includes("trading income")) {
+          Object.entries(byMonth).forEach(([m, v]) => { revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v; });
+          ytdRevenue = (ytdRevenue ?? 0) + ytd;
+        } else if (title.includes("gross profit")) {
+          Object.entries(byMonth).forEach(([m, v]) => { grossProfitByMonth[m] = v; });
+        } else if (title.includes("operating") || title.includes("expense") || title.includes("overhead") || title.includes("less operating")) {
+          Object.entries(byMonth).forEach(([m, v]) => { expensesByMonth[m] = (expensesByMonth[m] ?? 0) + v; });
+          ytdExpenses = (ytdExpenses ?? 0) + ytd;
+        } else if (title.includes("net profit") || title.includes("net loss") || title.includes("profit for")) {
+          Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
+          ytdNetProfit = ytd;
+        }
+      }
+    }
+
+    // ── Parse Balance Sheet ───────────────────────────────────────────────────
+    const balRows: any[] = balData?.Reports?.[0]?.Rows ?? [];
+    const totalAssets        = xSectionTotal(balRows, "total assets")        ?? xSectionTotal(balRows, "assets");
+    const currentAssets      = xSectionTotal(balRows, "current assets");
+    const fixedAssets        = xSectionTotal(balRows, "fixed assets")        ?? xSectionTotal(balRows, "non-current assets");
+    const totalLiabilities   = xSectionTotal(balRows, "total liabilities")   ?? xSectionTotal(balRows, "liabilities");
+    const currentLiabilities = xSectionTotal(balRows, "current liabilities");
+    const equity             = xSectionTotal(balRows, "equity")              ?? xSectionTotal(balRows, "net assets");
+
+    // ── Parse Bank Summary ───────────────────────────────────────────────────
+    let cashBalance: number | null = null;
+    const bankAccounts: { name: string; balance: number; currency: string }[] = [];
+    const cashReport = cashData?.Reports?.[0];
+    if (cashReport) {
+      for (const section of cashReport.Rows ?? []) {
+        if (section.RowType !== "Section") continue;
+        for (const row of section.Rows ?? []) {
+          if (row.RowType !== "Row" || !row.Cells?.length) continue;
+          const name = String(row.Cells[0]?.Value ?? "").trim();
+          const bal  = xNum(row.Cells[row.Cells.length - 1]);
+          if (name && name !== "Account" && Math.abs(bal) > 0) {
+            bankAccounts.push({ name, balance: bal, currency: "EUR" });
+            cashBalance = (cashBalance ?? 0) + bal;
+          }
+        }
+      }
+    }
+
+    // ── Parse Invoices (Accounts Receivable) ─────────────────────────────────
+    const invoices: any[] = invData?.Invoices ?? [];
+    const accountsReceivable  = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const overdueInvoices     = invoices.filter(inv => inv.IsOverdue);
+    const overdueAmount       = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+
+    const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
+
+    return {
+      live,
+      tenantId,
+      revenueByMonth,
+      expensesByMonth,
+      grossProfitByMonth,
+      netProfitByMonth,
+      ytdRevenue:   ytdRevenue  !== null ? Math.round(ytdRevenue)  : null,
+      ytdExpenses:  ytdExpenses !== null ? Math.round(ytdExpenses) : null,
+      ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,
+      totalAssets:        totalAssets        !== null ? Math.round(totalAssets)        : null,
+      currentAssets:      currentAssets      !== null ? Math.round(currentAssets)      : null,
+      fixedAssets:        fixedAssets        !== null ? Math.round(fixedAssets)        : null,
+      totalLiabilities:   totalLiabilities   !== null ? Math.round(totalLiabilities)   : null,
+      currentLiabilities: currentLiabilities !== null ? Math.round(currentLiabilities) : null,
+      equity:             equity             !== null ? Math.round(equity)             : null,
+      cashBalance:          cashBalance          !== null ? Math.round(cashBalance)          : null,
+      bankAccounts,
+      accountsReceivable:   accountsReceivable   > 0 ? Math.round(accountsReceivable)   : null,
+      unpaidInvoiceCount:   invoices.length,
+      overdueAmount:        overdueAmount        > 0 ? Math.round(overdueAmount)        : null,
+      overdueInvoiceCount:  overdueInvoices.length,
+      currency: "EUR",
+    };
+  } catch (err: any) {
+    console.error("Xero fetch error:", err.message);
+    return null;
+  }
+}
+
+
 // ─── Jortt ───────────────────────────────────────────────────────────────────
 //
 // CONFIRMED WORKING — client_credentials via form params (NOT Basic auth header)

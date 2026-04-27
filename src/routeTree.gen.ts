@@ -19,6 +19,8 @@ import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.inst
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
+import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
+import { Route as ApiAuthXeroCallbackRouteImport } from './routes/api.auth.xero.callback'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -70,6 +72,16 @@ const ApiJorttCallbackRoute = ApiJorttCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => ApiJorttRoute,
 } as any)
+const ApiAuthXeroRoute = ApiAuthXeroRouteImport.update({
+  id: '/api/auth/xero',
+  path: '/api/auth/xero',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthXeroCallbackRoute = ApiAuthXeroCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthXeroRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -78,10 +90,12 @@ export interface FileRoutesByFullPath {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
+  '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,10 +104,12 @@ export interface FileRoutesByTo {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
+  '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,10 +119,12 @@ export interface FileRoutesById {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
+  '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,10 +135,12 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
+    | '/api/auth/xero/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -129,10 +149,12 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
+    | '/api/auth/xero/callback'
   id:
     | '__root__'
     | '/'
@@ -141,10 +163,12 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/shopify/callback'
     | '/api/shopify/install'
+    | '/api/auth/xero/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -154,6 +178,7 @@ export interface RootRouteChildren {
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
+  ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
 }
@@ -230,6 +255,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiJorttCallbackRouteImport
       parentRoute: typeof ApiJorttRoute
     }
+    '/api/auth/xero': {
+      id: '/api/auth/xero'
+      path: '/api/auth/xero'
+      fullPath: '/api/auth/xero'
+      preLoaderRoute: typeof ApiAuthXeroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/xero/callback': {
+      id: '/api/auth/xero/callback'
+      path: '/callback'
+      fullPath: '/api/auth/xero/callback'
+      preLoaderRoute: typeof ApiAuthXeroCallbackRouteImport
+      parentRoute: typeof ApiAuthXeroRoute
+    }
   }
 }
 
@@ -247,6 +286,18 @@ const ApiJorttRouteWithChildren = ApiJorttRoute._addFileChildren(
   ApiJorttRouteChildren,
 )
 
+interface ApiAuthXeroRouteChildren {
+  ApiAuthXeroCallbackRoute: typeof ApiAuthXeroCallbackRoute
+}
+
+const ApiAuthXeroRouteChildren: ApiAuthXeroRouteChildren = {
+  ApiAuthXeroCallbackRoute: ApiAuthXeroCallbackRoute,
+}
+
+const ApiAuthXeroRouteWithChildren = ApiAuthXeroRoute._addFileChildren(
+  ApiAuthXeroRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
@@ -254,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
+  ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
 }

@@ -14,6 +14,7 @@ interface LiveData {
   juo?: any[] | null;
   loop?: any[] | null;
   jortt?: { opexByMonth: any[]; opexDetail: Record<string, any>; revenueByMonth: Record<string, number>; live: boolean } | null;
+  xero?: Record<string, any> | null;
 }
 
 export default function FinanceDashboard(props: {

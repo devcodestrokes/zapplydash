@@ -116,6 +116,7 @@ function HomePage() {
         juo: data.juo,
         loop: data.loop,
         jortt: data.jortt,
+        xero: data.xero,
       }}
       connections={data.connections}
       syncedAt={data.syncedAt}
