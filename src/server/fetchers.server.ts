@@ -953,39 +953,69 @@ export async function fetchXero() {
       }
     }
 
+    // ── Diagnostics: collect labels actually present in the Xero reports ─────
+    const collectLabels = (rs: any[], out: { sections: string[]; rows: string[] }) => {
+      for (const r of rs ?? []) {
+        if (r.RowType === "Section") {
+          if (r.Title) out.sections.push(String(r.Title));
+          if (r.Rows) collectLabels(r.Rows, out);
+        } else if ((r.RowType === "Row" || r.RowType === "SummaryRow") && r.Cells?.length) {
+          const lbl = String(r.Cells[0]?.Value ?? "").trim();
+          if (lbl) out.rows.push(lbl);
+        }
+      }
+    };
+    const plLabels = { sections: [] as string[], rows: [] as string[] };
+    const bsLabels = { sections: [] as string[], rows: [] as string[] };
+    if (plReport) collectLabels(plReport.Rows ?? [], plLabels);
+
     // ── Parse Balance Sheet ───────────────────────────────────────────────────
     // Xero BS structure: top-level Sections "Assets", "Liabilities", "Equity"
     // each with nested subsections + a final SummaryRow that's the section total.
     // Some orgs also expose explicit "Total Assets" Row at top level.
     const balRows: any[] = balData?.Reports?.[0]?.Rows ?? [];
+    collectLabels(balRows, bsLabels);
+    // Track every lookup attempt for diagnostics: which label/section we tried,
+    // and whether Xero returned a match. The UI can show this verbatim.
+    const bsLookups: { field: string; query: string; type: "row" | "section"; matched: boolean; value: number | null }[] = [];
+    const tryRow = (field: string, q: string) => {
+      const v = xRowByLabel(balRows, q);
+      bsLookups.push({ field, query: q, type: "row", matched: v !== null, value: v });
+      return v;
+    };
+    const trySection = (field: string, q: string) => {
+      const v = xSectionTotal(balRows, q);
+      bsLookups.push({ field, query: q, type: "section", matched: v !== null, value: v });
+      return v;
+    };
     const totalAssets =
-      xRowByLabel(balRows, "total assets") ??
-      xSectionTotal(balRows, "assets");
+      tryRow("Total Assets", "total assets") ??
+      trySection("Total Assets", "assets");
     const currentAssets =
-      xSectionTotal(balRows, "current assets") ??
-      xRowByLabel(balRows, "total current assets");
+      trySection("Current Assets", "current assets") ??
+      tryRow("Current Assets", "total current assets");
     const fixedAssets =
-      xSectionTotal(balRows, "fixed assets") ??
-      xSectionTotal(balRows, "non-current assets") ??
-      xRowByLabel(balRows, "total fixed assets") ??
-      xRowByLabel(balRows, "total non-current assets");
+      trySection("Fixed Assets", "fixed assets") ??
+      trySection("Fixed Assets", "non-current assets") ??
+      tryRow("Fixed Assets", "total fixed assets") ??
+      tryRow("Fixed Assets", "total non-current assets");
     const parsedTotalLiabilities =
-      xRowByLabel(balRows, "total liabilities") ??
-      xRowByLabel(balRows, "total liability") ??
-      xSectionTotal(balRows, "liabilities") ??
-      xSectionTotal(balRows, "liability");
+      tryRow("Total Liabilities", "total liabilities") ??
+      tryRow("Total Liabilities", "total liability") ??
+      trySection("Total Liabilities", "liabilities") ??
+      trySection("Total Liabilities", "liability");
     const currentLiabilities =
-      xSectionTotal(balRows, "current liabilities") ??
-      xSectionTotal(balRows, "current liability") ??
-      xRowByLabel(balRows, "total current liabilities") ??
-      xRowByLabel(balRows, "total current liability");
+      trySection("Current Liabilities", "current liabilities") ??
+      trySection("Current Liabilities", "current liability") ??
+      tryRow("Current Liabilities", "total current liabilities") ??
+      tryRow("Current Liabilities", "total current liability");
     const parsedEquity =
-      xRowByLabel(balRows, "total equity") ??
-      xRowByLabel(balRows, "total capital") ??
-      xRowByLabel(balRows, "net assets") ??
-      xSectionTotal(balRows, "equity") ??
-      xSectionTotal(balRows, "capital") ??
-      xSectionTotal(balRows, "net assets");
+      tryRow("Equity", "total equity") ??
+      tryRow("Equity", "total capital") ??
+      tryRow("Equity", "net assets") ??
+      trySection("Equity", "equity") ??
+      trySection("Equity", "capital") ??
+      trySection("Equity", "net assets");
     const totalLiabilities = parsedTotalLiabilities ??
       (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null);
     const equity = parsedEquity ??
@@ -1041,6 +1071,30 @@ export async function fetchXero() {
       overdueAmount:        overdueAmount        > 0 ? Math.round(overdueAmount)        : null,
       overdueInvoiceCount:  overdueInvoices.length,
       currency: "EUR",
+      _diagnostics: {
+        profitAndLoss: {
+          reportPresent: !!plReport,
+          sectionTitles: plLabels.sections,
+          rowLabels: plLabels.rows.slice(0, 80),
+          parsedRevenueMonths: Object.keys(revenueByMonth),
+          parsedExpenseMonths: Object.keys(expensesByMonth),
+          parsedNetProfitMonths: Object.keys(netProfitByMonth),
+        },
+        balanceSheet: {
+          reportPresent: balRows.length > 0,
+          sectionTitles: bsLabels.sections,
+          rowLabels: bsLabels.rows.slice(0, 80),
+          lookups: bsLookups,
+        },
+        bankSummary: {
+          reportPresent: !!cashReport,
+          accountsFound: bankAccounts.map((b) => b.name),
+        },
+        invoices: {
+          endpointResponded: invData !== null,
+          totalReturned: invoices.length,
+        },
+      },
     };
   } catch (err: any) {
     console.error("Xero fetch error:", err.message);

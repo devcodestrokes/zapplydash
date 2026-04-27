@@ -294,6 +294,7 @@ export interface XeroReportStatus {
   label: string;
   ok: boolean;
   reason?: string;
+  diagnostics?: any;
 }
 
 export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () => {
@@ -314,6 +315,7 @@ export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () =
   }
 
   const reports: XeroReportStatus[] = [];
+  const diag = live._diagnostics ?? {};
 
   // P&L: monthly revenue rows + YTD figure
   if (
@@ -321,13 +323,13 @@ export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () =
     Object.keys(live.revenueByMonth).length > 0 &&
     live.ytdRevenue !== null
   ) {
-    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: true });
+    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: true, diagnostics: diag.profitAndLoss });
   } else {
     const why =
       !live.revenueByMonth || Object.keys(live.revenueByMonth).length === 0
         ? "no monthly revenue rows parsed"
         : "missing YTD revenue total";
-    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: false, reason: why });
+    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: false, reason: why, diagnostics: diag.profitAndLoss });
   }
 
   // Balance Sheet: needs Assets, Liabilities and Equity totals
@@ -336,13 +338,14 @@ export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () =
   if (live.totalLiabilities === null) bsMissing.push("Total Liabilities");
   if (live.equity === null) bsMissing.push("Equity");
   if (bsMissing.length === 0) {
-    reports.push({ key: "balanceSheet", label: "Balance Sheet", ok: true });
+    reports.push({ key: "balanceSheet", label: "Balance Sheet", ok: true, diagnostics: diag.balanceSheet });
   } else {
     reports.push({
       key: "balanceSheet",
       label: "Balance Sheet",
       ok: false,
       reason: `missing ${bsMissing.join(", ")}`,
+      diagnostics: diag.balanceSheet,
     });
   }
 
@@ -351,25 +354,27 @@ export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () =
     (Array.isArray(live.bankAccounts) && live.bankAccounts.length > 0) ||
     live.cashBalance !== null
   ) {
-    reports.push({ key: "bankSummary", label: "Bank Summary", ok: true });
+    reports.push({ key: "bankSummary", label: "Bank Summary", ok: true, diagnostics: diag.bankSummary });
   } else {
     reports.push({
       key: "bankSummary",
       label: "Bank Summary",
       ok: false,
       reason: "no bank accounts or cash balance returned",
+      diagnostics: diag.bankSummary,
     });
   }
 
   // Invoices (A/R): unpaidInvoiceCount is always set when the endpoint responds
   if (typeof live.unpaidInvoiceCount === "number") {
-    reports.push({ key: "invoices", label: "Invoices (A/R)", ok: true });
+    reports.push({ key: "invoices", label: "Invoices (A/R)", ok: true, diagnostics: diag.invoices });
   } else {
     reports.push({
       key: "invoices",
       label: "Invoices (A/R)",
       ok: false,
       reason: "invoice endpoint did not return data",
+      diagnostics: diag.invoices,
     });
   }
 
