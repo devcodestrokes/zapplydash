@@ -20,7 +20,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LogIn, RefreshCw } from "lucide-react";
+import { LogIn, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import type { XeroReportStatus } from "@/server/dashboard-pages.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/accounting")({
