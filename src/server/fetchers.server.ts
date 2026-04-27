@@ -888,34 +888,42 @@ function categorise(name: string): string {
   return "other";
 }
 
-async function getJorttToken(): Promise<string | null> {
+// Get a Jortt access_token for ONE specific scope.
+// Confirmed via official docs (https://developer.jortt.nl/) and live testing:
+//   1. credentials must be sent as HTTP Basic Auth (-u CLIENT:SECRET), NOT as form body params
+//   2. only one scope per request — multi-scope requests return invalid_scope
+//   3. requesting a new token invalidates any previously-issued token for the same client
+async function getJorttTokenForScope(scope: string): Promise<string | null> {
   const clientId     = process.env.JORTT_CLIENT_ID;
   const clientSecret = process.env.JORTT_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
   try {
-    // IMPORTANT: Jortt requires credentials as form BODY params, not Basic auth header
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     const res = await fetch("https://app.jortt.nl/oauth-provider/oauth/token", {
-      method:  "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
       body: new URLSearchParams({
-        grant_type:    "client_credentials",
-        client_id:     clientId,
-        client_secret: clientSecret,
-        scope:         "invoices:read expenses:read reports:read",
+        grant_type: "client_credentials",
+        scope,
       }).toString(),
       cache: "no-store",
     });
 
     if (!res.ok) {
       const err = await res.text();
-      console.error("Jortt token error:", res.status, err.slice(0, 200));
+      // invalid_scope simply means this OAuth app doesn't have that scope
+      // enabled — log at warn level so it doesn't look like a hard failure.
+      console.warn(`Jortt token (scope=${scope}) ${res.status}:`, err.slice(0, 200));
       return null;
     }
-    const { access_token } = await res.json();
-    return access_token ?? null;
+    const json: any = await res.json();
+    return json.access_token ?? null;
   } catch (err: any) {
-    console.error("Jortt token fetch failed:", err.message);
+    console.error(`Jortt token (scope=${scope}) fetch failed:`, err.message);
     return null;
   }
 }
