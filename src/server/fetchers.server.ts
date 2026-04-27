@@ -748,6 +748,25 @@ function xRowByLabel(rows: any[], labelFragment: string, colIdx = 1): number | n
   return null;
 }
 
+function xRowsByLabels(rows: any[], fragments: string[], colIdx = 1) {
+  const lowerFrags = fragments.map((f) => f.toLowerCase());
+  const matches: { label: string; value: number }[] = [];
+  const walk = (rs: any[]) => {
+    for (const row of rs ?? []) {
+      if ((row.RowType === "Row" || row.RowType === "SummaryRow") && row.Cells?.length) {
+        const label = String(row.Cells[0]?.Value ?? "").trim();
+        const lower = label.toLowerCase();
+        if (label && lowerFrags.some((frag) => lower.includes(frag)) && row.Cells[colIdx] != null) {
+          matches.push({ label, value: xNum(row.Cells[colIdx]) });
+        }
+      }
+      if (row.Rows) walk(row.Rows);
+    }
+  };
+  walk(rows);
+  return matches;
+}
+
 export async function fetchXero() {
   const [token, tenantId] = await Promise.all([getXeroToken(), getXeroTenantId()]);
   if (!token) return null;
@@ -781,6 +800,21 @@ export async function fetchXero() {
     }
   };
 
+  const xeroFetchAllInvoicePages = async (url: string) => {
+    const invoices: any[] = [];
+    let lastJson: any = null;
+    for (let page = 1; page <= 50; page++) {
+      const pageUrl = `${url}${url.includes("?") ? "&" : "?"}page=${page}`;
+      const json = await xeroFetch(`Invoices page ${page}`, pageUrl);
+      if (!json) return null;
+      const pageInvoices: any[] = json.Invoices ?? [];
+      invoices.push(...pageInvoices);
+      lastJson = json;
+      if (pageInvoices.length < 100) break;
+    }
+    return { ...lastJson, Invoices: invoices };
+  };
+
   try {
     const [plS, balS, cashS, invS] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
@@ -788,7 +822,7 @@ export async function fetchXero() {
       xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
       xeroFetch("BalanceSheet", `${BASE}/Reports/BalanceSheet?date=${toDateStr}`),
       xeroFetch("BankSummary", `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`),
-      xeroFetch("Invoices", `${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
@@ -1016,10 +1050,20 @@ export async function fetchXero() {
       trySection("Equity", "equity") ??
       trySection("Equity", "capital") ??
       trySection("Equity", "net assets");
+    const arBalanceRows = xRowsByLabels(balRows, ["accounts receivable", "trade debtors", "debtors"]);
+    const arBalance = arBalanceRows.length > 0
+      ? arBalanceRows[arBalanceRows.length - 1].value
+      : null;
+    const derivedCurrentAssets = currentAssets ??
+      (totalAssets !== null && fixedAssets !== null ? totalAssets - fixedAssets : null);
+    const derivedFixedAssets = fixedAssets ??
+      (totalAssets !== null && currentAssets !== null ? totalAssets - currentAssets : null);
     const totalLiabilities = parsedTotalLiabilities ??
       (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null);
     const equity = parsedEquity ??
       (totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
+    const derivedCurrentLiabilities = currentLiabilities ??
+      (totalLiabilities !== null ? totalLiabilities : null);
 
     // ── Parse Bank Summary ───────────────────────────────────────────────────
     let cashBalance: number | null = null;
@@ -1042,9 +1086,10 @@ export async function fetchXero() {
 
     // ── Parse Invoices (Accounts Receivable) ─────────────────────────────────
     const invoices: any[] = invData?.Invoices ?? [];
-    const accountsReceivable  = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const invoiceAccountsReceivable = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
     const overdueInvoices     = invoices.filter(inv => inv.IsOverdue);
     const overdueAmount       = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const accountsReceivable = invoiceAccountsReceivable || arBalance || 0;
 
     const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
@@ -1059,10 +1104,10 @@ export async function fetchXero() {
       ytdExpenses:  ytdExpenses !== null ? Math.round(ytdExpenses) : null,
       ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,
       totalAssets:        totalAssets        !== null ? Math.round(totalAssets)        : null,
-      currentAssets:      currentAssets      !== null ? Math.round(currentAssets)      : null,
-      fixedAssets:        fixedAssets        !== null ? Math.round(fixedAssets)        : null,
+      currentAssets:      derivedCurrentAssets !== null ? Math.round(derivedCurrentAssets) : null,
+      fixedAssets:        derivedFixedAssets   !== null ? Math.round(derivedFixedAssets)   : null,
       totalLiabilities:   totalLiabilities   !== null ? Math.round(totalLiabilities)   : null,
-      currentLiabilities: currentLiabilities !== null ? Math.round(currentLiabilities) : null,
+      currentLiabilities: derivedCurrentLiabilities !== null ? Math.round(derivedCurrentLiabilities) : null,
       equity:             equity             !== null ? Math.round(equity)             : null,
       cashBalance:          cashBalance          !== null ? Math.round(cashBalance)          : null,
       bankAccounts,
@@ -1085,6 +1130,7 @@ export async function fetchXero() {
           sectionTitles: bsLabels.sections,
           rowLabels: bsLabels.rows.slice(0, 80),
           lookups: bsLookups,
+          accountsReceivableRows: arBalanceRows,
         },
         bankSummary: {
           reportPresent: !!cashReport,
@@ -1093,6 +1139,7 @@ export async function fetchXero() {
         invoices: {
           endpointResponded: invData !== null,
           totalReturned: invoices.length,
+          amountDueTotal: invoiceAccountsReceivable,
         },
       },
     };
