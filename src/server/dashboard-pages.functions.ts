@@ -5,7 +5,6 @@ import {
   fetchLoopMarketDetail,
   fetchJuoDetail,
   fetchJorttInvoiceDetail,
-  SHOPIFY_STORE_LIST,
 } from "./dashboard-detail.server";
 import { fetchTripleWhale, fetchXero } from "./fetchers.server";
 import { readAllCache } from "./cache.server";
@@ -14,12 +13,6 @@ const dateRangeSchema = z.object({
   from: z.string(),
   to: z.string(),
 });
-
-export const STORE_OPTIONS = SHOPIFY_STORE_LIST.map((s) => ({
-  code: s.code,
-  flag: s.flag,
-  name: s.name,
-}));
 
 // ─── Store dashboard (Shopify) ──────────────────────────────────────────────
 export const getStoreDashboard = createServerFn({ method: "GET" })
