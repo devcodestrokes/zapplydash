@@ -57,6 +57,22 @@ export default function SyncView({ initialConnections = {} }) {
   const [syncing, setSyncing] = useState(false);
 
   const [xeroError, setXeroError] = useState(null);
+  const [debug, setDebug] = useState(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+
+  const fetchDebug = useServerFn(getSyncDebug);
+
+  const refreshDebug = useCallback(async () => {
+    setDebugLoading(true);
+    try {
+      const d = await fetchDebug();
+      setDebug(d);
+    } catch (err) {
+      console.error("debug fetch failed", err);
+    } finally {
+      setDebugLoading(false);
+    }
+  }, [fetchDebug]);
 
   // Pick up ?connected= or ?error= from OAuth redirect
   useEffect(() => {
@@ -78,12 +94,27 @@ export default function SyncView({ initialConnections = {} }) {
       setXeroError(params.get("xero_error"));
       window.history.replaceState({}, "", "/?view=sync");
     }
-  }, []);
+    // Initial load
+    void refreshDebug();
+  }, [refreshDebug]);
 
   async function syncAll() {
     setSyncing(true);
-    await fetch("/api/jortt").catch(() => {});
-    setTimeout(() => setSyncing(false), 1500);
+    try {
+      // Try /api/sync first; fall back to /api/public/sync (which is exposed
+      // without auth in published builds).
+      let res = await fetch("/api/sync", { method: "POST" }).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch("/api/public/sync", { method: "POST" }).catch(() => null);
+      }
+    } finally {
+      // Poll the debug endpoint a few times so the panel updates as
+      // background jobs finish writing to the cache.
+      for (const delay of [1500, 4000, 8000]) {
+        setTimeout(() => void refreshDebug(), delay);
+      }
+      setTimeout(() => setSyncing(false), 1500);
+    }
   }
 
   return (
