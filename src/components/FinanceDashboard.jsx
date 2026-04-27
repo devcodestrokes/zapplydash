@@ -2447,20 +2447,27 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   })();
 
   // ── Live data only (no mock fallbacks) ────────────────────────────────
+  // Cache may return {__empty:true} or {__error:...} objects instead of arrays — guard everything.
+  const asArr = (v) => (Array.isArray(v) ? v : []);
   const shopifyToday      = liveData?.shopifyToday ?? null;
-  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some(m => m?.live) ? liveData.shopifyMarkets : null;
+  const shopifyMarketsArr = asArr(liveData?.shopifyMarkets);
+  const activeMarkets     = shopifyMarketsArr.some(m => m?.live) ? shopifyMarketsArr : null;
   const shopifyLive       = !!activeMarkets;
-  const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
-  const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
-  const jorttLive         = !!(liveData?.jortt?.live);
-  const xeroLive          = !!(liveData?.xero?.live);
-  const twData            = liveData?.tripleWhale?.filter(m => m.live) ?? [];
+  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !liveData.jortt.__empty && !liveData.jortt.__error ? liveData.jortt : null;
+  const xeroObj           = liveData?.xero && typeof liveData.xero === "object" && !liveData.xero.__empty && !liveData.xero.__error ? liveData.xero : null;
+  const activeOpexByMonth = asArr(jorttObj?.opexByMonth).length > 0 ? jorttObj.opexByMonth : null;
+  const activeOpexDetail  = jorttObj?.opexDetail ?? null;
+  const jorttLive         = !!(jorttObj?.live);
+  const xeroLive          = !!(xeroObj?.live);
+  const twData            = asArr(liveData?.tripleWhale).filter(m => m?.live);
   const twLive            = twData.length > 0;
-  const juoLive           = liveData?.juo?.some(m => m.live) ?? false;
-  const loopLive          = liveData?.loop?.some(m => m.live) ?? false;
+  const juoArr            = asArr(liveData?.juo);
+  const loopArr           = asArr(liveData?.loop);
+  const juoLive           = juoArr.some(m => m?.live);
+  const loopLive          = loopArr.some(m => m?.live);
   const subLive           = juoLive || loopLive;
   // Combined subscription data: JUO (NL) + Loop (UK/US/EU)
-  const allSubData        = [...(liveData?.juo ?? []), ...(liveData?.loop ?? [])].filter(m => m.live);
+  const allSubData        = [...juoArr, ...loopArr].filter(m => m?.live);
   const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
 
   async function handleLogout() {
