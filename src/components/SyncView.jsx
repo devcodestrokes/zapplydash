@@ -260,7 +260,7 @@ export default function SyncView({ initialConnections = {} }) {
                   </span>
                   <a
                     href="/api/auth/xero"
-                    className="text-[11px] text-neutral-400 hover:text-neutral-600 underline"
+                    className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Re-authorize
                   </a>
