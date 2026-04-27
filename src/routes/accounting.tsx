@@ -20,7 +20,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LogIn, RefreshCw } from "lucide-react";
+import { LogIn, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import type { XeroReportStatus } from "@/server/dashboard-pages.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/accounting")({
@@ -49,19 +50,38 @@ function AccountingPage() {
   );
   const { data, isLoading, load } = useInstantDashboardData<XData>("accounting", fetchDashboard, !!user);
   const [syncing, setSyncing] = useState(false);
+  const [syncReports, setSyncReports] = useState<XeroReportStatus[] | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncOk, setSyncOk] = useState(false);
 
   const handleSyncAll = useCallback(async () => {
     setSyncing(true);
-    const t = toast.loading("Syncing all Xero data… (P&L + Balance Sheet)");
+    setSyncOk(false);
+    setSyncError(null);
+    setSyncReports(null);
+    const t = toast.loading("Syncing all Xero reports…");
     try {
       const res: any = await syncXeroAll();
+      setSyncReports(res?.reports ?? null);
       if (res?.ok) {
-        toast.success("Xero sync complete — all reports updated.", { id: t });
+        setSyncOk(true);
+        toast.success("Xero sync complete — all 4 reports updated.", { id: t });
         await load(true);
       } else {
-        toast.error(res?.error ?? "Xero sync failed.", { id: t });
+        setSyncError(res?.error ?? "Xero sync failed.");
+        const failedLabels = (res?.reports ?? [])
+          .filter((r: XeroReportStatus) => !r.ok)
+          .map((r: XeroReportStatus) => r.label)
+          .join(", ");
+        toast.error(
+          failedLabels
+            ? `Failed: ${failedLabels}. Cache not updated.`
+            : res?.error ?? "Xero sync failed.",
+          { id: t }
+        );
       }
     } catch (err: any) {
+      setSyncError(err?.message ?? "Xero sync failed.");
       toast.error(err?.message ?? "Xero sync failed.", { id: t });
     } finally {
       setSyncing(false);
@@ -114,6 +134,45 @@ function AccountingPage() {
       }
     >
       <div className="p-6 space-y-6">
+        {syncReports && (
+          <Card
+            className={
+              syncOk
+                ? "border-emerald-500/40 bg-emerald-500/5"
+                : "border-destructive/40 bg-destructive/5"
+            }
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {syncOk
+                  ? "Xero sync complete"
+                  : "Xero sync incomplete — cache not updated"}
+              </CardTitle>
+              {syncError && !syncOk && (
+                <CardDescription>{syncError}</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1.5 text-sm">
+                {syncReports.map((r) => (
+                  <li key={r.key} className="flex items-start gap-2">
+                    {r.ok ? (
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+                    )}
+                    <span className="font-medium">{r.label}:</span>
+                    <span className={r.ok ? "text-muted-foreground" : "text-destructive"}>
+                      {r.ok ? "OK" : r.reason ?? "failed"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+
         {data?.source === "cache" && (
           <Card className="border-yellow-500/40 bg-yellow-500/5">
             <CardContent className="pt-6 text-sm">
