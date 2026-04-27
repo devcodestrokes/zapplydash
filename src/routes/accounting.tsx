@@ -334,7 +334,7 @@ function AccountingPage() {
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -342,6 +342,7 @@ function KpiCard({ label, value }: { label: string; value: string }) {
       </CardHeader>
       <CardContent>
         <div className="text-xl font-bold">{value}</div>
+        {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
       </CardContent>
     </Card>
   );
