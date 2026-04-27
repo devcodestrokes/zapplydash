@@ -43,10 +43,6 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
           );
         }
 
-        const creds = Buffer.from(`${clientId}:${clientSecret}`).toString(
-          "base64",
-        );
-
         try {
           // Use btoa instead of Buffer for Worker runtime compatibility
           const basicAuth =
