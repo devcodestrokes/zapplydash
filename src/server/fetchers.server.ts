@@ -953,11 +953,28 @@ export async function fetchXero() {
       }
     }
 
+    // ── Diagnostics: collect labels actually present in the Xero reports ─────
+    const collectLabels = (rs: any[], out: { sections: string[]; rows: string[] }) => {
+      for (const r of rs ?? []) {
+        if (r.RowType === "Section") {
+          if (r.Title) out.sections.push(String(r.Title));
+          if (r.Rows) collectLabels(r.Rows, out);
+        } else if ((r.RowType === "Row" || r.RowType === "SummaryRow") && r.Cells?.length) {
+          const lbl = String(r.Cells[0]?.Value ?? "").trim();
+          if (lbl) out.rows.push(lbl);
+        }
+      }
+    };
+    const plLabels = { sections: [] as string[], rows: [] as string[] };
+    const bsLabels = { sections: [] as string[], rows: [] as string[] };
+    if (plReport) collectLabels(plReport.Rows ?? [], plLabels);
+
     // ── Parse Balance Sheet ───────────────────────────────────────────────────
     // Xero BS structure: top-level Sections "Assets", "Liabilities", "Equity"
     // each with nested subsections + a final SummaryRow that's the section total.
     // Some orgs also expose explicit "Total Assets" Row at top level.
     const balRows: any[] = balData?.Reports?.[0]?.Rows ?? [];
+    collectLabels(balRows, bsLabels);
     const totalAssets =
       xRowByLabel(balRows, "total assets") ??
       xSectionTotal(balRows, "assets");
