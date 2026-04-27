@@ -38,6 +38,94 @@ export interface CacheEntry {
 
 export type CacheMap = Record<string, CacheEntry | null>;
 
+const MEMORY_TTL_MS = 30_000;
+const rowMemory = new Map<string, { entry: CacheEntry; readAt: number }>();
+
+function cacheId(provider: string, key: string) {
+  return `${provider}/${key}`;
+}
+
+function remember(provider: string, key: string, entry: CacheEntry) {
+  rowMemory.set(cacheId(provider, key), { entry, readAt: Date.now() });
+}
+
+function getRemembered(provider: string, key: string): CacheEntry | null {
+  const hit = rowMemory.get(cacheId(provider, key));
+  if (!hit) return null;
+  if (Date.now() - hit.readAt > MEMORY_TTL_MS) {
+    rowMemory.delete(cacheId(provider, key));
+    return null;
+  }
+  return hit.entry;
+}
+
+/** Fetch one cache entry instead of downloading the whole cache table. */
+export async function readCache(provider: string, key: string): Promise<CacheEntry | null> {
+  const remembered = getRemembered(provider, key);
+  if (remembered) return remembered;
+
+  try {
+    const { data, error } = await (serviceClient() as any)
+      .from("data_cache")
+      .select("payload, fetched_at")
+      .eq("provider", provider)
+      .eq("cache_key", key)
+      .maybeSingle();
+    if (error) {
+      console.error(`readCache ${provider}/${key} error:`, error.message);
+      return null;
+    }
+    if (!data) return null;
+    const entry = { payload: data.payload, fetchedAt: data.fetched_at };
+    remember(provider, key, entry);
+    return entry;
+  } catch (err: any) {
+    console.error(`readCache ${provider}/${key} exception:`, err?.message);
+    return null;
+  }
+}
+
+/** Fetch only selected cache entries, used by the overview dashboard. */
+export async function readCacheKeys(keys: Array<[string, string]>): Promise<CacheMap> {
+  if (keys.length === 0) return {};
+
+  const out: CacheMap = {};
+  const missing: Array<[string, string]> = [];
+  for (const [provider, key] of keys) {
+    const remembered = getRemembered(provider, key);
+    if (remembered) out[cacheId(provider, key)] = remembered;
+    else missing.push([provider, key]);
+  }
+  if (missing.length === 0) return out;
+
+  const providers = [...new Set(missing.map(([provider]) => provider))];
+  const cacheKeys = [...new Set(missing.map(([, key]) => key))];
+  const wanted = new Set(missing.map(([provider, key]) => cacheId(provider, key)));
+
+  try {
+    const { data, error } = await (serviceClient() as any)
+      .from("data_cache")
+      .select("provider, cache_key, payload, fetched_at")
+      .in("provider", providers)
+      .in("cache_key", cacheKeys);
+    if (error) {
+      console.error("readCacheKeys error:", error.message);
+      return out;
+    }
+    for (const row of (data ?? []) as any[]) {
+      const id = cacheId(row.provider, row.cache_key);
+      if (!wanted.has(id)) continue;
+      const entry = { payload: row.payload, fetchedAt: row.fetched_at };
+      out[id] = entry;
+      remember(row.provider, row.cache_key, entry);
+    }
+    return out;
+  } catch (err: any) {
+    console.error("readCacheKeys exception:", err?.message);
+    return out;
+  }
+}
+
 /**
  * Fetch all dashboard cache rows in ONE query.
  * Returns a map keyed by "provider/cache_key".
@@ -58,6 +146,7 @@ export async function readAllCache(): Promise<CacheMap> {
         payload: row.payload,
         fetchedAt: row.fetched_at,
       };
+      remember(row.provider, row.cache_key, map[`${row.provider}/${row.cache_key}`]!);
     }
     return map;
   } catch (err: any) {
@@ -94,6 +183,7 @@ export async function writeCache(provider: string, key: string, payload: any): P
       console.error(`writeCache ${id} db error:`, msg);
       lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
     } else {
+      remember(provider, key, { payload, fetchedAt: new Date().toISOString() });
       // Clear any previous error after a successful write.
       lastWriteErrors.delete(id);
     }
