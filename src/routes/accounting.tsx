@@ -50,19 +50,38 @@ function AccountingPage() {
   );
   const { data, isLoading, load } = useInstantDashboardData<XData>("accounting", fetchDashboard, !!user);
   const [syncing, setSyncing] = useState(false);
+  const [syncReports, setSyncReports] = useState<XeroReportStatus[] | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncOk, setSyncOk] = useState(false);
 
   const handleSyncAll = useCallback(async () => {
     setSyncing(true);
-    const t = toast.loading("Syncing all Xero data… (P&L + Balance Sheet)");
+    setSyncOk(false);
+    setSyncError(null);
+    setSyncReports(null);
+    const t = toast.loading("Syncing all Xero reports…");
     try {
       const res: any = await syncXeroAll();
+      setSyncReports(res?.reports ?? null);
       if (res?.ok) {
-        toast.success("Xero sync complete — all reports updated.", { id: t });
+        setSyncOk(true);
+        toast.success("Xero sync complete — all 4 reports updated.", { id: t });
         await load(true);
       } else {
-        toast.error(res?.error ?? "Xero sync failed.", { id: t });
+        setSyncError(res?.error ?? "Xero sync failed.");
+        const failedLabels = (res?.reports ?? [])
+          .filter((r: XeroReportStatus) => !r.ok)
+          .map((r: XeroReportStatus) => r.label)
+          .join(", ");
+        toast.error(
+          failedLabels
+            ? `Failed: ${failedLabels}. Cache not updated.`
+            : res?.error ?? "Xero sync failed.",
+          { id: t }
+        );
       }
     } catch (err: any) {
+      setSyncError(err?.message ?? "Xero sync failed.");
       toast.error(err?.message ?? "Xero sync failed.", { id: t });
     } finally {
       setSyncing(false);
