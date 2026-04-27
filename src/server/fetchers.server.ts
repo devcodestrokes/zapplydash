@@ -1037,7 +1037,12 @@ export async function fetchXero() {
       trySection("Total Assets", "assets");
     const currentAssets =
       trySection("Current Assets", "current assets") ??
-      tryRow("Current Assets", "total current assets");
+      tryRow("Current Assets", "total current assets") ??
+      // Some Xero orgs (especially small ones) expose only a top-level "Bank"
+      // section instead of a "Current Assets" wrapper. Treat Total Bank as
+      // current assets in that case.
+      trySection("Current Assets", "bank") ??
+      tryRow("Current Assets", "total bank");
     const fixedAssets =
       trySection("Fixed Assets", "fixed assets") ??
       trySection("Fixed Assets", "non-current assets") ??
@@ -1064,16 +1069,26 @@ export async function fetchXero() {
     const arBalance = arBalanceRows.length > 0
       ? arBalanceRows[arBalanceRows.length - 1].value
       : null;
+
+    // Detect whether Xero returned ANY liabilities section/row at all.
+    // If Assets and Equity are present but liabilities are entirely absent,
+    // this org legitimately has no liabilities — treat as 0 instead of failing.
+    const hasLiabilitiesSection =
+      bsLabels.sections.some((s) => /liabilit/i.test(s)) ||
+      bsLabels.rows.some((r) => /liabilit/i.test(r));
+
     const derivedCurrentAssets = currentAssets ??
       (totalAssets !== null && fixedAssets !== null ? totalAssets - fixedAssets : null);
     const derivedFixedAssets = fixedAssets ??
       (totalAssets !== null && currentAssets !== null ? totalAssets - currentAssets : null);
     const totalLiabilities = parsedTotalLiabilities ??
-      (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null);
+      (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null) ??
+      (!hasLiabilitiesSection && (totalAssets !== null || parsedEquity !== null) ? 0 : null);
     const equity = parsedEquity ??
       (totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
     const derivedCurrentLiabilities = currentLiabilities ??
       (totalLiabilities !== null ? totalLiabilities : null);
+
 
     // ── Parse Bank Summary + full Accounts list ──────────────────────────────
     // 1) Build a base list from /Accounts (every BANK account, with currency,
