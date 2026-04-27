@@ -226,7 +226,7 @@ const OverviewView = ({ range, setRange, data = [], totals, liveMarkets = null, 
   const liveMER         = liveTWNL?.mer ?? null;
   const liveNCPA        = liveTWNL?.ncpa ?? null;
   const liveLtvCpa      = liveTWNL?.ltvCpa ?? null;
-  const liveLoop        = loopData?.find(l => l.live) ?? null;
+  const liveLoop        = (Array.isArray(loopData) ? loopData : []).find((l: any) => l?.live) ?? null;
   const liveMRR         = liveLoop?.mrr ?? null;
   return (<>
     <div className="flex items-end justify-between">
