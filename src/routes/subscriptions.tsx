@@ -56,10 +56,10 @@ function SubscriptionsPage() {
   const [data, setData] = useState<SubData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const load = () => {
+  const load = (force = false) => {
     setIsLoading(true);
     getSubscriptionDashboard({
-      data: { storeCode: storeCode as any, from: toIsoDate(range.from), to: toIsoDate(range.to) },
+      data: { storeCode: storeCode as any, from: toIsoDate(range.from), to: toIsoDate(range.to), force },
     })
       .then((d) => setData(d))
       .finally(() => setIsLoading(false));
@@ -67,7 +67,7 @@ function SubscriptionsPage() {
 
   useEffect(() => {
     if (!user) return;
-    load();
+    load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, storeCode, range.from?.getTime(), range.to?.getTime()]);
 
@@ -93,11 +93,16 @@ function SubscriptionsPage() {
         <>
           <StoreSelect value={storeCode} onChange={setStoreCode} options={[...STORE_OPTIONS]} />
           <DateRangePicker value={range} onChange={setRange} />
-          <RefreshButton onRefresh={load} isLoading={isLoading} />
+          <RefreshButton onRefresh={() => load(true)} isLoading={isLoading} />
         </>
       }
     >
       <div className="p-6 space-y-6">
+        {data?.source === "cache" && (
+          <div className="text-xs text-muted-foreground">
+            Cached · updated {Math.round((data as any).ageMinutes ?? 0)} min ago · click Refresh for live data
+          </div>
+        )}
         <Card className="bg-card/50">
           <CardContent className="pt-6 flex items-center gap-3 text-sm">
             <span className="font-medium">Source:</span>
