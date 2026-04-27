@@ -9,7 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TripleWhaleRouteImport } from './routes/triple-whale'
+import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
+import { Route as StoreRouteImport } from './routes/store'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InvoicesRouteImport } from './routes/invoices'
+import { Route as AccountingRouteImport } from './routes/accounting'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
@@ -25,9 +30,34 @@ import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
 import { Route as ApiAuthJorttRouteImport } from './routes/api.auth.jortt'
 import { Route as ApiAuthXeroCallbackRouteImport } from './routes/api.auth.xero.callback'
 
+const TripleWhaleRoute = TripleWhaleRouteImport.update({
+  id: '/triple-whale',
+  path: '/triple-whale',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SubscriptionsRoute = SubscriptionsRouteImport.update({
+  id: '/subscriptions',
+  path: '/subscriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoreRoute = StoreRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesRoute = InvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountingRoute = AccountingRouteImport.update({
+  id: '/accounting',
+  path: '/accounting',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -103,7 +133,12 @@ const ApiAuthXeroCallbackRoute = ApiAuthXeroCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accounting': typeof AccountingRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/store': typeof StoreRoute
+  '/subscriptions': typeof SubscriptionsRoute
+  '/triple-whale': typeof TripleWhaleRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -120,7 +155,12 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accounting': typeof AccountingRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/store': typeof StoreRoute
+  '/subscriptions': typeof SubscriptionsRoute
+  '/triple-whale': typeof TripleWhaleRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -138,7 +178,12 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/accounting': typeof AccountingRoute
+  '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/store': typeof StoreRoute
+  '/subscriptions': typeof SubscriptionsRoute
+  '/triple-whale': typeof TripleWhaleRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -157,7 +202,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accounting'
+    | '/invoices'
     | '/login'
+    | '/store'
+    | '/subscriptions'
+    | '/triple-whale'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -174,7 +224,12 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/accounting'
+    | '/invoices'
     | '/login'
+    | '/store'
+    | '/subscriptions'
+    | '/triple-whale'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -191,7 +246,12 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/accounting'
+    | '/invoices'
     | '/login'
+    | '/store'
+    | '/subscriptions'
+    | '/triple-whale'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -209,7 +269,12 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountingRoute: typeof AccountingRoute
+  InvoicesRoute: typeof InvoicesRoute
   LoginRoute: typeof LoginRoute
+  StoreRoute: typeof StoreRoute
+  SubscriptionsRoute: typeof SubscriptionsRoute
+  TripleWhaleRoute: typeof TripleWhaleRoute
   ApiJorttRoute: typeof ApiJorttRouteWithChildren
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -224,11 +289,46 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/triple-whale': {
+      id: '/triple-whale'
+      path: '/triple-whale'
+      fullPath: '/triple-whale'
+      preLoaderRoute: typeof TripleWhaleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/subscriptions': {
+      id: '/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/subscriptions'
+      preLoaderRoute: typeof SubscriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/store': {
+      id: '/store'
+      path: '/store'
+      fullPath: '/store'
+      preLoaderRoute: typeof StoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices': {
+      id: '/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof InvoicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accounting': {
+      id: '/accounting'
+      path: '/accounting'
+      fullPath: '/accounting'
+      preLoaderRoute: typeof AccountingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -360,7 +460,12 @@ const ApiAuthXeroRouteWithChildren = ApiAuthXeroRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountingRoute: AccountingRoute,
+  InvoicesRoute: InvoicesRoute,
   LoginRoute: LoginRoute,
+  StoreRoute: StoreRoute,
+  SubscriptionsRoute: SubscriptionsRoute,
+  TripleWhaleRoute: TripleWhaleRoute,
   ApiJorttRoute: ApiJorttRouteWithChildren,
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
