@@ -336,3 +336,114 @@ function KpiCard({ label, value }: { label: string; value: string }) {
     </Card>
   );
 }
+
+function ReportDiagnostics({
+  reportKey,
+  diagnostics,
+}: {
+  reportKey: "profitAndLoss" | "balanceSheet";
+  diagnostics: any;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!diagnostics) return null;
+
+  return (
+    <div className="ml-6 rounded-md border border-border/60 bg-background/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-muted/40 transition-colors"
+      >
+        {open ? "▾" : "▸"} Show Xero labels & matches
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-3 text-xs">
+          {!diagnostics.reportPresent && (
+            <div className="text-destructive">Xero did not return this report.</div>
+          )}
+
+          {diagnostics.sectionTitles?.length > 0 && (
+            <div>
+              <div className="font-semibold mb-1">Section titles returned by Xero:</div>
+              <div className="flex flex-wrap gap-1">
+                {diagnostics.sectionTitles.map((s: string, i: number) => (
+                  <span key={i} className="px-1.5 py-0.5 rounded bg-muted text-foreground/80">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {diagnostics.rowLabels?.length > 0 && (
+            <div>
+              <div className="font-semibold mb-1">
+                Row labels found ({diagnostics.rowLabels.length}):
+              </div>
+              <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
+                {diagnostics.rowLabels.map((s: string, i: number) => (
+                  <span key={i} className="px-1.5 py-0.5 rounded bg-muted/60 text-foreground/70">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {reportKey === "profitAndLoss" && (
+            <div className="space-y-1">
+              <div>
+                <span className="font-semibold">Revenue months parsed:</span>{" "}
+                {diagnostics.parsedRevenueMonths?.length > 0
+                  ? diagnostics.parsedRevenueMonths.join(", ")
+                  : <span className="text-destructive">none</span>}
+              </div>
+              <div>
+                <span className="font-semibold">Expense months parsed:</span>{" "}
+                {diagnostics.parsedExpenseMonths?.length > 0
+                  ? diagnostics.parsedExpenseMonths.join(", ")
+                  : <span className="text-destructive">none</span>}
+              </div>
+              <div>
+                <span className="font-semibold">Net profit months parsed:</span>{" "}
+                {diagnostics.parsedNetProfitMonths?.length > 0
+                  ? diagnostics.parsedNetProfitMonths.join(", ")
+                  : <span className="text-destructive">none</span>}
+              </div>
+            </div>
+          )}
+
+          {reportKey === "balanceSheet" && diagnostics.lookups?.length > 0 && (
+            <div>
+              <div className="font-semibold mb-1">Balance Sheet lookups attempted:</div>
+              <table className="w-full text-left">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="pr-2 font-medium">Field</th>
+                    <th className="pr-2 font-medium">Type</th>
+                    <th className="pr-2 font-medium">Query</th>
+                    <th className="pr-2 font-medium">Match</th>
+                    <th className="font-medium">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diagnostics.lookups.map((l: any, i: number) => (
+                    <tr key={i} className="border-t border-border/40">
+                      <td className="pr-2 py-0.5">{l.field}</td>
+                      <td className="pr-2 py-0.5 text-muted-foreground">{l.type}</td>
+                      <td className="pr-2 py-0.5 font-mono">"{l.query}"</td>
+                      <td className={`pr-2 py-0.5 ${l.matched ? "text-emerald-500" : "text-destructive"}`}>
+                        {l.matched ? "✓" : "✗"}
+                      </td>
+                      <td className="py-0.5">{l.value ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
