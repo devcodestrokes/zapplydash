@@ -7,9 +7,23 @@ import { createFileRoute } from "@tanstack/react-router";
 // Xero app at https://developer.xero.com/app/manage. If any scope is not
 // enabled on the app, Xero returns: unauthorized_client / "Invalid scope for client".
 // Allow override via env var so you can quickly trim scopes without redeploying code logic.
+// NOTE: Xero replaced broad scopes with granular ones for apps created after
+// 2 March 2026. Use the new granular scope names (e.g. accounting.transactions.read
+// instead of accounting.transactions). See: https://developer.xero.com/documentation/guides/oauth2/scopes/
 const XERO_SCOPES =
   process.env.XERO_SCOPES ??
-  "openid profile email offline_access accounting.transactions";
+  [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    // Granular accounting scopes (read-only — safe defaults)
+    "accounting.transactions.read",
+    "accounting.contacts.read",
+    "accounting.reports.read",
+    "accounting.settings.read",
+    "accounting.journals.read",
+  ].join(" ");
 
 export const Route = createFileRoute("/api/auth/xero")({
   server: {
