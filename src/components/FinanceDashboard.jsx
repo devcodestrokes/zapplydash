@@ -1031,7 +1031,7 @@ const MetricsView = ({ twData = [] }) => {
    ========================================================================= */
 
 const ReconciliationView = ({ shopifyMarkets = null, jorttData = null }) => {
-  const shopifyTotal = shopifyMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? null;
+  const shopifyTotal = Array.isArray(shopifyMarkets) ? shopifyMarkets.filter(m => m?.live).reduce((s, m) => s + (m.revenue ?? 0), 0) : null;
   const jorttRevenue = jorttData?.revenueByMonth
     ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0)
     : null;
