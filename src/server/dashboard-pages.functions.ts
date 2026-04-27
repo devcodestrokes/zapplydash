@@ -276,3 +276,50 @@ export const getAccountingDashboard = createServerFn({ method: "GET" })
       error: result.error,
     };
   });
+
+/**
+ * Strict full Xero sync — fetches P&L + Balance Sheet (+ Bank + Invoices).
+ * Cache is ONLY updated if BOTH the Profit & Loss and the full Balance
+ * Sheet were parsed successfully. Otherwise the existing cache is left
+ * untouched and the call returns an error so the UI can surface it.
+ */
+export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () => {
+  const live: any = await fetchXero();
+
+  if (!live) {
+    return {
+      ok: false as const,
+      error:
+        "Xero is not connected. Visit /api/auth/xero to connect your organization.",
+    };
+  }
+
+  const missing: string[] = [];
+  const plOk =
+    live.revenueByMonth && Object.keys(live.revenueByMonth).length > 0 &&
+    live.ytdRevenue !== null;
+  const bsOk =
+    live.totalAssets !== null &&
+    live.totalLiabilities !== null &&
+    live.equity !== null;
+
+  if (!plOk) missing.push("Profit & Loss");
+  if (!bsOk) missing.push("Balance Sheet");
+
+  if (missing.length > 0) {
+    return {
+      ok: false as const,
+      error: `Sync incomplete — missing: ${missing.join(", ")}. Cache was not updated.`,
+      partial: live,
+    };
+  }
+
+  // All required reports succeeded — commit to cache atomically.
+  await writeCache("xero", "accounting", live);
+
+  return {
+    ok: true as const,
+    data: live,
+    fetchedAt: new Date().toISOString(),
+  };
+});
