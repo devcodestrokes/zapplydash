@@ -48,12 +48,20 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
         );
 
         try {
+          // Use btoa instead of Buffer for Worker runtime compatibility
+          const basicAuth =
+            typeof Buffer !== "undefined"
+              ? Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
+              : btoa(`${clientId}:${clientSecret}`);
+
+          console.log("[Xero callback] exchanging code for token, redirect_uri:", redirectUri);
+
           const tokenRes = await fetch(
             "https://identity.xero.com/connect/token",
             {
               method: "POST",
               headers: {
-                Authorization: `Basic ${creds}`,
+                Authorization: `Basic ${basicAuth}`,
                 "Content-Type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams({
@@ -67,15 +75,16 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
 
           if (!tokenRes.ok) {
             const body = await tokenRes.text();
-            console.error("Xero token exchange failed:", tokenRes.status, body);
+            console.error("[Xero callback] token exchange failed:", tokenRes.status, body);
             return Response.redirect(
-              `${appUrl}/?xero_error=token_exchange_failed`,
+              `${appUrl}/?xero_error=token_exchange_failed&detail=${encodeURIComponent(body.slice(0, 200))}`,
               302,
             );
           }
 
-          const { access_token, refresh_token, expires_in } =
-            await tokenRes.json();
+          const tokenJson = await tokenRes.json();
+          const { access_token, refresh_token, expires_in } = tokenJson;
+          console.log("[Xero callback] token received, expires_in:", expires_in);
 
           const connRes = await fetch("https://api.xero.com/connections", {
             headers: {
@@ -85,6 +94,8 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
             cache: "no-store",
           });
           const connections = connRes.ok ? await connRes.json() : [];
+          console.log("[Xero callback] connections count:", Array.isArray(connections) ? connections.length : 0);
+
           const zapplyOrg =
             (connections as any[]).find((c) =>
               (c.tenantName ?? "").toLowerCase().includes("zapply"),
@@ -99,10 +110,12 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
             Date.now() + ((expires_in ?? 1800) - 60) * 1000,
           ).toISOString();
 
-          await (serviceClient() as any).from("integrations").upsert(
+          const sb = serviceClient();
+          const { error: upsertError } = await (sb as any).from("integrations").upsert(
             {
               provider: "xero",
               access_token,
+              refresh_token: refresh_token ?? null,
               expires_at: expiresAt,
               updated_at: new Date().toISOString(),
               metadata: {
@@ -119,12 +132,31 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
             { onConflict: "provider" },
           );
 
-          console.log(`Xero connected: ${tenantName} (${tenantId})`);
+          if (upsertError) {
+            console.error("[Xero callback] DB upsert error:", upsertError);
+            return Response.redirect(
+              `${appUrl}/?xero_error=db_upsert_failed&detail=${encodeURIComponent(upsertError.message)}`,
+              302,
+            );
+          }
+
+          // Invalidate stale empty cache so next dashboard load fetches live
+          try {
+            await (sb as any).from("data_cache").delete().eq("provider", "xero").eq("cache_key", "accounting");
+          } catch (e) {
+            console.warn("[Xero callback] cache invalidate skipped:", e);
+          }
+
+          console.log(`[Xero callback] connected: ${tenantName} (${tenantId})`);
           return Response.redirect(`${appUrl}/?xero_connected=1`, 302);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          console.error("Xero callback error:", msg);
-          return Response.redirect(`${appUrl}/?xero_error=callback_error`, 302);
+          const stack = err instanceof Error ? err.stack : "";
+          console.error("[Xero callback] unhandled error:", msg, stack);
+          return Response.redirect(
+            `${appUrl}/?xero_error=callback_error&detail=${encodeURIComponent(msg.slice(0, 200))}`,
+            302,
+          );
         }
       },
     },
