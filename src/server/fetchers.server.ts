@@ -806,53 +806,126 @@ export async function fetchXero() {
     if (plReport) {
       const rows: any[] = plReport.Rows ?? [];
       const headerRow = rows.find((r: any) => r.RowType === "Header");
-      // colLabels: ["Description", "Apr '25", "May '25", ..., "YTD"]
+      // colLabels: ["", "Apr 25", "May 25", ..., "YTD"] OR just one period column
       const colLabels: string[] = (headerRow?.Cells ?? []).map((c: any) => String(c.Value ?? ""));
-      const ytdCol = colLabels.indexOf("YTD");
+      const ytdCol = colLabels.findIndex((l) => /ytd/i.test(l));
 
-      const extractCols = (summaryRow: any): { byMonth: Record<string, number>; ytd: number } => {
+      const extractCols = (cells: any[]): { byMonth: Record<string, number>; ytd: number } => {
         const byMonth: Record<string, number> = {};
         let ytd = 0;
-        (summaryRow.Cells ?? []).forEach((cell: any, i: number) => {
+        cells.forEach((cell: any, i: number) => {
           if (i === 0) return;
           if (i === ytdCol) { ytd = xNum(cell); return; }
           const label = colLabels[i];
           if (label) byMonth[label] = xNum(cell);
         });
+        // If no YTD column, sum the monthly values as YTD
+        if (ytdCol === -1) ytd = Object.values(byMonth).reduce((s, v) => s + v, 0);
         return { byMonth, ytd };
       };
 
-      for (const section of rows) {
-        if (section.RowType !== "Section") continue;
-        const title = (section.Title ?? "").toLowerCase();
-        const summaryRow = (section.Rows ?? []).find((r: any) => r.RowType === "SummaryRow");
-        if (!summaryRow) continue;
+      // Recursively walk every Section, classifying by title & accumulating values.
+      // Xero P&L structure varies: some orgs use "Income"+"Less Operating Expenses",
+      // others "Trading Income"+"Less Cost of Sales"+"Gross Profit"+"Less Operating Expenses".
+      // We accept any of those and use the LAST SummaryRow as the section total.
+      const walk = (sections: any[]) => {
+        for (const section of sections) {
+          if (section.RowType !== "Section") continue;
+          const title = (section.Title ?? "").toLowerCase();
+          const subRows: any[] = section.Rows ?? [];
+          // Find LAST summary row of this section (Xero puts subsection totals first)
+          let summaryRow: any = null;
+          for (const r of subRows) {
+            if (r.RowType === "SummaryRow") summaryRow = r;
+          }
 
-        const { byMonth, ytd } = extractCols(summaryRow);
+          if (summaryRow) {
+            const { byMonth, ytd } = extractCols(summaryRow.Cells ?? []);
 
-        if (title.includes("revenue") || title.includes("income") || title.includes("trading income")) {
-          Object.entries(byMonth).forEach(([m, v]) => { revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v; });
-          ytdRevenue = (ytdRevenue ?? 0) + ytd;
-        } else if (title.includes("gross profit")) {
-          Object.entries(byMonth).forEach(([m, v]) => { grossProfitByMonth[m] = v; });
-        } else if (title.includes("operating") || title.includes("expense") || title.includes("overhead") || title.includes("less operating")) {
-          Object.entries(byMonth).forEach(([m, v]) => { expensesByMonth[m] = (expensesByMonth[m] ?? 0) + v; });
-          ytdExpenses = (ytdExpenses ?? 0) + ytd;
-        } else if (title.includes("net profit") || title.includes("net loss") || title.includes("profit for")) {
-          Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
-          ytdNetProfit = ytd;
+            const isRevenue =
+              title.includes("income") || title.includes("revenue") || title.includes("turnover") || title.includes("sales");
+            const isCogs =
+              title.includes("cost of sales") || title.includes("cost of goods") || title.includes("cogs");
+            const isGross = title.includes("gross profit") || title.includes("gross margin");
+            const isExpense =
+              title.includes("operating expense") || title.includes("less operating") ||
+              title.includes("overhead") || title.includes("administrative") ||
+              (title.includes("expense") && !title.includes("non-operating"));
+            const isNet =
+              title.includes("net profit") || title.includes("net loss") ||
+              title.includes("profit for") || title.includes("net income");
+
+            if (isRevenue && !isGross && !isNet) {
+              Object.entries(byMonth).forEach(([m, v]) => { revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v; });
+              ytdRevenue = (ytdRevenue ?? 0) + ytd;
+            } else if (isGross) {
+              Object.entries(byMonth).forEach(([m, v]) => { grossProfitByMonth[m] = v; });
+            } else if (isCogs || isExpense) {
+              Object.entries(byMonth).forEach(([m, v]) => { expensesByMonth[m] = (expensesByMonth[m] ?? 0) + v; });
+              ytdExpenses = (ytdExpenses ?? 0) + ytd;
+            } else if (isNet) {
+              Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
+              ytdNetProfit = ytd;
+            }
+          }
+
+          // Some Xero orgs put "Net Profit" as a top-level Row (not Section)
+          // — so also scan child rows recursively.
+          walk(subRows);
         }
+
+        // Also scan top-level Rows for "Net Profit" / "Total Income" labels
+        for (const r of sections) {
+          if (r.RowType === "Row" && r.Cells?.length) {
+            const label = String(r.Cells[0]?.Value ?? "").toLowerCase();
+            if (label.includes("net profit") || label.includes("net income")) {
+              const { byMonth, ytd } = extractCols(r.Cells);
+              Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
+              if (ytdNetProfit === null) ytdNetProfit = ytd;
+            }
+          }
+        }
+      };
+      walk(rows);
+
+      // Fallback YTD calc if not picked up from a YTD column or section
+      if (ytdRevenue === null && Object.keys(revenueByMonth).length > 0) {
+        ytdRevenue = Object.values(revenueByMonth).reduce((s, v) => s + v, 0);
+      }
+      if (ytdExpenses === null && Object.keys(expensesByMonth).length > 0) {
+        ytdExpenses = Object.values(expensesByMonth).reduce((s, v) => s + v, 0);
+      }
+      if (ytdNetProfit === null && Object.keys(netProfitByMonth).length > 0) {
+        ytdNetProfit = Object.values(netProfitByMonth).reduce((s, v) => s + v, 0);
       }
     }
 
     // ── Parse Balance Sheet ───────────────────────────────────────────────────
+    // Xero BS structure: top-level Sections "Assets", "Liabilities", "Equity"
+    // each with nested subsections + a final SummaryRow that's the section total.
+    // Some orgs also expose explicit "Total Assets" Row at top level.
     const balRows: any[] = balData?.Reports?.[0]?.Rows ?? [];
-    const totalAssets        = xSectionTotal(balRows, "total assets")        ?? xSectionTotal(balRows, "assets");
-    const currentAssets      = xSectionTotal(balRows, "current assets");
-    const fixedAssets        = xSectionTotal(balRows, "fixed assets")        ?? xSectionTotal(balRows, "non-current assets");
-    const totalLiabilities   = xSectionTotal(balRows, "total liabilities")   ?? xSectionTotal(balRows, "liabilities");
-    const currentLiabilities = xSectionTotal(balRows, "current liabilities");
-    const equity             = xSectionTotal(balRows, "equity")              ?? xSectionTotal(balRows, "net assets");
+    const totalAssets =
+      xRowByLabel(balRows, "total assets") ??
+      xSectionTotal(balRows, "assets");
+    const currentAssets =
+      xSectionTotal(balRows, "current assets") ??
+      xRowByLabel(balRows, "total current assets");
+    const fixedAssets =
+      xSectionTotal(balRows, "fixed assets") ??
+      xSectionTotal(balRows, "non-current assets") ??
+      xRowByLabel(balRows, "total fixed assets") ??
+      xRowByLabel(balRows, "total non-current assets");
+    const totalLiabilities =
+      xRowByLabel(balRows, "total liabilities") ??
+      xSectionTotal(balRows, "liabilities");
+    const currentLiabilities =
+      xSectionTotal(balRows, "current liabilities") ??
+      xRowByLabel(balRows, "total current liabilities");
+    const equity =
+      xRowByLabel(balRows, "total equity") ??
+      xSectionTotal(balRows, "equity") ??
+      xSectionTotal(balRows, "net assets");
 
     // ── Parse Bank Summary ───────────────────────────────────────────────────
     let cashBalance: number | null = null;
