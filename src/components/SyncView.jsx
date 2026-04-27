@@ -354,9 +354,10 @@ export default function SyncView({ initialConnections = {} }) {
             <div className="shrink-0">
               {connections["xero"] === "connected" ? (
                 <div className="flex flex-col items-end gap-1.5">
-                  <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                    Live ✓
-                  </span>
+                  <LiveStatusBadge
+                    status={getSourceStatus("xero")}
+                    errorMessage={getSourceErrorMessage("xero")}
+                  />
                   <a
                     href="/api/auth/xero"
                     className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
