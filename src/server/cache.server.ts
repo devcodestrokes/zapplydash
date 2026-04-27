@@ -66,8 +66,22 @@ export async function readAllCache(): Promise<CacheMap> {
   }
 }
 
+/**
+ * In-memory log of the most recent write error per "provider/key".
+ * Cleared automatically on the next successful write. Read by the
+ * sync debug endpoint to surface what's actually breaking.
+ */
+const lastWriteErrors = new Map<string, { message: string; at: string }>();
+
+export function getWriteErrors(): Record<string, { message: string; at: string }> {
+  const out: Record<string, { message: string; at: string }> = {};
+  for (const [k, v] of lastWriteErrors.entries()) out[k] = v;
+  return out;
+}
+
 /** Write one cache entry. */
 export async function writeCache(provider: string, key: string, payload: any): Promise<void> {
+  const id = `${provider}/${key}`;
   try {
     const { error } = await (serviceClient() as any)
       .from("data_cache")
@@ -76,10 +90,17 @@ export async function writeCache(provider: string, key: string, payload: any): P
         { onConflict: "provider,cache_key" }
       );
     if (error) {
-      console.error(`writeCache ${provider}/${key} db error:`, error.message);
+      const msg = error.message || String(error);
+      console.error(`writeCache ${id} db error:`, msg);
+      lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
+    } else {
+      // Clear any previous error after a successful write.
+      lastWriteErrors.delete(id);
     }
   } catch (err: any) {
-    console.error(`writeCache ${provider}/${key}:`, err?.message);
+    const msg = err?.message || String(err);
+    console.error(`writeCache ${id}:`, msg);
+    lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
   }
 }
 
@@ -88,3 +109,4 @@ export function ageMinutes(fetchedAt: string | null | undefined): number {
   if (!fetchedAt) return Infinity;
   return (Date.now() - new Date(fetchedAt).getTime()) / 60_000;
 }
+
