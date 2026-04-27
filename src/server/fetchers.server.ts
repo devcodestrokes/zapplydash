@@ -413,7 +413,10 @@ function normalizeToMonthly(price: number, interval: string, intervalCount: numb
 
 async function _fetchJuo() {
   const apiKey = process.env.JUO_NL_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn("Juo: JUO_NL_API_KEY not set in this runtime");
+    return null;
+  }
 
   const JUO_BASE = "https://api.juo.io";
   const headers  = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
