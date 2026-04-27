@@ -80,7 +80,7 @@ function StoreDashboardPage() {
       title="Store Dashboard"
       actions={
         <>
-          <StoreSelect value={storeCode} onChange={setStoreCode} options={STORE_OPTIONS as StoreOption[]} />
+          <StoreSelect value={storeCode} onChange={setStoreCode} options={[...STORE_OPTIONS]} />
           <DateRangePicker value={range} onChange={setRange} />
           <RefreshButton onRefresh={load} isLoading={isLoading} />
         </>
