@@ -1050,10 +1050,20 @@ export async function fetchXero() {
       trySection("Equity", "equity") ??
       trySection("Equity", "capital") ??
       trySection("Equity", "net assets");
+    const arBalanceRows = xRowsByLabels(balRows, ["accounts receivable", "trade debtors", "debtors"]);
+    const arBalance = arBalanceRows.length > 0
+      ? arBalanceRows[arBalanceRows.length - 1].value
+      : null;
+    const derivedCurrentAssets = currentAssets ??
+      (totalAssets !== null && fixedAssets !== null ? totalAssets - fixedAssets : null);
+    const derivedFixedAssets = fixedAssets ??
+      (totalAssets !== null && currentAssets !== null ? totalAssets - currentAssets : null);
     const totalLiabilities = parsedTotalLiabilities ??
       (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null);
     const equity = parsedEquity ??
       (totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
+    const derivedCurrentLiabilities = currentLiabilities ??
+      (totalLiabilities !== null ? totalLiabilities : null);
 
     // ── Parse Bank Summary ───────────────────────────────────────────────────
     let cashBalance: number | null = null;
@@ -1076,9 +1086,10 @@ export async function fetchXero() {
 
     // ── Parse Invoices (Accounts Receivable) ─────────────────────────────────
     const invoices: any[] = invData?.Invoices ?? [];
-    const accountsReceivable  = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const invoiceAccountsReceivable = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
     const overdueInvoices     = invoices.filter(inv => inv.IsOverdue);
     const overdueAmount       = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const accountsReceivable = invoiceAccountsReceivable || arBalance || 0;
 
     const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
