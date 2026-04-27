@@ -1104,10 +1104,10 @@ export async function fetchXero() {
       ytdExpenses:  ytdExpenses !== null ? Math.round(ytdExpenses) : null,
       ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,
       totalAssets:        totalAssets        !== null ? Math.round(totalAssets)        : null,
-      currentAssets:      currentAssets      !== null ? Math.round(currentAssets)      : null,
-      fixedAssets:        fixedAssets        !== null ? Math.round(fixedAssets)        : null,
+      currentAssets:      derivedCurrentAssets !== null ? Math.round(derivedCurrentAssets) : null,
+      fixedAssets:        derivedFixedAssets   !== null ? Math.round(derivedFixedAssets)   : null,
       totalLiabilities:   totalLiabilities   !== null ? Math.round(totalLiabilities)   : null,
-      currentLiabilities: currentLiabilities !== null ? Math.round(currentLiabilities) : null,
+      currentLiabilities: derivedCurrentLiabilities !== null ? Math.round(derivedCurrentLiabilities) : null,
       equity:             equity             !== null ? Math.round(equity)             : null,
       cashBalance:          cashBalance          !== null ? Math.round(cashBalance)          : null,
       bankAccounts,
@@ -1130,6 +1130,7 @@ export async function fetchXero() {
           sectionTitles: bsLabels.sections,
           rowLabels: bsLabels.rows.slice(0, 80),
           lookups: bsLookups,
+          accountsReceivableRows: arBalanceRows,
         },
         bankSummary: {
           reportPresent: !!cashReport,
@@ -1138,6 +1139,7 @@ export async function fetchXero() {
         invoices: {
           endpointResponded: invData !== null,
           totalReturned: invoices.length,
+          amountDueTotal: invoiceAccountsReceivable,
         },
       },
     };
