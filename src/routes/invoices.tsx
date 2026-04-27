@@ -71,6 +71,7 @@ function InvoicesPage() {
   const totals = result?.totals ?? {};
   const invoices: any[] = result?.invoices ?? [];
   const unpaid: any[] = result?.unpaid ?? [];
+  const diag: any = result?.diagnostics ?? null;
 
   return (
     <DashboardShell
@@ -87,6 +88,16 @@ function InvoicesPage() {
         {result?.error && (
           <Card className="border-destructive/40">
             <CardContent className="pt-6 text-sm text-destructive">{result.error}</CardContent>
+          </Card>
+        )}
+
+        {!isLoading && diag && invoices.length === 0 && (diag.totalSentFetched + diag.totalPaidFetched) > 0 && (
+          <Card className="border-yellow-500/40 bg-yellow-500/5">
+            <CardContent className="pt-6 text-sm">
+              No invoices in selected range ({diag.dateRange.from} → {diag.dateRange.to}).
+              Found {diag.totalSentFetched + diag.totalPaidFetched} invoices in Jortt overall —
+              try widening the date range.
+            </CardContent>
           </Card>
         )}
 
