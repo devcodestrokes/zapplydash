@@ -1,7 +1,7 @@
 ﻿'use client';
 // @ts-nocheck
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@tanstack/react-router";
 import SyncView from "./SyncView";
 import {
   AreaChart,
