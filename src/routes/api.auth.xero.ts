@@ -9,7 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 // Allow override via env var so you can quickly trim scopes without redeploying code logic.
 const XERO_SCOPES =
   process.env.XERO_SCOPES ??
-  "openid profile email offline_access accounting.transactions accounting.reports.read accounting.settings.read";
+  "openid profile email offline_access accounting.transactions accounting.reports.read accounting.settings";
 
 export const Route = createFileRoute("/api/auth/xero")({
   server: {
