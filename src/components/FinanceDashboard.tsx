@@ -226,7 +226,7 @@ const OverviewView = ({ range, setRange, data = [], totals, liveMarkets = null, 
   const liveMER         = liveTWNL?.mer ?? null;
   const liveNCPA        = liveTWNL?.ncpa ?? null;
   const liveLtvCpa      = liveTWNL?.ltvCpa ?? null;
-  const liveLoop        = loopData?.find(l => l.live) ?? null;
+  const liveLoop        = (Array.isArray(loopData) ? loopData : []).find((l: any) => l?.live) ?? null;
   const liveMRR         = liveLoop?.mrr ?? null;
   return (<>
     <div className="flex items-end justify-between">
@@ -1593,15 +1593,19 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     setLastUpdated(new Date().toLocaleString());
   }, []);
 
-  // â”€â”€ Live data only (no mock fallbacks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some((m: any) => m?.live) ? liveData.shopifyMarkets : null;
+  // ── Live data only (no mock fallbacks) ──────────────────────────────
+  // Cache may return {__empty:true}/{__error:...} objects — guard everything as arrays/objects.
+  const asArr = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
+  const shopifyMarketsArr = asArr<any>(liveData?.shopifyMarkets);
+  const activeMarkets     = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
   const shopifyLive       = !!activeMarkets;
-  const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
-  const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
-  const jorttLive         = !!(liveData?.jortt?.live);
-  const twData            = liveData?.tripleWhale?.filter(m => m.live) ?? [];
+  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !(liveData.jortt as any).__empty && !(liveData.jortt as any).__error ? liveData.jortt : null;
+  const activeOpexByMonth = asArr<any>(jorttObj?.opexByMonth).length > 0 ? jorttObj!.opexByMonth : null;
+  const activeOpexDetail  = jorttObj?.opexDetail ?? null;
+  const jorttLive         = !!(jorttObj?.live);
+  const twData            = asArr<any>(liveData?.tripleWhale).filter((m: any) => m?.live);
   const twLive            = twData.length > 0;
-  const loopLive          = liveData?.loop?.some(m => m.live) ?? false;
+  const loopLive          = asArr<any>(liveData?.loop).some((m: any) => m?.live);
   const liveSources       = [shopifyLive, jorttLive, twLive, loopLive].filter(Boolean).length;
 
   async function handleLogout() {
@@ -1764,14 +1768,14 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={liveData?.loop} />}
+          {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={asArr<any>(liveData?.loop)} />}
           {view === "metrics" && <MetricsView twData={twData} />}
-          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={liveData?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={liveData?.jortt} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
+          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={(liveData as any)?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={liveData?.shopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
-          {view === "balance" && <BalanceView jorttData={liveData?.jortt} />}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={asArr<any>(liveData?.shopifyMonthly)} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "balance" && <BalanceView jorttData={jorttObj} />}
           {view === "forecast" && <ForecastView />}
-          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={liveData?.jortt} />}
+          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
           {view === "sync" && <SyncView initialConnections={connections} />}
 
           <div className="mt-10 text-center text-[11px] text-neutral-400">

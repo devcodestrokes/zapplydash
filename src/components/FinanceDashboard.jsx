@@ -475,8 +475,8 @@ const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = []
 
   // When a custom-range sync has returned data, use it in place of the live props
   const effectiveMarkets = Array.isArray(rangeData?.shopifyMarkets) ? rangeData.shopifyMarkets : liveMarkets;
-  const effectiveTWData  = rangeData?.tripleWhale
-    ? rangeData.tripleWhale.filter(m => m.live)
+  const effectiveTWData  = Array.isArray(rangeData?.tripleWhale)
+    ? rangeData.tripleWhale.filter(m => m?.live)
     : twData;
 
   // Is the selected range the current month?
@@ -2447,21 +2447,30 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   })();
 
   // ── Live data only (no mock fallbacks) ────────────────────────────────
+  // Cache may return {__empty:true} or {__error:...} objects instead of arrays — guard everything.
+  const asArr = (v) => (Array.isArray(v) ? v : []);
   const shopifyToday      = liveData?.shopifyToday ?? null;
-  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some(m => m?.live) ? liveData.shopifyMarkets : null;
+  const shopifyMarketsArr = asArr(liveData?.shopifyMarkets);
+  const activeMarkets     = shopifyMarketsArr.some(m => m?.live) ? shopifyMarketsArr : null;
   const shopifyLive       = !!activeMarkets;
-  const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
-  const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
-  const jorttLive         = !!(liveData?.jortt?.live);
-  const xeroLive          = !!(liveData?.xero?.live);
-  const twData            = liveData?.tripleWhale?.filter(m => m.live) ?? [];
+  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !liveData.jortt.__empty && !liveData.jortt.__error ? liveData.jortt : null;
+  const xeroObj           = liveData?.xero && typeof liveData.xero === "object" && !liveData.xero.__empty && !liveData.xero.__error ? liveData.xero : null;
+  const activeOpexByMonth = asArr(jorttObj?.opexByMonth).length > 0 ? jorttObj.opexByMonth : null;
+  const activeOpexDetail  = jorttObj?.opexDetail ?? null;
+  const jorttLive         = !!(jorttObj?.live);
+  const xeroLive          = !!(xeroObj?.live);
+  const twData            = asArr(liveData?.tripleWhale).filter(m => m?.live);
   const twLive            = twData.length > 0;
-  const juoLive           = liveData?.juo?.some(m => m.live) ?? false;
-  const loopLive          = liveData?.loop?.some(m => m.live) ?? false;
+  const juoArr            = asArr(liveData?.juo);
+  const loopArr           = asArr(liveData?.loop);
+  const juoLive           = juoArr.some(m => m?.live);
+  const loopLive          = loopArr.some(m => m?.live);
   const subLive           = juoLive || loopLive;
   // Combined subscription data: JUO (NL) + Loop (UK/US/EU)
-  const allSubData        = [...(liveData?.juo ?? []), ...(liveData?.loop ?? [])].filter(m => m.live);
+  const allSubData        = [...juoArr, ...loopArr].filter(m => m?.live);
   const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
+  // Safe values to pass into subcomponents (markers stripped to null/[])
+  const safeShopifyMonthly = asArr(liveData?.shopifyMonthly);
 
   async function handleLogout() {
     await fetch("/auth/logout", { method: "POST" });
@@ -2636,14 +2645,14 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={liveData?.shopifyMonthly} jorttData={liveData?.jortt} rangeData={rangeData} rangeSyncing={rangeSyncing} />}
+          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} />}
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={liveData?.shopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
-          {view === "balance" && <BalanceView jorttData={liveData?.jortt} xeroData={liveData?.xero} shopifyMarkets={activeMarkets} twData={twData} />}
-          {view === "forecast" && <ForecastView jorttData={liveData?.jortt} xeroData={liveData?.xero} shopifyMonthly={liveData?.shopifyMonthly} />}
-          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={liveData?.jortt} />}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "balance" && <BalanceView jorttData={jorttObj} xeroData={xeroObj} shopifyMarkets={activeMarkets} twData={twData} />}
+          {view === "forecast" && <ForecastView jorttData={jorttObj} xeroData={xeroObj} shopifyMonthly={safeShopifyMonthly} />}
+          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
           {view === "sync" && <SyncView initialConnections={connections} />}
 
           <div className="mt-10 text-center text-[11px] text-neutral-400">
