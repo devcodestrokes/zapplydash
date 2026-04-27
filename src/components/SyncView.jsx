@@ -1,4 +1,3 @@
-"use client";
 import { useState, useEffect } from "react";
 import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink } from "lucide-react";
 
