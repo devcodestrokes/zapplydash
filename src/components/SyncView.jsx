@@ -276,9 +276,10 @@ export default function SyncView({ initialConnections = {} }) {
                     {src.id === "jortt" ? (
                       status === "connected" ? (
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                            Live ✓
-                          </span>
+                          <LiveStatusBadge
+                            status={getSourceStatus("jortt")}
+                            errorMessage={getSourceErrorMessage("jortt")}
+                          />
                           <a
                             href="/api/auth/jortt"
                             className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
@@ -296,9 +297,10 @@ export default function SyncView({ initialConnections = {} }) {
                         </a>
                       )
                     ) : status === "connected" ? (
-                      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                        Live ✓
-                      </span>
+                      <LiveStatusBadge
+                        status={getSourceStatus(src.id)}
+                        errorMessage={getSourceErrorMessage(src.id)}
+                      />
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500">
