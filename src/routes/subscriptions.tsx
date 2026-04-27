@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { DashboardShell, RefreshButton } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
+import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
 import { StoreSelect, DateRangePicker, defaultRange, toIsoDate, type StoreOption } from "@/components/dashboard/Filters";
 import { getSubscriptionDashboard } from "@/server/dashboard-pages.functions";
 import { STORE_OPTIONS } from "@/lib/dashboard-stores";
@@ -53,23 +54,17 @@ function SubscriptionsPage() {
   const { user, loading } = useDashboardSession();
   const [storeCode, setStoreCode] = useState<string>("NL");
   const [range, setRange] = useState<DateRange>(defaultRange());
-  const [data, setData] = useState<SubData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const load = (force = false) => {
-    setIsLoading(true);
-    getSubscriptionDashboard({
-      data: { storeCode: storeCode as any, from: toIsoDate(range.from), to: toIsoDate(range.to), force },
-    })
-      .then((d) => setData(d))
-      .finally(() => setIsLoading(false));
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, storeCode, range.from?.getTime(), range.to?.getTime()]);
+  const from = toIsoDate(range.from);
+  const to = toIsoDate(range.to);
+  const fetchDashboard = useCallback(
+    (force: boolean) => getSubscriptionDashboard({ data: { storeCode: storeCode as any, from, to, force } }),
+    [storeCode, from, to]
+  );
+  const { data, isLoading, load } = useInstantDashboardData<SubData>(
+    `subscriptions.${storeCode}.${from}.${to}`,
+    fetchDashboard,
+    !!user
+  );
 
   if (loading || !user) {
     return (
