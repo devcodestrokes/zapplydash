@@ -52,6 +52,46 @@ function StatusPill({ status }) {
   );
 }
 
+// Compact badge that reflects ACTUAL cache liveness (not just "credentials present").
+// status: "live" | "empty" | "error" | "missing"
+function LiveStatusBadge({ status, errorMessage }) {
+  if (status === "live") {
+    return (
+      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+        Live ✓
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span
+        title={errorMessage ?? "Last sync failed"}
+        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-medium text-red-700"
+      >
+        Error
+      </span>
+    );
+  }
+  if (status === "empty") {
+    return (
+      <span
+        title="API responded but returned no data"
+        className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-medium text-amber-700"
+      >
+        No data
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Cache not written yet — click Sync all now"
+      className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500"
+    >
+      Not synced
+    </span>
+  );
+}
+
 export default function SyncView({ initialConnections = {} }) {
   const [connections, setConnections] = useState(initialConnections);
   const [syncing, setSyncing] = useState(false);
@@ -61,6 +101,32 @@ export default function SyncView({ initialConnections = {} }) {
   const [debugLoading, setDebugLoading] = useState(false);
 
   const fetchDebug = useServerFn(getSyncDebug);
+
+  // Real per-source liveness derived from the debug cache snapshot.
+  // Falls back to "missing" when the cache hasn't been written yet so we
+  // never mis-label an integration as Live just because env keys exist.
+  const PROVIDER_TO_ID = {
+    loop: "loop/subscriptions",
+    triplewhale: "triplewhale/summary",
+    jortt: "jortt/invoices",
+    juo: "juo/subscriptions",
+    xero: "xero/accounting",
+  };
+  const liveMap = {};
+  for (const p of debug?.providers ?? []) {
+    liveMap[p.id] = p; // status: "live" | "empty" | "error" | "missing"
+  }
+  const shopifyStoreStatus = debug?.shopifyStores ?? {};
+  const getSourceStatus = (sourceId) => {
+    const cacheId = PROVIDER_TO_ID[sourceId];
+    if (!cacheId) return "missing";
+    return liveMap[cacheId]?.status ?? "missing";
+  };
+  const getSourceErrorMessage = (sourceId) => {
+    const cacheId = PROVIDER_TO_ID[sourceId];
+    if (!cacheId) return null;
+    return liveMap[cacheId]?.errorMessage ?? null;
+  };
 
   const refreshDebug = useCallback(async () => {
     setDebugLoading(true);
@@ -161,9 +227,7 @@ export default function SyncView({ initialConnections = {} }) {
                   </div>
                   <div className="shrink-0">
                     {status === "connected" ? (
-                      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                        Live ✓
-                      </span>
+                      <LiveStatusBadge status={shopifyStoreStatus[src.id] ?? "missing"} />
                     ) : (
                       <a
                         href={`/api/shopify/install?shop=${src.shop}`}
@@ -212,9 +276,10 @@ export default function SyncView({ initialConnections = {} }) {
                     {src.id === "jortt" ? (
                       status === "connected" ? (
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                            Live ✓
-                          </span>
+                          <LiveStatusBadge
+                            status={getSourceStatus("jortt")}
+                            errorMessage={getSourceErrorMessage("jortt")}
+                          />
                           <a
                             href="/api/auth/jortt"
                             className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
@@ -232,9 +297,10 @@ export default function SyncView({ initialConnections = {} }) {
                         </a>
                       )
                     ) : status === "connected" ? (
-                      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                        Live ✓
-                      </span>
+                      <LiveStatusBadge
+                        status={getSourceStatus(src.id)}
+                        errorMessage={getSourceErrorMessage(src.id)}
+                      />
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500">
@@ -288,9 +354,10 @@ export default function SyncView({ initialConnections = {} }) {
             <div className="shrink-0">
               {connections["xero"] === "connected" ? (
                 <div className="flex flex-col items-end gap-1.5">
-                  <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                    Live ✓
-                  </span>
+                  <LiveStatusBadge
+                    status={getSourceStatus("xero")}
+                    errorMessage={getSourceErrorMessage("xero")}
+                  />
                   <a
                     href="/api/auth/xero"
                     className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
