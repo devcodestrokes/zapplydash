@@ -204,8 +204,18 @@ function AccountingPage() {
           <KpiCard label="YTD Net Profit" value={fmtMoney(x?.ytdNetProfit, currency)} />
           <KpiCard label="Cash" value={fmtMoney(x?.cashBalance, currency)} />
           <KpiCard label="A/R" value={fmtMoney(x?.accountsReceivable, currency)} />
-          <KpiCard label="Overdue" value={fmtMoney(x?.overdueAmount, currency)} />
+          <KpiCard label="Overdue A/R" value={fmtMoney(x?.overdueAmount, currency)} />
         </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <KpiCard label="Bills awaiting" value={fmtMoney(x?.billsAwaitingAmount, currency)} sub={`${x?.billsAwaitingCount ?? 0} bills`} />
+          <KpiCard label="Bills overdue" value={fmtMoney(x?.overdueBillsAmount, currency)} sub={`${x?.overdueBillsCount ?? 0} bills`} />
+          <KpiCard label="Draft invoices" value={fmtMoney(x?.draftsAmount, currency)} sub={`${x?.draftsCount ?? 0} drafts`} />
+          <KpiCard label="Unpaid invoices" value={String(x?.unpaidInvoiceCount ?? 0)} />
+          <KpiCard label="Overdue invoices" value={String(x?.overdueInvoiceCount ?? 0)} />
+          <KpiCard label="Bank accounts" value={String((x?.bankAccounts ?? []).length)} />
+        </div>
+
 
         <div className="grid md:grid-cols-2 gap-6">
           <Card>
@@ -324,7 +334,7 @@ function AccountingPage() {
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -332,6 +342,7 @@ function KpiCard({ label, value }: { label: string; value: string }) {
       </CardHeader>
       <CardContent>
         <div className="text-xl font-bold">{value}</div>
+        {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
       </CardContent>
     </Card>
   );
