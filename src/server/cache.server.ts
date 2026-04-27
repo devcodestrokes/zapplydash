@@ -5,7 +5,7 @@ let _client: ReturnType<typeof createSupabaseJS> | null = null;
 function serviceClient() {
   if (!_client) {
     _client = createSupabaseJS(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false } }
     );
