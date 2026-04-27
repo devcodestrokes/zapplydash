@@ -227,9 +227,7 @@ export default function SyncView({ initialConnections = {} }) {
                   </div>
                   <div className="shrink-0">
                     {status === "connected" ? (
-                      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
-                        Live ✓
-                      </span>
+                      <LiveStatusBadge status={shopifyStoreStatus[src.id] ?? "missing"} />
                     ) : (
                       <a
                         href={`/api/shopify/install?shop=${src.shop}`}
