@@ -781,6 +781,21 @@ export async function fetchXero() {
     }
   };
 
+  const xeroFetchAllInvoicePages = async (url: string) => {
+    const invoices: any[] = [];
+    let lastJson: any = null;
+    for (let page = 1; page <= 50; page++) {
+      const pageUrl = `${url}${url.includes("?") ? "&" : "?"}page=${page}`;
+      const json = await xeroFetch(`Invoices page ${page}`, pageUrl);
+      if (!json) return null;
+      const pageInvoices: any[] = json.Invoices ?? [];
+      invoices.push(...pageInvoices);
+      lastJson = json;
+      if (pageInvoices.length < 100) break;
+    }
+    return { ...lastJson, Invoices: invoices };
+  };
+
   try {
     const [plS, balS, cashS, invS] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
@@ -788,7 +803,7 @@ export async function fetchXero() {
       xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
       xeroFetch("BalanceSheet", `${BASE}/Reports/BalanceSheet?date=${toDateStr}`),
       xeroFetch("BankSummary", `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`),
-      xeroFetch("Invoices", `${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
