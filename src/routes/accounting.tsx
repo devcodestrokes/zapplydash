@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { DashboardShell, RefreshButton } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
-import { getAccountingDashboard } from "@/server/dashboard-pages.functions";
+import { getAccountingDashboard, syncXeroAll } from "@/server/dashboard-pages.functions";
 import {
   Card,
   CardHeader,
@@ -20,7 +20,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LogIn } from "lucide-react";
+import { LogIn, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/accounting")({
   head: () => ({
