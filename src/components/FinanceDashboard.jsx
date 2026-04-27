@@ -2469,6 +2469,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   // Combined subscription data: JUO (NL) + Loop (UK/US/EU)
   const allSubData        = [...juoArr, ...loopArr].filter(m => m?.live);
   const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
+  // Safe values to pass into subcomponents (markers stripped to null/[])
+  const safeShopifyMonthly = asArr(liveData?.shopifyMonthly);
 
   async function handleLogout() {
     await fetch("/auth/logout", { method: "POST" });
