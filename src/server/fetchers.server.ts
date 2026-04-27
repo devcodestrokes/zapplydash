@@ -321,7 +321,6 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
           method: "POST",
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
           body: JSON.stringify({ shopDomain: shop, period: { start, end } }),
-          next: { revalidate: 600 },
         });
 
         if (!res.ok) {
