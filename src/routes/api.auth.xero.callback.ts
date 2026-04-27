@@ -2,11 +2,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
 
 function serviceClient() {
-  return createSupabaseJS(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    (import.meta as any).env?.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      `Supabase creds missing (url=${!!url}, key=${!!key})`,
+    );
+  }
+  return createSupabaseJS(url, key, { auth: { persistSession: false } });
 }
 
 export const Route = createFileRoute("/api/auth/xero/callback")({
