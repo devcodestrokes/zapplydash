@@ -294,6 +294,7 @@ export interface XeroReportStatus {
   label: string;
   ok: boolean;
   reason?: string;
+  diagnostics?: any;
 }
 
 export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () => {
