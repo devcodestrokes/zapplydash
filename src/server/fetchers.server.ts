@@ -748,6 +748,25 @@ function xRowByLabel(rows: any[], labelFragment: string, colIdx = 1): number | n
   return null;
 }
 
+function xRowsByLabels(rows: any[], fragments: string[], colIdx = 1) {
+  const lowerFrags = fragments.map((f) => f.toLowerCase());
+  const matches: { label: string; value: number }[] = [];
+  const walk = (rs: any[]) => {
+    for (const row of rs ?? []) {
+      if ((row.RowType === "Row" || row.RowType === "SummaryRow") && row.Cells?.length) {
+        const label = String(row.Cells[0]?.Value ?? "").trim();
+        const lower = label.toLowerCase();
+        if (label && lowerFrags.some((frag) => lower.includes(frag)) && row.Cells[colIdx] != null) {
+          matches.push({ label, value: xNum(row.Cells[colIdx]) });
+        }
+      }
+      if (row.Rows) walk(row.Rows);
+    }
+  };
+  walk(rows);
+  return matches;
+}
+
 export async function fetchXero() {
   const [token, tenantId] = await Promise.all([getXeroToken(), getXeroTenantId()]);
   if (!token) return null;
