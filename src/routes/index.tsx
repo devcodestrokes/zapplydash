@@ -111,12 +111,16 @@ function HomePage() {
       liveData={{
         shopifyMarkets: data.shopifyMarkets,
         shopifyMonthly: data.shopifyMonthly,
-        shopifyHourly: data.shopifyHourly,
+        shopifyToday: data.shopifyToday,
         tripleWhale: data.tripleWhale,
+        juo: data.juo,
         loop: data.loop,
         jortt: data.jortt,
       }}
       connections={data.connections}
+      syncedAt={data.syncedAt}
+      dataIsStale={data.dataIsStale}
+      hasAnyData={data.hasAnyData}
     />
   );
 }
