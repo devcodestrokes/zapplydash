@@ -1169,6 +1169,14 @@ export async function fetchXero() {
       unpaidInvoiceCount:   invoices.length,
       overdueAmount:        overdueAmount        > 0 ? Math.round(overdueAmount)        : null,
       overdueInvoiceCount:  overdueInvoices.length,
+      // Bills (ACCPAY)
+      billsAwaitingAmount:  billsAwaitingAmount  > 0 ? Math.round(billsAwaitingAmount)  : null,
+      billsAwaitingCount:   bills.length,
+      overdueBillsAmount:   overdueBillsAmount   > 0 ? Math.round(overdueBillsAmount)   : null,
+      overdueBillsCount:    overdueBills.length,
+      // Drafts (ACCREC)
+      draftsAmount:         draftsAmount         > 0 ? Math.round(draftsAmount)         : null,
+      draftsCount:          drafts.length,
       currency: "EUR",
       _diagnostics: {
         profitAndLoss: {
@@ -1188,12 +1196,15 @@ export async function fetchXero() {
         },
         bankSummary: {
           reportPresent: !!cashReport,
-          accountsFound: bankAccounts.map((b) => b.name),
+          accountsFromAccountsApi: acctsList.length,
+          accountsFound: bankAccounts.map((b) => `${b.name} (${b.currency})`),
         },
         invoices: {
           endpointResponded: invData !== null,
           totalReturned: invoices.length,
           amountDueTotal: invoiceAccountsReceivable,
+          billsReturned: bills.length,
+          draftsReturned: drafts.length,
         },
       },
     };
