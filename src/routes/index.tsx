@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import FinanceDashboard from "@/components/FinanceDashboard";
 import { getDashboardData } from "@/server/dashboard.functions";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
+import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -17,16 +18,12 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const { user, loading } = useDashboardSession();
-  const [data, setData] = useState<Awaited<ReturnType<typeof getDashboardData>> | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    if (!user) return;
-    setLoadingData(true);
-    getDashboardData()
-      .then((d) => setData(d))
-      .finally(() => setLoadingData(false));
-  }, [user]);
+  const fetchDashboard = useCallback(() => getDashboardData(), []);
+  const { data, isLoading: loadingData } = useInstantDashboardData<Awaited<ReturnType<typeof getDashboardData>>>(
+    "overview",
+    fetchDashboard,
+    !!user
+  );
 
   if (loading || !user) {
     return (
