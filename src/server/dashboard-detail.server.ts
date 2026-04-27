@@ -306,20 +306,34 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
 
   const currency = marketCode === "US" ? "USD" : marketCode === "UK" ? "GBP" : "EUR";
   const subs = filtered.map((s) => ({
-    id: s.id,
+    id: String(s.id),
     status: s.status ?? null,
     price: parseFloat(s.totalLineItemPrice ?? "0"),
     currency: s.currencyCode ?? currency,
     createdAt: s.createdAt ?? null,
     cancelledAt: s.cancelledAt ?? null,
-    nextBillingDate: s.nextBillingDate ?? null,
-    customerEmail: s.email ?? s.customer?.email ?? null,
-    customerName: s.customer?.displayName ?? s.customer?.firstName ?? null,
+    nextBillingDate: s.nextBillingDateEpoch
+      ? new Date(s.nextBillingDateEpoch * 1000).toISOString()
+      : s.nextBillingDate ?? null,
+    customerEmail: s.email ?? s.customer?.email ?? s.shippingAddress?.email ?? null,
+    customerName:
+      s.customer?.displayName ??
+      (s.shippingAddress?.firstName
+        ? `${s.shippingAddress.firstName} ${s.shippingAddress.lastName ?? ""}`.trim()
+        : null),
+    inRange: !!s.__inRange,
   }));
 
-  const active = subs.filter((s) => s.status === "ACTIVE");
-  const canceled = subs.filter((s) => s.status === "CANCELLED");
+  const active = subs.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
+  const canceled = subs.filter((s) => (s.status ?? "").toUpperCase() === "CANCELLED");
+  const newInRange = subs.filter((s) => s.inRange);
   const mrr = active.reduce((sum, s) => sum + s.price, 0);
+
+  // Sort: in-range first, then most recent
+  subs.sort((a, b) => {
+    if (a.inRange !== b.inRange) return a.inRange ? -1 : 1;
+    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+  });
 
   return {
     live: true,
@@ -330,6 +344,7 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
       total: subs.length,
       active: active.length,
       canceled: canceled.length,
+      newInRange: newInRange.length,
       mrr: +mrr.toFixed(2),
       arpu: active.length > 0 ? +(mrr / active.length).toFixed(2) : 0,
     },
