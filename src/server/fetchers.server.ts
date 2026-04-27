@@ -935,124 +935,133 @@ function monthKey(dateStr: string): string {
 }
 
 export async function fetchJortt() {
-  const token = await getJorttToken();
-  if (!token) return null;
+  const BASE = "https://api.jortt.nl";
 
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-  const BASE    = "https://api.jortt.nl";
-
-  // Date range: last 12 months
+  // Date range: last 12 months — used to drop very old expenses if we can fetch them.
   const since = new Date();
   since.setMonth(since.getMonth() - 12);
   const sinceStr = since.toISOString().split("T")[0];
 
-  try {
-    // Fetch invoices, expenses, P&L summary, cash, and balance report in parallel
-    const [invoicePages, unpaidInvoices, expensePages, plRes, cashRes, balanceRes] = await Promise.all([
-      // Sent invoices (revenue) — /v1/invoices, 3 pages × 100
-      Promise.all([1, 2, 3].map(p =>
-        fetch(`${BASE}/v1/invoices?per_page=100&page=${p}&invoice_status=sent`, { headers, cache: "no-store" })
-          .then(r => {
-            if (!r.ok) { console.warn(`Jortt invoices p${p}: ${r.status}`); return []; }
-            return r.json().then(d => d.data ?? []);
-          })
-      )),
-      // Unpaid + late invoices → accounts receivable
-      fetch(`${BASE}/v1/invoices?per_page=100&page=1&invoice_status=unpaid`, { headers, cache: "no-store" })
-        .then(r => r.ok ? r.json().then(d => d.data ?? []) : []).catch(() => []),
-      // Expenses — needs expenses:read scope
-      Promise.all([1, 2].map(p =>
-        fetch(`${BASE}/v3/expenses?expense_type=cost&vat_date_from=${sinceStr}&per_page=100&page=${p}`, { headers, cache: "no-store" })
-          .then(r => {
-            if (!r.ok) { console.warn(`Jortt expenses p${p}: ${r.status} (add expenses:read scope in Jortt app settings)`); return []; }
-            return r.json().then(d => d.data ?? []);
-          })
-          .catch(() => [])
-      )),
-      // P&L summary — needs reports:read scope
-      fetch(`${BASE}/v1/reports/summaries/profit_and_loss`, { headers, cache: "no-store" })
-        .then(r => {
-          if (!r.ok) { console.warn(`Jortt P&L: ${r.status} (add reports:read scope in Jortt app settings)`); return null; }
-          return r.json();
-        }).catch(() => null),
-      // Cash & bank — needs reports:read scope
-      fetch(`${BASE}/v1/reports/summaries/cash_and_bank`, { headers, cache: "no-store" })
-        .then(r => {
-          if (!r.ok) { console.warn(`Jortt cash: ${r.status} (add reports:read scope in Jortt app settings)`); return null; }
-          return r.json();
-        }).catch(() => null),
-      // Balance report — needs reports:read scope
-      fetch(`${BASE}/v1/reports/summaries/balance`, { headers, cache: "no-store" })
-        .then(r => {
-          if (!r.ok) { console.warn(`Jortt balance: ${r.status} (add reports:read scope in Jortt app settings)`); return null; }
-          return r.json();
-        }).catch(() => null),
-    ]);
+  // ── 1. Invoices (revenue + AR) — needs invoices:read ──────────────────────
+  // Jortt rotates tokens, so we MUST do all invoice work with one token before
+  // requesting a new token for a different scope.
+  let invoices: any[] = [];
+  let unpaidInvoices: any[] = [];
+  let invoiceFetchOk = false;
 
-    const invoices: any[]  = invoicePages.flat();
-    const expenses: any[]  = expensePages.flat();
+  const invToken = await getJorttTokenForScope("invoices:read");
+  if (invToken) {
+    const headers = { Authorization: `Bearer ${invToken}`, Accept: "application/json" };
 
-    // Accounts receivable = total outstanding unpaid invoices
-    const accountsReceivable = unpaidInvoices.reduce((sum: number, inv: any) => {
-      return sum + parseFloat(inv.invoice_total?.value ?? inv.total_amount?.value ?? "0");
-    }, 0);
-
-    // Revenue by month from invoices
-    const revenueByMonth: Record<string, number> = {};
-    for (const inv of invoices) {
-      const mk = monthKey(inv.invoice_date ?? "");
-      if (!mk) continue;
-      const total = parseFloat(inv.invoice_total?.value ?? "0");
-      if (total <= 0) continue;
-      revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
+    // Sent invoices (revenue) — page sequentially with the SAME token.
+    for (const p of [1, 2, 3]) {
+      try {
+        const r = await fetch(`${BASE}/v1/invoices?per_page=100&page=${p}&invoice_status=sent`, { headers, cache: "no-store" });
+        if (!r.ok) { console.warn(`Jortt invoices p${p}: ${r.status}`); break; }
+        const j: any = await r.json();
+        if (j?.error) { console.warn(`Jortt invoices p${p} error:`, j.error?.key ?? j.error?.message); break; }
+        const batch: any[] = j.data ?? [];
+        invoices.push(...batch);
+        invoiceFetchOk = true;
+        if (batch.length < 100) break;
+      } catch (err: any) {
+        console.warn(`Jortt invoices p${p} fetch error:`, err.message);
+        break;
+      }
     }
 
-    // Expenses by month from /v3/expenses
-    const expensesByMonth: Record<string, number> = {};
-    for (const exp of expenses) {
-      const mk = monthKey(exp.vat_date ?? exp.delivery_period ?? "");
-      if (!mk) continue;
-      // raw_total_amount is { value, currency }
-      const amt = parseFloat(
-        exp.raw_total_amount?.value ??
-        exp.total_amount?.value ??
-        exp.amount?.value ?? "0"
-      );
-      if (amt <= 0) continue;
-      expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amt;
-    }
+    // Unpaid invoices (AR)
+    try {
+      const r = await fetch(`${BASE}/v1/invoices?per_page=100&page=1&invoice_status=unpaid`, { headers, cache: "no-store" });
+      if (r.ok) {
+        const j: any = await r.json();
+        if (!j?.error) unpaidInvoices = j.data ?? [];
+      }
+    } catch { /* ignore */ }
+  }
 
-    // Cash position from summary (best-effort)
-    const cashBalance: number | null = (() => {
-      if (!cashRes) return null;
-      const v = cashRes?.total_balance?.value ?? cashRes?.balance?.value ?? cashRes?.cash ?? null;
-      return v != null ? parseFloat(v) : null;
-    })();
-
-    // P&L totals from summary (best-effort)
-    const plSummary = plRes ? {
-      revenue:    parseFloat(plRes?.revenue?.value      ?? plRes?.turnover?.value     ?? "0"),
-      costs:      parseFloat(plRes?.costs?.value        ?? plRes?.expenses?.value     ?? "0"),
-      grossProfit: parseFloat(plRes?.gross_profit?.value ?? plRes?.net_result?.value  ?? "0"),
-    } : null;
-
-    return {
-      revenueByMonth,
-      expensesByMonth,
-      cashBalance,
-      plSummary,
-      balanceReport: balanceRes,
-      accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
-      unpaidInvoiceCount: unpaidInvoices.length,
-      invoiceCount: invoices.filter(i => parseFloat(i.invoice_total?.value ?? "0") > 0).length,
-      expenseCount: expenses.length,
-      live: Object.keys(revenueByMonth).length > 0,
-      // Legacy fields (keep for compatibility)
-      opexByMonth: [],
-      opexDetail:  {},
+  // ── 2. Reports (P&L, cash, balance) — needs reports:read ──────────────────
+  // Optional — if the OAuth client doesn't have reports:read, we just skip it.
+  let plRes: any = null, cashRes: any = null, balanceRes: any = null;
+  const rptToken = await getJorttTokenForScope("reports:read");
+  if (rptToken) {
+    const headers = { Authorization: `Bearer ${rptToken}`, Accept: "application/json" };
+    const safeJson = async (path: string) => {
+      try {
+        const r = await fetch(`${BASE}${path}`, { headers, cache: "no-store" });
+        if (!r.ok) { console.warn(`Jortt ${path}: ${r.status}`); return null; }
+        const j: any = await r.json();
+        return j?.error ? null : j;
+      } catch { return null; }
     };
-  } catch (err: any) {
-    console.error("Jortt fetch error:", err.message);
+    plRes      = await safeJson("/v1/reports/summaries/profit_and_loss");
+    cashRes    = await safeJson("/v1/reports/summaries/cash_and_bank");
+    balanceRes = await safeJson("/v1/reports/summaries/balance");
+  }
+
+  // If we couldn't even reach invoices, treat as fully failed.
+  if (!invToken && !rptToken) return null;
+  if (!invoiceFetchOk && !plRes && !cashRes && !balanceRes) {
+    // Tokens worked but every read failed — surface as live=false (empty marker).
     return null;
   }
+
+  // ── 3. Aggregate ──────────────────────────────────────────────────────────
+  // Accounts receivable = total outstanding unpaid invoices
+  const accountsReceivable = unpaidInvoices.reduce((sum: number, inv: any) => {
+    const v = parseFloat(inv.invoice_due_amount?.value ?? inv.invoice_total?.value ?? "0");
+    return sum + (Number.isFinite(v) ? v : 0);
+  }, 0);
+
+  // Revenue by month from invoices (use invoice_total_incl_vat for top-line)
+  const revenueByMonth: Record<string, number> = {};
+  for (const inv of invoices) {
+    const mk = monthKey(inv.invoice_date ?? "");
+    if (!mk) continue;
+    const total = parseFloat(
+      inv.invoice_total_incl_vat?.value ??
+      inv.invoice_total?.value ??
+      "0"
+    );
+    if (!Number.isFinite(total) || total <= 0) continue;
+    revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
+  }
+
+  // Cash position from summary (best-effort)
+  const cashBalance: number | null = (() => {
+    if (!cashRes) return null;
+    const v = cashRes?.total_balance?.value ?? cashRes?.balance?.value ?? cashRes?.cash ?? null;
+    if (v == null) return null;
+    const n = parseFloat(String(v));
+    return Number.isFinite(n) ? n : null;
+  })();
+
+  // P&L totals from summary (best-effort)
+  const plSummary = plRes ? {
+    revenue:     parseFloat(plRes?.revenue?.value      ?? plRes?.turnover?.value     ?? "0"),
+    costs:       parseFloat(plRes?.costs?.value        ?? plRes?.expenses?.value     ?? "0"),
+    grossProfit: parseFloat(plRes?.gross_profit?.value ?? plRes?.net_result?.value   ?? "0"),
+  } : null;
+
+  const live =
+    Object.keys(revenueByMonth).length > 0 ||
+    cashBalance !== null ||
+    plSummary !== null ||
+    invoices.length > 0;
+
+  return {
+    revenueByMonth,
+    expensesByMonth: {} as Record<string, number>, // expenses:read not granted to OAuth client
+    cashBalance,
+    plSummary,
+    balanceReport: balanceRes,
+    accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
+    unpaidInvoiceCount: unpaidInvoices.length,
+    invoiceCount: invoices.filter(i => parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0).length,
+    expenseCount: 0,
+    live,
+    // Legacy fields
+    opexByMonth: [],
+    opexDetail:  {},
+  };
 }
