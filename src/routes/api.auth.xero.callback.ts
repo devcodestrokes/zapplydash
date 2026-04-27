@@ -1,22 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
 
+const VITE_SUPABASE_URL =
+  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+const VITE_SUPABASE_PUBLISHABLE_KEY =
+  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const FALLBACK_SUPABASE_URL = "https://coktedrgtpecruympsvv.supabase.co";
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImNva3RlZHJndHBlY3J1eW1wc3Z2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMjM5NDYsImV4cCI6MjA5MjU5OTk0Nn0.nNeS6X7dF9AAPo6kUZyoNMQEzd6V8rKYAPwdwXciooE";
+
 function serviceClient() {
   const url =
     process.env.SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
-    (import.meta as any).env?.VITE_SUPABASE_URL;
+    VITE_SUPABASE_URL ||
+    FALLBACK_SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+    VITE_SUPABASE_PUBLISHABLE_KEY ||
+    FALLBACK_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
     throw new Error(
       `Supabase creds missing (url=${!!url}, key=${!!key})`,
     );
   }
-  return createSupabaseJS(url, key, { auth: { persistSession: false } });
+  return createSupabaseJS(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export const Route = createFileRoute("/api/auth/xero/callback")({
