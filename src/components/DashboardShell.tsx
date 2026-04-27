@@ -26,14 +26,16 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const navItems = [
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+
+const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/store", label: "Store Dashboard", icon: Store },
   { to: "/triple-whale", label: "Triple Whale", icon: TrendingUp },
   { to: "/subscriptions", label: "Subscriptions", icon: Repeat },
   { to: "/invoices", label: "Invoices", icon: FileText },
   { to: "/accounting", label: "Accounting", icon: Calculator },
-] as const;
+];
 
 function AppSidebar({ user }: { user: { name: string; email: string; avatar: string | null } | null }) {
   const { state } = useSidebar();
