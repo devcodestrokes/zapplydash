@@ -2414,9 +2414,16 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     setSyncing(true);
     setSyncError(null);
     try {
+      // /api/sync now returns immediately (~50ms) and runs in the background.
       const res = await fetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
-      router.invalidate(); // re-run loaders to fetch fresh data
+      // Poll the dashboard a few times so cards fill in as jobs complete.
+      // Background jobs typically finish within 60s.
+      const intervals = [3000, 8000, 15000, 30000, 60000];
+      for (const delay of intervals) {
+        await new Promise((r) => setTimeout(r, delay));
+        try { await router.invalidate(); } catch { /* ignore */ }
+      }
     } catch (err) {
       setSyncError(err.message);
     } finally {
