@@ -33,9 +33,9 @@ const STALE_MIN = 30; // minutes — refresh cached entries older than this in t
 
 // Background-safe scheduler for the Worker runtime.
 function scheduleBackground(p: Promise<unknown>) {
-  // @ts-ignore — EdgeRuntime is available on the Worker runtime
-  if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any).waitUntil) {
-    (EdgeRuntime as any).waitUntil(p);
+  const ER = (globalThis as any).EdgeRuntime;
+  if (ER && typeof ER.waitUntil === "function") {
+    ER.waitUntil(p);
   }
   // Fallback: just let it run. Errors are swallowed.
   p.catch(() => {});
