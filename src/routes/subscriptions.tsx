@@ -79,6 +79,7 @@ function SubscriptionsPage() {
   const totals = result?.totals ?? {};
   const subs: any[] = result?.subscriptions ?? [];
   const currency = result?.currency ?? "EUR";
+  const summaryOnly = result?.summaryOnly === true;
 
   return (
     <DashboardShell
@@ -128,8 +129,11 @@ function SubscriptionsPage() {
           <CardHeader>
             <CardTitle>Subscriptions</CardTitle>
             <CardDescription>
-              {subs.length} subscriptions on file ·{" "}
-              <span className="text-foreground font-medium">{totals.newInRange ?? 0}</span> created in selected range
+              {summaryOnly ? "Store totals loaded · subscription rows are syncing" : `${subs.length} subscriptions on file · `}
+              {!summaryOnly && (
+                <span className="text-foreground font-medium">{totals.newInRange ?? 0}</span>
+              )}{" "}
+              {!summaryOnly && "created in selected range"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -168,7 +172,7 @@ function SubscriptionsPage() {
                   {!isLoading && subs.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                        No subscriptions in this range
+                        {summaryOnly ? "Detailed subscription rows are still syncing for this store" : "No subscriptions in this range"}
                       </TableCell>
                     </TableRow>
                   )}

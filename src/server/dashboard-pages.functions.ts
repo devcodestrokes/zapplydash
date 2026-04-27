@@ -30,6 +30,27 @@ const dateRangeSchema = z.object({
 
 const STALE_MIN = 30; // minutes — refresh cached entries older than this in the background
 
+function subscriptionSummaryFallback(summary: any, storeCode: "NL" | "UK" | "US" | "EU") {
+  const row = (Array.isArray(summary) ? summary : []).find((item) => item?.market === storeCode);
+  if (!row) return null;
+  return {
+    live: row.live === true,
+    platform: row.platform ?? (storeCode === "NL" ? "juo" : "loop"),
+    market: storeCode,
+    currency: row.currency ?? (storeCode === "US" ? "USD" : storeCode === "UK" ? "GBP" : "EUR"),
+    summaryOnly: true,
+    totals: {
+      total: row.totalFetched ?? row.activeSubs ?? 0,
+      active: row.activeSubs ?? 0,
+      canceled: row.canceledSubs ?? row.churnedThisMonth ?? 0,
+      newInRange: row.newThisMonth ?? 0,
+      mrr: row.mrr ?? 0,
+      arpu: row.arpu ?? 0,
+    },
+    subscriptions: [],
+  };
+}
+
 // Background-safe scheduler for the Worker runtime.
 function scheduleBackground(p: Promise<unknown>) {
   const ER = (globalThis as any).EdgeRuntime;
@@ -195,6 +216,21 @@ export const getSubscriptionDashboard = createServerFn({ method: "GET" })
       },
       { force: data.force }
     );
+
+    if (result.source === "none" && !data.force) {
+      const summary = await readCache(platform, "subscriptions");
+      const fallback = subscriptionSummaryFallback(summary?.payload, data.storeCode);
+      if (fallback) {
+        return {
+          data: fallback,
+          platform,
+          source: "cache" as const,
+          fetchedAt: summary?.fetchedAt ?? null,
+          ageMinutes: ageMinutes(summary?.fetchedAt),
+          error: null,
+        };
+      }
+    }
 
     return {
       data: result.data,

@@ -32,15 +32,29 @@ export interface DashboardUser {
 export function useDashboardSession(): { user: DashboardUser | null; loading: boolean } {
   const navigate = useNavigate();
   const previewBypass = isPreviewEnvironment();
-  const [session, setSession] = useState<Session | null | undefined>(
-    previewBypass ? PREVIEW_MOCK_SESSION : undefined
-  );
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    if (previewBypass) return;
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(({ data: { session: s } }) => setSession(s));
-    return () => sub.subscription.unsubscribe();
+    if (previewBypass) {
+      const t = window.setTimeout(() => setSession(PREVIEW_MOCK_SESSION), 0);
+      return () => window.clearTimeout(t);
+    }
+
+    const timeout = window.setTimeout(() => {
+      setSession((current) => (current === undefined ? null : current));
+    }, 4000);
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      window.clearTimeout(timeout);
+      setSession(s);
+    });
+    supabase.auth.getSession()
+      .then(({ data: { session: s } }) => setSession(s))
+      .catch(() => setSession(null))
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      window.clearTimeout(timeout);
+      sub.subscription.unsubscribe();
+    };
   }, [previewBypass]);
 
   useEffect(() => {

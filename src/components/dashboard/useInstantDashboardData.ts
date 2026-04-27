@@ -47,7 +47,14 @@ export function useInstantDashboardData<T>(
       try {
         let next = await fetcher(force);
         if (!force && !cached && (next as any)?.source === "none") {
-          next = await fetcher(true);
+          void fetcher(true)
+            .then((fresh) => {
+              if ((fresh as any)?.source !== "none") {
+                setData(fresh);
+                writeInstantDashboardCache(cacheKey, fresh);
+              }
+            })
+            .catch(() => null);
         }
         if ((next as any)?.source !== "none") {
           setData(next);
