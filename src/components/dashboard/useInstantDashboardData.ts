@@ -43,9 +43,12 @@ export function useInstantDashboardData<T>(
       if (!enabled) return null;
       const cached = force ? null : readInstantDashboardCache<T>(cacheKey);
       if (cached) setData(cached);
-      setIsLoading(force);
+      setIsLoading(force || !cached);
       try {
-        const next = await fetcher(force);
+        let next = await fetcher(force);
+        if (!force && !cached && (next as any)?.source === "none") {
+          next = await fetcher(true);
+        }
         if ((next as any)?.source !== "none") {
           setData(next);
           writeInstantDashboardCache(cacheKey, next);
