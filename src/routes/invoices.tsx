@@ -46,16 +46,16 @@ function InvoicesPage() {
   const [data, setData] = useState<InvData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const load = () => {
+  const load = (force = false) => {
     setIsLoading(true);
-    getInvoiceDashboard({ data: { from: toIsoDate(range.from), to: toIsoDate(range.to) } })
+    getInvoiceDashboard({ data: { from: toIsoDate(range.from), to: toIsoDate(range.to), force } })
       .then((d) => setData(d))
       .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
     if (!user) return;
-    load();
+    load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, range.from?.getTime(), range.to?.getTime()]);
 
@@ -79,7 +79,7 @@ function InvoicesPage() {
       actions={
         <>
           <DateRangePicker value={range} onChange={setRange} />
-          <RefreshButton onRefresh={load} isLoading={isLoading} />
+          <RefreshButton onRefresh={() => load(true)} isLoading={isLoading} />
         </>
       }
     >

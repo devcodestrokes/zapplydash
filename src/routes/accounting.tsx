@@ -42,16 +42,16 @@ function AccountingPage() {
   const [data, setData] = useState<XData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const load = () => {
+  const load = (force = false) => {
     setIsLoading(true);
-    getAccountingDashboard()
+    getAccountingDashboard({ data: { force } })
       .then((d) => setData(d))
       .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
     if (!user) return;
-    load();
+    load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -75,7 +75,7 @@ function AccountingPage() {
       title="Accounting (Xero)"
       actions={
         <>
-          <RefreshButton onRefresh={load} isLoading={isLoading} />
+          <RefreshButton onRefresh={() => load(true)} isLoading={isLoading} />
         </>
       }
     >
