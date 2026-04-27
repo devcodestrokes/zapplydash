@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink, Bug, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from "lucide-react";
+import { getSyncDebug } from "@/server/debug.functions";
 
 const SHOPIFY_STORES = [
   { id: "shopify_zapply-nl",      name: "Shopify NL", flag: "🇳🇱", shop: "zapply-nl.myshopify.com",      desc: "Netherlands · orders, revenue" },
@@ -55,6 +57,22 @@ export default function SyncView({ initialConnections = {} }) {
   const [syncing, setSyncing] = useState(false);
 
   const [xeroError, setXeroError] = useState(null);
+  const [debug, setDebug] = useState(null);
+  const [debugLoading, setDebugLoading] = useState(false);
+
+  const fetchDebug = useServerFn(getSyncDebug);
+
+  const refreshDebug = useCallback(async () => {
+    setDebugLoading(true);
+    try {
+      const d = await fetchDebug();
+      setDebug(d);
+    } catch (err) {
+      console.error("debug fetch failed", err);
+    } finally {
+      setDebugLoading(false);
+    }
+  }, [fetchDebug]);
 
   // Pick up ?connected= or ?error= from OAuth redirect
   useEffect(() => {
@@ -76,12 +94,27 @@ export default function SyncView({ initialConnections = {} }) {
       setXeroError(params.get("xero_error"));
       window.history.replaceState({}, "", "/?view=sync");
     }
-  }, []);
+    // Initial load
+    void refreshDebug();
+  }, [refreshDebug]);
 
   async function syncAll() {
     setSyncing(true);
-    await fetch("/api/jortt").catch(() => {});
-    setTimeout(() => setSyncing(false), 1500);
+    try {
+      // Try /api/sync first; fall back to /api/public/sync (which is exposed
+      // without auth in published builds).
+      let res = await fetch("/api/sync", { method: "POST" }).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch("/api/public/sync", { method: "POST" }).catch(() => null);
+      }
+    } finally {
+      // Poll the debug endpoint a few times so the panel updates as
+      // background jobs finish writing to the cache.
+      for (const delay of [1500, 4000, 8000]) {
+        setTimeout(() => void refreshDebug(), delay);
+      }
+      setTimeout(() => setSyncing(false), 1500);
+    }
   }
 
   return (
@@ -325,6 +358,9 @@ export default function SyncView({ initialConnections = {} }) {
         </div>
       </div>
 
+      {/* Sync debug panel */}
+      <SyncDebugPanel debug={debug} loading={debugLoading} onRefresh={refreshDebug} />
+
       {/* Setup notes */}
       <div className="mt-4 space-y-3">
         <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-[12px] text-blue-700">
@@ -345,5 +381,171 @@ export default function SyncView({ initialConnections = {} }) {
         </div>
       </div>
     </>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Sync Debug Panel
+// ----------------------------------------------------------------------------
+
+const PROVIDER_LABELS = {
+  "shopify/markets":     "Shopify · Markets",
+  "shopify/monthly":     "Shopify · Monthly",
+  "shopify/today":       "Shopify · Today",
+  "triplewhale/summary": "Triple Whale · Summary",
+  "loop/subscriptions":  "Loop · Subscriptions",
+  "juo/subscriptions":   "Juo · Subscriptions",
+  "jortt/invoices":      "Jortt · Invoices",
+  "xero/accounting":     "Xero · Accounting",
+};
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatRelative(iso) {
+  if (!iso) return "never";
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+  const sec = Math.round(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
+
+function StatusIcon({ status }) {
+  if (status === "live")    return <CheckCircle2 size={14} className="text-emerald-600" />;
+  if (status === "empty")   return <MinusCircle  size={14} className="text-amber-600" />;
+  if (status === "error")   return <XCircle      size={14} className="text-red-600" />;
+  return <AlertTriangle size={14} className="text-neutral-400" />;
+}
+
+function StatusBadge({ status }) {
+  const map = {
+    live:    { cls: "border-emerald-200 bg-emerald-50 text-emerald-700", label: "Live" },
+    empty:   { cls: "border-amber-200 bg-amber-50 text-amber-700",       label: "Empty" },
+    error:   { cls: "border-red-200 bg-red-50 text-red-700",             label: "Error" },
+    missing: { cls: "border-neutral-200 bg-neutral-50 text-neutral-500", label: "Missing" },
+  };
+  const m = map[status] ?? map.missing;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${m.cls}`}>
+      <StatusIcon status={status} />
+      {m.label}
+    </span>
+  );
+}
+
+function SyncDebugPanel({ debug, loading, onRefresh }) {
+  const providers = debug?.providers ?? [];
+
+  const counts = providers.reduce(
+    (acc, p) => {
+      acc[p.status] = (acc[p.status] ?? 0) + 1;
+      return acc;
+    },
+    { live: 0, empty: 0, error: 0, missing: 0 },
+  );
+
+  return (
+    <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-900 text-white">
+            <Bug size={16} />
+          </div>
+          <div>
+            <div className="text-[14px] font-semibold">Sync debug</div>
+            <div className="mt-0.5 text-[12px] text-neutral-500">
+              Per-provider cache status · payload sizes · last write errors
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
+              <span>Last successful write: <strong className="text-neutral-700">{formatRelative(debug?.lastSuccessAt)}</strong></span>
+              <span className="text-neutral-300">·</span>
+              <span>Last write attempt: <strong className="text-neutral-700">{formatRelative(debug?.lastWriteAt)}</strong></span>
+              <span className="text-neutral-300">·</span>
+              <span><span className="text-emerald-600 font-medium">{counts.live} live</span> · <span className="text-amber-600 font-medium">{counts.empty} empty</span> · <span className="text-red-600 font-medium">{counts.error} errored</span> · <span className="text-neutral-500 font-medium">{counts.missing} missing</span></span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+        >
+          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-neutral-200">
+        <table className="w-full text-[12px]">
+          <thead className="bg-neutral-50 text-[11px] font-medium uppercase tracking-wide text-neutral-500">
+            <tr>
+              <th className="px-3 py-2 text-left">Source</th>
+              <th className="px-3 py-2 text-left">Status</th>
+              <th className="px-3 py-2 text-right">Payload</th>
+              <th className="px-3 py-2 text-right">Last sync</th>
+              <th className="px-3 py-2 text-left">Detail</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-100">
+            {providers.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-neutral-400">
+                  {loading ? "Loading…" : "No cache data yet — click Sync all now."}
+                </td>
+              </tr>
+            )}
+            {providers.map((p) => (
+              <tr key={p.id} className="hover:bg-neutral-50/60">
+                <td className="px-3 py-2 font-medium text-neutral-800">
+                  {PROVIDER_LABELS[p.id] ?? p.id}
+                </td>
+                <td className="px-3 py-2">
+                  <StatusBadge status={p.status} />
+                </td>
+                <td className="px-3 py-2 text-right font-mono text-[11.5px] text-neutral-600">
+                  {p.fetchedAt ? formatBytes(p.payloadSize) : "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-neutral-500">
+                  {p.fetchedAt ? (
+                    <span title={p.fetchedAt}>{formatRelative(p.fetchedAt)}</span>
+                  ) : (
+                    "never"
+                  )}
+                </td>
+                <td className="px-3 py-2 text-[11.5px] text-neutral-500">
+                  {p.writeError ? (
+                    <span className="font-mono text-red-600" title={p.writeError.at}>
+                      write error: {p.writeError.message}
+                    </span>
+                  ) : p.errorMarker ? (
+                    <span className="font-mono text-red-600" title="Fetcher threw">
+                      fetcher error: {p.errorMessage ?? "unknown"}
+                    </span>
+                  ) : p.emptyMarker ? (
+                    <span className="text-amber-700">API returned no data</span>
+                  ) : p.status === "missing" ? (
+                    <span className="text-neutral-400">never written</span>
+                  ) : (
+                    <span className="text-neutral-400">ok</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 text-[10.5px] text-neutral-400">
+        Generated {debug?.generatedAt ? formatRelative(debug.generatedAt) : "—"}.
+        Tracking <code>__empty</code> / <code>__error</code> markers from the cache, plus in-memory write errors.
+      </div>
+    </div>
   );
 }
