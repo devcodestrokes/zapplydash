@@ -463,27 +463,54 @@ export async function fetchJorttInvoiceDetail(fromDate: string, toDate: string) 
   if (!token) return { live: false, error: "Could not obtain Jortt token", invoices: [], unpaid: [], totals: {} };
 
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-  const allSent: any[] = [];
-  const allUnpaid: any[] = [];
 
+  // Fetch invoices for ALL relevant statuses (sent invoices that are paid become
+  // status=paid in Jortt — they are NOT returned by ?invoice_status=sent).
+  // We fetch sent + paid + unpaid and merge.
+  async function fetchAllPagesByStatus(status: string, maxPages = 20): Promise<any[]> {
+    const out: any[] = [];
+    for (let p = 1; p <= maxPages; p++) {
+      try {
+        const r = await fetch(
+          `${BASE}/v1/invoices?per_page=100&page=${p}&invoice_status=${status}`,
+          { headers, cache: "no-store" }
+        );
+        if (!r.ok) break;
+        const j: any = await r.json();
+        if (j?.error) break;
+        const batch: any[] = j.data ?? [];
+        out.push(...batch);
+        if (batch.length < 100) break;
+      } catch {
+        break;
+      }
+    }
+    return out;
+  }
+
+  let allSent: any[] = [];
+  let allPaid: any[] = [];
+  let allUnpaid: any[] = [];
   try {
-    for (const p of [1, 2, 3, 4, 5]) {
-      const r = await fetch(`${BASE}/v1/invoices?per_page=100&page=${p}&invoice_status=sent`, { headers, cache: "no-store" });
-      if (!r.ok) break;
-      const j: any = await r.json();
-      if (j?.error) break;
-      const batch: any[] = j.data ?? [];
-      allSent.push(...batch);
-      if (batch.length < 100) break;
-    }
-    const ru = await fetch(`${BASE}/v1/invoices?per_page=100&page=1&invoice_status=unpaid`, { headers, cache: "no-store" });
-    if (ru.ok) {
-      const j: any = await ru.json();
-      if (!j?.error) allUnpaid.push(...(j.data ?? []));
-    }
+    [allSent, allPaid, allUnpaid] = await Promise.all([
+      fetchAllPagesByStatus("sent"),
+      fetchAllPagesByStatus("paid"),
+      fetchAllPagesByStatus("unpaid", 5),
+    ]);
   } catch (err: any) {
     return { live: false, error: err?.message, invoices: [], unpaid: [], totals: {} };
   }
+
+  // Deduplicate sent + paid by invoice id (an invoice that moves sent→paid
+  // would, in theory, only show in one bucket, but be safe).
+  const allRevenue = [...allSent, ...allPaid];
+  const seen = new Set<string>();
+  const dedupedRevenue = allRevenue.filter((i) => {
+    const id = i.invoice_id ?? i.id ?? i.invoice_number;
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 
   const norm = (i: any) => ({
     id: i.invoice_id ?? i.id ?? "",
@@ -497,29 +524,43 @@ export async function fetchJorttInvoiceDetail(fromDate: string, toDate: string) 
     currency: i.invoice_total_incl_vat?.currency ?? "EUR",
   });
 
-  const sentNorm = allSent.map(norm).filter((i) => {
+  const inRangeRevenue = dedupedRevenue.map(norm).filter((i) => {
     if (!i.invoiceDate) return false;
     const t = new Date(i.invoiceDate).getTime();
     return t >= fromMs && t <= toMs;
   });
   const unpaidNorm = allUnpaid.map(norm);
 
-  const totalRevenue = sentNorm.reduce((s, i) => s + i.total, 0);
+  const totalRevenue = inRangeRevenue.reduce((s, i) => s + i.total, 0);
   const accountsReceivable = unpaidNorm.reduce((s, i) => s + i.due, 0);
   const overdueNow = Date.now();
-  const overdue = unpaidNorm.filter((i) => i.dueDate && new Date(i.dueDate).getTime() < overdueNow);
+  const overdue = unpaidNorm.filter(
+    (i) => i.dueDate && new Date(i.dueDate).getTime() < overdueNow
+  );
+
+  // Sort newest first for display
+  inRangeRevenue.sort((a, b) =>
+    new Date(b.invoiceDate ?? 0).getTime() - new Date(a.invoiceDate ?? 0).getTime()
+  );
 
   return {
-    live: sentNorm.length > 0 || unpaidNorm.length > 0,
-    invoices: sentNorm,
+    live: true,
+    invoices: inRangeRevenue,
     unpaid: unpaidNorm,
     totals: {
       revenue: +totalRevenue.toFixed(2),
-      invoiceCount: sentNorm.length,
+      invoiceCount: inRangeRevenue.length,
       accountsReceivable: +accountsReceivable.toFixed(2),
       unpaidCount: unpaidNorm.length,
       overdueCount: overdue.length,
       overdueAmount: +overdue.reduce((s, i) => s + i.due, 0).toFixed(2),
+    },
+    // Diagnostics so the UI can tell user "we found X invoices total but none in range"
+    diagnostics: {
+      totalSentFetched: allSent.length,
+      totalPaidFetched: allPaid.length,
+      totalUnpaidFetched: allUnpaid.length,
+      dateRange: { from: fromDate, to: toDate },
     },
   };
 }

@@ -129,5 +129,7 @@ export function toIsoDate(d: Date | undefined): string {
 }
 
 export function defaultRange(): DateRange {
-  return { from: startOfMonth(new Date()), to: new Date() };
+  // Last 90 days — wide enough that data sources with sparse recent activity
+  // (e.g. Jortt monthly invoices) still show something on first visit.
+  return { from: subDays(new Date(), 89), to: new Date() };
 }
