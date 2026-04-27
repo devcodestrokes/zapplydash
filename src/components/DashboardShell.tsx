@@ -77,7 +77,7 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
                 return (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-                      <Link to={item.to}>
+                      <Link to={item.to as any}>
                         <Icon className="h-4 w-4" />
                         <span>{item.label}</span>
                       </Link>
