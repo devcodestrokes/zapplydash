@@ -20,6 +20,7 @@ import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.cal
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
+import { Route as ApiAuthJorttRouteImport } from './routes/api.auth.jortt'
 import { Route as ApiAuthXeroCallbackRouteImport } from './routes/api.auth.xero.callback'
 
 const LoginRoute = LoginRouteImport.update({
@@ -77,6 +78,11 @@ const ApiAuthXeroRoute = ApiAuthXeroRouteImport.update({
   path: '/api/auth/xero',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthJorttRoute = ApiAuthJorttRouteImport.update({
+  id: '/api/auth/jortt',
+  path: '/api/auth/jortt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthXeroCallbackRoute = ApiAuthXeroCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
@@ -135,6 +144,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
@@ -178,6 +190,7 @@ export interface RootRouteChildren {
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
+  ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
@@ -262,6 +275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthXeroRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/jortt': {
+      id: '/api/auth/jortt'
+      path: '/api/auth/jortt'
+      fullPath: '/api/auth/jortt'
+      preLoaderRoute: typeof ApiAuthJorttRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/xero/callback': {
       id: '/api/auth/xero/callback'
       path: '/callback'
@@ -305,6 +325,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
+  ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,

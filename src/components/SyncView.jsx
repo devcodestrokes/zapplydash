@@ -176,7 +176,29 @@ export default function SyncView({ initialConnections = {} }) {
                     </div>
                   </div>
                   <div className="shrink-0">
-                    {status === "connected" ? (
+                    {src.id === "jortt" ? (
+                      status === "connected" ? (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+                            Live ✓
+                          </span>
+                          <a
+                            href="/api/auth/jortt"
+                            className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
+                          >
+                            Re-authorize
+                          </a>
+                        </div>
+                      ) : (
+                        <a
+                          href="/api/auth/jortt"
+                          className="rounded-lg border px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
+                          style={{ backgroundColor: src.color, borderColor: src.color }}
+                        >
+                          Connect Jortt
+                        </a>
+                      )
+                    ) : status === "connected" ? (
                       <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
                         Live ✓
                       </span>
@@ -238,7 +260,7 @@ export default function SyncView({ initialConnections = {} }) {
                   </span>
                   <a
                     href="/api/auth/xero"
-                    className="text-[11px] text-neutral-400 hover:text-neutral-600 underline"
+                    className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
                   >
                     Re-authorize
                   </a>
