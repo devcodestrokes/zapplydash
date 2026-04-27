@@ -1,25 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { writeCache } from "@/server/cache.server";
 import {
   fetchShopifyMarkets,
-  fetchShopifyMonthly,
-  fetchShopifyToday,
   fetchTripleWhale,
-  fetchJortt,
-  fetchJuoRaw,
-  fetchLoopRaw,
-  fetchXero,
 } from "@/server/fetchers.server";
+import { runAllInBackground } from "@/server/sync.server";
 
-// Full sync of all dashboard sources. Writes results to data_cache.
-// Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD for ad-hoc range (Shopify + TW only,
-// returned in response without overwriting cache).
+// POST /api/sync
+//   Fires the full sync in the background and returns immediately (~50ms).
+//   The dashboard reads from data_cache and shows stale data while the
+//   background sync repopulates it. Add ?wait=1 to wait for completion
+//   (only useful for debugging).
+//
+// POST /api/sync?from=YYYY-MM-DD&to=YYYY-MM-DD
+//   Custom date range — fetches Shopify + Triple Whale for the period only,
+//   returns the data inline without touching the cache.
 export const Route = createFileRoute("/api/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const { searchParams } = new URL(request.url);
-        const source = searchParams.get("source") ?? "all";
         const fromDate = searchParams.get("from") ?? undefined;
         const toDate = searchParams.get("to") ?? undefined;
         const isCustomRange = !!(fromDate && toDate);
@@ -42,40 +41,14 @@ export const Route = createFileRoute("/api/sync")({
           });
         }
 
-        const results: Record<string, string> = {};
-        async function run(
-          name: string,
-          fn: () => Promise<unknown>,
-          provider: string,
-          key: string,
-        ) {
-          if (source !== "all" && source !== name) return;
-          try {
-            const data = await fn();
-            await writeCache(provider, key, data);
-            results[name] = "ok";
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`Sync ${name}:`, msg);
-            results[name] = `error: ${msg}`;
-          }
-        }
-
-        await Promise.all([
-          run("shopify_markets", fetchShopifyMarkets, "shopify", "markets"),
-          run("shopify_monthly", fetchShopifyMonthly, "shopify", "monthly"),
-          run("shopify_today", fetchShopifyToday, "shopify", "today"),
-          run("triplewhale", fetchTripleWhale, "triplewhale", "summary"),
-          run("jortt", fetchJortt, "jortt", "invoices"),
-          run("juo", fetchJuoRaw, "juo", "subscriptions"),
-          run("loop", fetchLoopRaw, "loop", "subscriptions"),
-          run("xero", fetchXero, "xero", "accounting"),
-        ]);
-
+        // Fire-and-forget — runAllInBackground returns void synchronously.
+        runAllInBackground();
         return Response.json({
           ok: true,
-          syncedAt: new Date().toISOString(),
-          results,
+          started: true,
+          message:
+            "Sync started in background. Refresh the dashboard in a moment to see new data.",
+          startedAt: new Date().toISOString(),
         });
       },
     },
