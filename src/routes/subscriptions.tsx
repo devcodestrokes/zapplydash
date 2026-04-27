@@ -5,7 +5,8 @@ import { format } from "date-fns";
 import { DashboardShell, RefreshButton } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { StoreSelect, DateRangePicker, defaultRange, toIsoDate, type StoreOption } from "@/components/dashboard/Filters";
-import { getSubscriptionDashboard, STORE_OPTIONS } from "@/server/dashboard-pages.functions";
+import { getSubscriptionDashboard } from "@/server/dashboard-pages.functions";
+import { STORE_OPTIONS } from "@/lib/dashboard-stores";
 import {
   Card,
   CardHeader,
