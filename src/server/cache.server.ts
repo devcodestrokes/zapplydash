@@ -168,9 +168,17 @@ export function getWriteErrors(): Record<string, { message: string; at: string }
   return out;
 }
 
-/** Write one cache entry. */
+/** Write one cache entry. Skips writes when payload is null/undefined. */
 export async function writeCache(provider: string, key: string, payload: any): Promise<void> {
   const id = `${provider}/${key}`;
+  if (payload === null || payload === undefined) {
+    // Don't try to persist a null payload — the column is NOT NULL and the
+    // upstream fetcher just signalled "no data". Record the reason instead.
+    const msg = "fetcher returned null (no data / upstream error)";
+    console.warn(`writeCache ${id} skipped:`, msg);
+    lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
+    return;
+  }
   try {
     const { error } = await (serviceClient() as any)
       .from("data_cache")
