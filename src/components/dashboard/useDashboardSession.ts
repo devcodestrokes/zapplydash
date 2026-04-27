@@ -32,12 +32,13 @@ export interface DashboardUser {
 export function useDashboardSession(): { user: DashboardUser | null; loading: boolean } {
   const navigate = useNavigate();
   const previewBypass = isPreviewEnvironment();
-  const [session, setSession] = useState<Session | null | undefined>(
-    previewBypass ? PREVIEW_MOCK_SESSION : undefined
-  );
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    if (previewBypass) return;
+    if (previewBypass) {
+      setSession(PREVIEW_MOCK_SESSION);
+      return;
+    }
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     supabase.auth.getSession().then(({ data: { session: s } }) => setSession(s));
     return () => sub.subscription.unsubscribe();
