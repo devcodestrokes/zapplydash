@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readAllCache, ageMinutes } from "./cache.server";
+import { readCacheKeys, ageMinutes } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
 
 function getConnections(): Record<string, string> {
@@ -24,7 +24,16 @@ function getConnections(): Record<string, string> {
 }
 
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
-  const cache = await readAllCache();
+  const cache = await readCacheKeys([
+    ["shopify", "markets"],
+    ["shopify", "monthly"],
+    ["shopify", "today"],
+    ["triplewhale", "summary"],
+    ["juo", "subscriptions"],
+    ["loop", "subscriptions"],
+    ["jortt", "invoices"],
+    ["xero", "accounting"],
+  ]);
   const get = (provider: string, key: string) => cache[`${provider}/${key}`] ?? null;
 
   // Fire-and-forget background refresh for any source whose cache entry is

@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import { DashboardShell, RefreshButton } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
+import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
 import { getAccountingDashboard } from "@/server/dashboard-pages.functions";
 import {
   Card,
@@ -39,21 +40,11 @@ function fmtMoney(n: number | null | undefined, currency = "EUR") {
 
 function AccountingPage() {
   const { user, loading } = useDashboardSession();
-  const [data, setData] = useState<XData | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const load = (force = false) => {
-    setIsLoading(true);
-    getAccountingDashboard({ data: { force } })
-      .then((d) => setData(d))
-      .finally(() => setIsLoading(false));
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    load(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  const fetchDashboard = useCallback(
+    (force: boolean) => getAccountingDashboard({ data: { force } }),
+    []
+  );
+  const { data, isLoading, load } = useInstantDashboardData<XData>("accounting", fetchDashboard, !!user);
 
   if (loading || !user) {
     return (
