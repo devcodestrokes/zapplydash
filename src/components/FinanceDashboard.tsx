@@ -1768,14 +1768,14 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={liveData?.loop} />}
+          {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={asArr<any>(liveData?.loop)} />}
           {view === "metrics" && <MetricsView twData={twData} />}
-          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={liveData?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={liveData?.jortt} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
+          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={(liveData as any)?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={liveData?.shopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
-          {view === "balance" && <BalanceView jorttData={liveData?.jortt} />}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={asArr<any>(liveData?.shopifyMonthly)} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "balance" && <BalanceView jorttData={jorttObj} />}
           {view === "forecast" && <ForecastView />}
-          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={liveData?.jortt} />}
+          {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
           {view === "sync" && <SyncView initialConnections={connections} />}
 
           <div className="mt-10 text-center text-[11px] text-neutral-400">
