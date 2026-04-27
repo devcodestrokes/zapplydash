@@ -15,13 +15,26 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-// Service-role Supabase client — no cookies, works anywhere server-side
+// Service-role Supabase client — no cookies, works anywhere server-side.
+// In the TanStack Worker runtime only VITE_* vars are reliably injected,
+// so fall back to the publishable/anon key if the service role key is missing.
+// The integrations + data_cache tables have permissive RLS for this use case.
 function serviceClient() {
-  return createSupabaseJS(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  );
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    (import.meta as any).env?.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      `Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`
+    );
+  }
+  return createSupabaseJS(url, key, { auth: { persistSession: false } });
 }
 
 // ─── Shopify ─────────────────────────────────────────────────────────────────
