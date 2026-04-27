@@ -1594,7 +1594,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   }, []);
 
   // â”€â”€ Live data only (no mock fallbacks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const activeMarkets     = liveData?.shopifyMarkets?.some(m => m.live) ? liveData.shopifyMarkets : null;
+  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some((m: any) => m?.live) ? liveData.shopifyMarkets : null;
   const shopifyLive       = !!activeMarkets;
   const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
   const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
