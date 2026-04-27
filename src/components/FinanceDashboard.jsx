@@ -474,7 +474,7 @@ const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = []
   useEffect(() => { setChartsReady(true); }, []);
 
   // When a custom-range sync has returned data, use it in place of the live props
-  const effectiveMarkets = rangeData?.shopifyMarkets ?? liveMarkets;
+  const effectiveMarkets = Array.isArray(rangeData?.shopifyMarkets) ? rangeData.shopifyMarkets : liveMarkets;
   const effectiveTWData  = rangeData?.tripleWhale
     ? rangeData.tripleWhale.filter(m => m.live)
     : twData;
@@ -1031,7 +1031,7 @@ const MetricsView = ({ twData = [] }) => {
    ========================================================================= */
 
 const ReconciliationView = ({ shopifyMarkets = null, jorttData = null }) => {
-  const shopifyTotal = shopifyMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? null;
+  const shopifyTotal = Array.isArray(shopifyMarkets) ? shopifyMarkets.filter(m => m?.live).reduce((s, m) => s + (m.revenue ?? 0), 0) : null;
   const jorttRevenue = jorttData?.revenueByMonth
     ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0)
     : null;
@@ -2448,7 +2448,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
 
   // ── Live data only (no mock fallbacks) ────────────────────────────────
   const shopifyToday      = liveData?.shopifyToday ?? null;
-  const activeMarkets     = liveData?.shopifyMarkets?.some(m => m.live) ? liveData.shopifyMarkets : null;
+  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some(m => m?.live) ? liveData.shopifyMarkets : null;
   const shopifyLive       = !!activeMarkets;
   const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
   const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
