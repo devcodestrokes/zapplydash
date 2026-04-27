@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink, Bug, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from "lucide-react";
+import { getSyncDebug } from "@/server/debug.functions";
 
 const SHOPIFY_STORES = [
   { id: "shopify_zapply-nl",      name: "Shopify NL", flag: "🇳🇱", shop: "zapply-nl.myshopify.com",      desc: "Netherlands · orders, revenue" },
