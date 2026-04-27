@@ -62,6 +62,32 @@ export default function SyncView({ initialConnections = {} }) {
 
   const fetchDebug = useServerFn(getSyncDebug);
 
+  // Real per-source liveness derived from the debug cache snapshot.
+  // Falls back to "missing" when the cache hasn't been written yet so we
+  // never mis-label an integration as Live just because env keys exist.
+  const PROVIDER_TO_ID = {
+    loop: "loop/subscriptions",
+    triplewhale: "triplewhale/summary",
+    jortt: "jortt/invoices",
+    juo: "juo/subscriptions",
+    xero: "xero/accounting",
+  };
+  const liveMap = {};
+  for (const p of debug?.providers ?? []) {
+    liveMap[p.id] = p; // status: "live" | "empty" | "error" | "missing"
+  }
+  const shopifyStoreStatus = debug?.shopifyStores ?? {};
+  const getSourceStatus = (sourceId) => {
+    const cacheId = PROVIDER_TO_ID[sourceId];
+    if (!cacheId) return "missing";
+    return liveMap[cacheId]?.status ?? "missing";
+  };
+  const getSourceErrorMessage = (sourceId) => {
+    const cacheId = PROVIDER_TO_ID[sourceId];
+    if (!cacheId) return null;
+    return liveMap[cacheId]?.errorMessage ?? null;
+  };
+
   const refreshDebug = useCallback(async () => {
     setDebugLoading(true);
     try {
