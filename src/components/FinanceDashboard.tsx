@@ -1593,15 +1593,19 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     setLastUpdated(new Date().toLocaleString());
   }, []);
 
-  // â”€â”€ Live data only (no mock fallbacks) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const activeMarkets     = Array.isArray(liveData?.shopifyMarkets) && liveData.shopifyMarkets.some((m: any) => m?.live) ? liveData.shopifyMarkets : null;
+  // ── Live data only (no mock fallbacks) ──────────────────────────────
+  // Cache may return {__empty:true}/{__error:...} objects — guard everything as arrays/objects.
+  const asArr = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
+  const shopifyMarketsArr = asArr<any>(liveData?.shopifyMarkets);
+  const activeMarkets     = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
   const shopifyLive       = !!activeMarkets;
-  const activeOpexByMonth = liveData?.jortt?.opexByMonth?.length > 0 ? liveData.jortt.opexByMonth : null;
-  const activeOpexDetail  = liveData?.jortt?.opexDetail ?? null;
-  const jorttLive         = !!(liveData?.jortt?.live);
-  const twData            = liveData?.tripleWhale?.filter(m => m.live) ?? [];
+  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !(liveData.jortt as any).__empty && !(liveData.jortt as any).__error ? liveData.jortt : null;
+  const activeOpexByMonth = asArr<any>(jorttObj?.opexByMonth).length > 0 ? jorttObj!.opexByMonth : null;
+  const activeOpexDetail  = jorttObj?.opexDetail ?? null;
+  const jorttLive         = !!(jorttObj?.live);
+  const twData            = asArr<any>(liveData?.tripleWhale).filter((m: any) => m?.live);
   const twLive            = twData.length > 0;
-  const loopLive          = liveData?.loop?.some(m => m.live) ?? false;
+  const loopLive          = asArr<any>(liveData?.loop).some((m: any) => m?.live);
   const liveSources       = [shopifyLive, jorttLive, twLive, loopLive].filter(Boolean).length;
 
   async function handleLogout() {
