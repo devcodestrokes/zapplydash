@@ -153,7 +153,9 @@ export async function fetchShopifyStoreDetail(
   let cursor: string | null = null;
   let hasNextPage = true;
   let page = 0;
-  const MAX_PAGES = 30;
+  // Cap pages to keep response under ~10s. 10 pages × 100 = 1,000 orders/page,
+  // covers typical date ranges. Truncated flag tells UI when more exists.
+  const MAX_PAGES = 10;
 
   try {
     while (hasNextPage && page < MAX_PAGES) {
@@ -265,15 +267,16 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
   const fromMs = new Date(`${fromDate}T00:00:00Z`).getTime();
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
-  const MAX_PAGES = 40;
+  // Cap pages to keep request fast. 15 × 50 = 750 most-recent subs.
+  const MAX_PAGES = 15;
   let apiReached = false;
 
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
-      if (page > 1) await new Promise((r) => setTimeout(r, 600));
+      // Removed 600ms sleep — Loop allows ~2 req/s, our concurrency is 1.
       let res: Response = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
       if (res.status === 429) {
-        await new Promise((r) => setTimeout(r, 15000));
+        await new Promise((r) => setTimeout(r, 2000));
         res = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
       }
       if (!res.ok) break;
@@ -338,7 +341,8 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
   let nextUrl: string | null = `${BASE}/admin/v1/subscriptions?limit=100`;
-  const MAX_PAGES = 50;
+  // Cap to keep response fast. 15 × 100 = 1,500 most-recent subs.
+  const MAX_PAGES = 15;
   let page = 0;
   let apiReached = false;
 
