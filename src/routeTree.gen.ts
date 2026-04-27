@@ -17,6 +17,7 @@ import { Route as ApiSyncRouteImport } from './routes/api.sync'
 import { Route as ApiJorttRouteImport } from './routes/api.jortt'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
+import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
@@ -63,6 +64,11 @@ const ApiShopifyCallbackRoute = ApiShopifyCallbackRouteImport.update({
   path: '/api/shopify/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSyncRoute = ApiPublicSyncRouteImport.update({
+  id: '/api/public/sync',
+  path: '/api/public/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiJorttConnectRoute = ApiJorttConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
   '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
   '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
   '/api/auth/xero/callback': typeof ApiAuthXeroCallbackRoute
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
     | '/api/auth/xero/callback'
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
     | '/api/auth/xero/callback'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
     | '/api/auth/xero/callback'
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   AuthLogoutRoute: typeof AuthLogoutRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
+  ApiPublicSyncRoute: typeof ApiPublicSyncRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
 }
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/api/shopify/callback'
       fullPath: '/api/shopify/callback'
       preLoaderRoute: typeof ApiShopifyCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sync': {
+      id: '/api/public/sync'
+      path: '/api/public/sync'
+      fullPath: '/api/public/sync'
+      preLoaderRoute: typeof ApiPublicSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/jortt/connect': {
@@ -327,6 +347,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLogoutRoute: AuthLogoutRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
+  ApiPublicSyncRoute: ApiPublicSyncRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
 }
