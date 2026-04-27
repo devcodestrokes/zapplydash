@@ -41,11 +41,28 @@ async function runJob(job: Job): Promise<void> {
   const p = (async () => {
     try {
       const data = await job.fn();
-      await writeCache(job.provider, job.key, data);
-      console.log(`[sync] ${job.name} ok`);
+      // Always write SOMETHING so the cache row exists. If the fetcher
+      // returned null/undefined, store a marker payload so we can tell
+      // "fetched but empty" apart from "never fetched".
+      const payload =
+        data === null || data === undefined
+          ? { __empty: true, fetchedAt: new Date().toISOString() }
+          : data;
+      await writeCache(job.provider, job.key, payload);
+      if (data === null || data === undefined) {
+        console.warn(`[sync] ${job.name} returned no data (empty/null)`);
+      } else {
+        console.log(`[sync] ${job.name} ok`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[sync] ${job.name} failed:`, msg);
+      // Persist an error marker so the dashboard knows this source failed.
+      await writeCache(job.provider, job.key, {
+        __error: true,
+        message: msg,
+        fetchedAt: new Date().toISOString(),
+      });
     } finally {
       inFlight.delete(id);
     }

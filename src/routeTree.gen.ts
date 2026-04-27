@@ -15,7 +15,6 @@ import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
 import { Route as ApiJorttRouteImport } from './routes/api.jortt'
-import { Route as ApiDebugEnvRouteImport } from './routes/api.debug-env'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
@@ -53,11 +52,6 @@ const ApiJorttRoute = ApiJorttRouteImport.update({
   path: '/api/jortt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDebugEnvRoute = ApiDebugEnvRouteImport.update({
-  id: '/api/debug-env',
-  path: '/api/debug-env',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiShopifyInstallRoute = ApiShopifyInstallRouteImport.update({
   id: '/api/shopify/install',
   path: '/api/shopify/install',
@@ -92,7 +86,6 @@ const ApiAuthXeroCallbackRoute = ApiAuthXeroCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/debug-env': typeof ApiDebugEnvRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -107,7 +100,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/debug-env': typeof ApiDebugEnvRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -123,7 +115,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/api/debug-env': typeof ApiDebugEnvRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -140,7 +131,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
-    | '/api/debug-env'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -155,7 +145,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/api/debug-env'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -170,7 +159,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/login'
-    | '/api/debug-env'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -186,7 +174,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
-  ApiDebugEnvRoute: typeof ApiDebugEnvRoute
   ApiJorttRoute: typeof ApiJorttRouteWithChildren
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -238,13 +225,6 @@ declare module '@tanstack/react-router' {
       path: '/api/jortt'
       fullPath: '/api/jortt'
       preLoaderRoute: typeof ApiJorttRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/debug-env': {
-      id: '/api/debug-env'
-      path: '/api/debug-env'
-      fullPath: '/api/debug-env'
-      preLoaderRoute: typeof ApiDebugEnvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/shopify/install': {
@@ -321,7 +301,6 @@ const ApiAuthXeroRouteWithChildren = ApiAuthXeroRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
-  ApiDebugEnvRoute: ApiDebugEnvRoute,
   ApiJorttRoute: ApiJorttRouteWithChildren,
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
