@@ -475,8 +475,8 @@ const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = []
 
   // When a custom-range sync has returned data, use it in place of the live props
   const effectiveMarkets = Array.isArray(rangeData?.shopifyMarkets) ? rangeData.shopifyMarkets : liveMarkets;
-  const effectiveTWData  = rangeData?.tripleWhale
-    ? rangeData.tripleWhale.filter(m => m.live)
+  const effectiveTWData  = Array.isArray(rangeData?.tripleWhale)
+    ? rangeData.tripleWhale.filter(m => m?.live)
     : twData;
 
   // Is the selected range the current month?
