@@ -1075,9 +1075,36 @@ export async function fetchXero() {
     const derivedCurrentLiabilities = currentLiabilities ??
       (totalLiabilities !== null ? totalLiabilities : null);
 
-    // ── Parse Bank Summary ───────────────────────────────────────────────────
+    // ── Parse Bank Summary + full Accounts list ──────────────────────────────
+    // 1) Build a base list from /Accounts (every BANK account, with currency,
+    //    even if balance is zero). 2) Overlay balances parsed from BankSummary
+    //    when available. This mirrors what the Xero dashboard shows.
+    type BankAcct = {
+      name: string;
+      balance: number;
+      currency: string;
+      accountId?: string;
+      code?: string;
+      bankAccountNumber?: string;
+      status?: string;
+    };
+    const acctsList: any[] = accData?.Accounts ?? [];
+    const bankAccountsMap = new Map<string, BankAcct>();
+    for (const a of acctsList) {
+      const name = String(a.Name ?? "").trim();
+      if (!name) continue;
+      bankAccountsMap.set(name.toLowerCase(), {
+        name,
+        balance: 0,
+        currency: a.CurrencyCode ?? "EUR",
+        accountId: a.AccountID,
+        code: a.Code,
+        bankAccountNumber: a.BankAccountNumber,
+        status: a.Status,
+      });
+    }
+
     let cashBalance: number | null = null;
-    const bankAccounts: { name: string; balance: number; currency: string }[] = [];
     const cashReport = cashData?.Reports?.[0];
     if (cashReport) {
       for (const section of cashReport.Rows ?? []) {
@@ -1086,13 +1113,20 @@ export async function fetchXero() {
           if (row.RowType !== "Row" || !row.Cells?.length) continue;
           const name = String(row.Cells[0]?.Value ?? "").trim();
           const bal  = xNum(row.Cells[row.Cells.length - 1]);
-          if (name && name !== "Account" && Math.abs(bal) > 0) {
-            bankAccounts.push({ name, balance: bal, currency: "EUR" });
-            cashBalance = (cashBalance ?? 0) + bal;
+          if (!name || name === "Account") continue;
+          const key = name.toLowerCase();
+          const existing = bankAccountsMap.get(key);
+          if (existing) {
+            existing.balance = bal;
+          } else {
+            bankAccountsMap.set(key, { name, balance: bal, currency: "EUR" });
           }
+          cashBalance = (cashBalance ?? 0) + bal;
         }
       }
     }
+    const bankAccounts: BankAcct[] = Array.from(bankAccountsMap.values())
+      .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
 
     // ── Parse Invoices (Accounts Receivable) ─────────────────────────────────
     const invoices: any[] = invData?.Invoices ?? [];
@@ -1100,6 +1134,16 @@ export async function fetchXero() {
     const overdueInvoices     = invoices.filter(inv => inv.IsOverdue);
     const overdueAmount       = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
     const accountsReceivable = invoiceAccountsReceivable || arBalance || 0;
+
+    // ── Parse Bills (Accounts Payable / ACCPAY) ──────────────────────────────
+    const bills: any[] = billData?.Invoices ?? [];
+    const billsAwaitingAmount = bills.reduce((s, b) => s + (b.AmountDue ?? 0), 0);
+    const overdueBills        = bills.filter((b) => b.IsOverdue);
+    const overdueBillsAmount  = overdueBills.reduce((s, b) => s + (b.AmountDue ?? 0), 0);
+
+    // ── Parse Drafts (ACCREC) ────────────────────────────────────────────────
+    const drafts: any[] = draftData?.Invoices ?? [];
+    const draftsAmount  = drafts.reduce((s, d) => s + (d.Total ?? d.AmountDue ?? 0), 0);
 
     const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
