@@ -5,17 +5,37 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-function createSupabaseAdminClient() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// In the TanStack Worker runtime, process.env may not contain the Supabase
+// keys at runtime. We read VITE_* values via import.meta.env at MODULE TOP
+// LEVEL so Vite inlines them as string literals at build time. This guarantees
+// the Worker bundle always has them available regardless of runtime env injection.
+const VITE_SUPABASE_URL =
+  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+const VITE_SUPABASE_PUBLISHABLE_KEY =
+  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+function createSupabaseAdminClient() {
+  const SUPABASE_URL =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    VITE_SUPABASE_URL;
+  // Prefer service role (bypasses RLS) but fall back to publishable key so
+  // the Worker can still operate against tables with permissive RLS when the
+  // service role secret is not injected into the runtime.
+  const SUPABASE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    VITE_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
-      'Missing Supabase server environment variables. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.'
+      `Missing Supabase server environment variables (url=${!!SUPABASE_URL}, key=${!!SUPABASE_KEY}). ` +
+      `Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY) are set.`
     );
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
     auth: {
       storage: undefined,
       persistSession: false,
