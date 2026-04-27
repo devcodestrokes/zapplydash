@@ -691,25 +691,55 @@ function xNum(cell: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Walk report rows recursively to find a SummaryRow under the first matching section title
+// Walk report rows recursively. Returns the LAST SummaryRow under any section
+// whose title contains the given fragment (case-insensitive). Xero balance
+// sheets nest subsections (Bank → Current Assets → Fixed Assets) inside a
+// parent "Assets" section whose grand total is the LAST SummaryRow — picking
+// the first one would return a sub-total instead.
 function xSectionTotal(rows: any[], titleFragment: string, colIdx = 1): number | null {
+  const frag = titleFragment.toLowerCase();
   for (const row of rows) {
     const title = (row.Title ?? "").toLowerCase();
-    if (row.RowType === "Section" && title.includes(titleFragment.toLowerCase())) {
-      // Look for SummaryRow directly or in nested rows
-      const findSummary = (rs: any[]): number | null => {
+    if (row.RowType === "Section" && title.includes(frag)) {
+      const findLastSummary = (rs: any[]): number | null => {
+        let last: number | null = null;
         for (const r of rs) {
-          if (r.RowType === "SummaryRow" && r.Cells?.[colIdx] != null) return xNum(r.Cells[colIdx]);
-          if (r.Rows) { const v = findSummary(r.Rows); if (v !== null) return v; }
+          if (r.RowType === "SummaryRow" && r.Cells?.[colIdx] != null) {
+            last = xNum(r.Cells[colIdx]);
+          }
+          if (r.Rows) {
+            const nested = findLastSummary(r.Rows);
+            if (nested !== null) last = nested;
+          }
         }
-        return null;
+        return last;
       };
-      const v = findSummary(row.Rows ?? []);
+      const v = findLastSummary(row.Rows ?? []);
       if (v !== null) return v;
     }
     if (row.Rows) {
       const v = xSectionTotal(row.Rows, titleFragment, colIdx);
       if (v !== null) return v;
+    }
+  }
+  return null;
+}
+
+// Find a Row (not SummaryRow) whose first cell title matches fragment.
+// Used for Xero rows like "Total Assets", "Total Liabilities" that appear
+// at top level outside any section.
+function xRowByLabel(rows: any[], labelFragment: string, colIdx = 1): number | null {
+  const frag = labelFragment.toLowerCase();
+  for (const row of rows) {
+    if (row.RowType === "Section" && row.Rows) {
+      const v = xRowByLabel(row.Rows, labelFragment, colIdx);
+      if (v !== null) return v;
+    }
+    if ((row.RowType === "Row" || row.RowType === "SummaryRow") && row.Cells?.length) {
+      const label = String(row.Cells[0]?.Value ?? "").toLowerCase();
+      if (label.includes(frag) && row.Cells[colIdx] != null) {
+        return xNum(row.Cells[colIdx]);
+      }
     }
   }
   return null;
