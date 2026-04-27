@@ -1,14 +1,32 @@
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
 
-// Single persistent client — avoids re-creating on every request
+// Resolve Supabase credentials with sensible fallbacks.
+// In the TanStack Worker runtime, only VITE_* vars are injected reliably;
+// SUPABASE_SERVICE_ROLE_KEY may be unavailable. The data_cache table has
+// permissive RLS for authenticated users, so the publishable/anon key works.
+function resolveCreds() {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    (import.meta as any).env?.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+  return { url, key };
+}
+
 let _client: ReturnType<typeof createSupabaseJS> | null = null;
 function serviceClient() {
   if (!_client) {
-    _client = createSupabaseJS(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } }
-    );
+    const { url, key } = resolveCreds();
+    if (!url || !key) {
+      throw new Error(
+        `Supabase creds missing (url=${!!url}, key=${!!key}). Need SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/VITE_SUPABASE_PUBLISHABLE_KEY.`
+      );
+    }
+    _client = createSupabaseJS(url, key, { auth: { persistSession: false } });
   }
   return _client;
 }
@@ -29,7 +47,11 @@ export async function readAllCache(): Promise<CacheMap> {
     const { data, error } = await (serviceClient() as any)
       .from("data_cache")
       .select("provider, cache_key, payload, fetched_at");
-    if (error || !data) return {};
+    if (error) {
+      console.error("readAllCache error:", error.message);
+      return {};
+    }
+    if (!data) return {};
     const map: CacheMap = {};
     for (const row of data as any[]) {
       map[`${row.provider}/${row.cache_key}`] = {
@@ -38,7 +60,8 @@ export async function readAllCache(): Promise<CacheMap> {
       };
     }
     return map;
-  } catch {
+  } catch (err: any) {
+    console.error("readAllCache exception:", err?.message);
     return {};
   }
 }
@@ -46,14 +69,17 @@ export async function readAllCache(): Promise<CacheMap> {
 /** Write one cache entry. */
 export async function writeCache(provider: string, key: string, payload: any): Promise<void> {
   try {
-    await (serviceClient() as any)
+    const { error } = await (serviceClient() as any)
       .from("data_cache")
       .upsert(
         { provider, cache_key: key, payload, fetched_at: new Date().toISOString() },
         { onConflict: "provider,cache_key" }
       );
+    if (error) {
+      console.error(`writeCache ${provider}/${key} db error:`, error.message);
+    }
   } catch (err: any) {
-    console.error(`writeCache ${provider}/${key}:`, err.message);
+    console.error(`writeCache ${provider}/${key}:`, err?.message);
   }
 }
 
