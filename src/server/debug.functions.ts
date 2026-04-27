@@ -78,8 +78,36 @@ export const getSyncDebug = createServerFn({ method: "GET" }).handler(async () =
   const lastWriteAt =
     allFetches.length > 0 ? allFetches.reduce((a, b) => (a > b ? a : b)) : null;
 
+  // Per-store Shopify status, derived from the shopify/markets payload.
+  // Keys match the SyncView store ids (e.g. "shopify_zapply-nl").
+  const shopifyStores: Record<string, "live" | "empty" | "error" | "missing"> = {};
+  const shopifyEntry = cache["shopify/markets"];
+  const shopifyPayload: any = shopifyEntry?.payload ?? null;
+  const SHOPIFY_STORE_IDS: Record<string, string> = {
+    NL: "shopify_zapply-nl",
+    UK: "shopify_zapplyde",
+    US: "shopify_zapply-usa",
+    EU: "shopify_zapplygermany",
+  };
+  if (Array.isArray(shopifyPayload)) {
+    for (const market of shopifyPayload) {
+      const id = SHOPIFY_STORE_IDS[market?.code];
+      if (!id) continue;
+      if (market.live === true) shopifyStores[id] = "live";
+      else if (market.error) shopifyStores[id] = "error";
+      else shopifyStores[id] = "missing";
+    }
+  } else if (shopifyPayload?.__error) {
+    for (const id of Object.values(SHOPIFY_STORE_IDS)) shopifyStores[id] = "error";
+  } else if (shopifyPayload?.__empty) {
+    for (const id of Object.values(SHOPIFY_STORE_IDS)) shopifyStores[id] = "empty";
+  } else if (!shopifyEntry) {
+    for (const id of Object.values(SHOPIFY_STORE_IDS)) shopifyStores[id] = "missing";
+  }
+
   return {
     providers,
+    shopifyStores,
     lastSuccessAt,
     lastWriteAt,
     writeErrorCount: Object.keys(writeErrors).length,
