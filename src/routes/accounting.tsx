@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { DashboardShell, RefreshButton } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
-import { getAccountingDashboard } from "@/server/dashboard-pages.functions";
+import { getAccountingDashboard, syncXeroAll } from "@/server/dashboard-pages.functions";
 import {
   Card,
   CardHeader,
@@ -20,7 +20,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { LogIn } from "lucide-react";
+import { LogIn, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/accounting")({
   head: () => ({
@@ -47,6 +48,25 @@ function AccountingPage() {
     []
   );
   const { data, isLoading, load } = useInstantDashboardData<XData>("accounting", fetchDashboard, !!user);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncAll = useCallback(async () => {
+    setSyncing(true);
+    const t = toast.loading("Syncing all Xero data… (P&L + Balance Sheet)");
+    try {
+      const res: any = await syncXeroAll();
+      if (res?.ok) {
+        toast.success("Xero sync complete — all reports updated.", { id: t });
+        await load(true);
+      } else {
+        toast.error(res?.error ?? "Xero sync failed.", { id: t });
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Xero sync failed.", { id: t });
+    } finally {
+      setSyncing(false);
+    }
+  }, [load]);
 
   if (loading || !user) {
     return (
@@ -70,7 +90,7 @@ function AccountingPage() {
         <>
           <Button
             asChild
-            variant="default"
+            variant="outline"
             size="sm"
             className="gap-2"
           >
@@ -78,6 +98,16 @@ function AccountingPage() {
               <LogIn className="w-4 h-4" />
               Connect Xero
             </a>
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-2"
+            onClick={handleSyncAll}
+            disabled={syncing}
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing all Xero data…" : "Sync all Xero data"}
           </Button>
           <RefreshButton onRefresh={() => load(true)} isLoading={isLoading} />
         </>
