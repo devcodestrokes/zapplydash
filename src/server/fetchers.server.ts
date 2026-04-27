@@ -969,23 +969,26 @@ export async function fetchXero() {
       xSectionTotal(balRows, "non-current assets") ??
       xRowByLabel(balRows, "total fixed assets") ??
       xRowByLabel(balRows, "total non-current assets");
-    const totalLiabilities =
+    const parsedTotalLiabilities =
       xRowByLabel(balRows, "total liabilities") ??
       xRowByLabel(balRows, "total liability") ??
       xSectionTotal(balRows, "liabilities") ??
-      xSectionTotal(balRows, "liability") ??
-      (totalAssets !== null && equity !== null ? totalAssets - equity : null);
+      xSectionTotal(balRows, "liability");
     const currentLiabilities =
       xSectionTotal(balRows, "current liabilities") ??
       xSectionTotal(balRows, "current liability") ??
       xRowByLabel(balRows, "total current liabilities") ??
       xRowByLabel(balRows, "total current liability");
-    const equity =
+    const parsedEquity =
       xRowByLabel(balRows, "total equity") ??
       xRowByLabel(balRows, "total capital") ??
+      xRowByLabel(balRows, "net assets") ??
       xSectionTotal(balRows, "equity") ??
       xSectionTotal(balRows, "capital") ??
-      xSectionTotal(balRows, "net assets") ??
+      xSectionTotal(balRows, "net assets");
+    const totalLiabilities = parsedTotalLiabilities ??
+      (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null);
+    const equity = parsedEquity ??
       (totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
 
     // ── Parse Bank Summary ───────────────────────────────────────────────────
