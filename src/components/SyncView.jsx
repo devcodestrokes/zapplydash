@@ -52,6 +52,46 @@ function StatusPill({ status }) {
   );
 }
 
+// Compact badge that reflects ACTUAL cache liveness (not just "credentials present").
+// status: "live" | "empty" | "error" | "missing"
+function LiveStatusBadge({ status, errorMessage }) {
+  if (status === "live") {
+    return (
+      <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+        Live ✓
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span
+        title={errorMessage ?? "Last sync failed"}
+        className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[12px] font-medium text-red-700"
+      >
+        Error
+      </span>
+    );
+  }
+  if (status === "empty") {
+    return (
+      <span
+        title="API responded but returned no data"
+        className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-medium text-amber-700"
+      >
+        No data
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Cache not written yet — click Sync all now"
+      className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500"
+    >
+      Not synced
+    </span>
+  );
+}
+
 export default function SyncView({ initialConnections = {} }) {
   const [connections, setConnections] = useState(initialConnections);
   const [syncing, setSyncing] = useState(false);
