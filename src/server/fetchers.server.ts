@@ -816,19 +816,29 @@ export async function fetchXero() {
   };
 
   try {
-    const [plS, balS, cashS, invS] = await Promise.allSettled([
+    const [plS, balS, cashS, invS, accS, billS, draftS] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
       // total for the range; with timeframe=MONTH Xero auto-derives the period count.
       xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
       xeroFetch("BalanceSheet", `${BASE}/Reports/BalanceSheet?date=${toDateStr}`),
       xeroFetch("BankSummary", `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`),
       xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      // Full Chart of Accounts filtered to BANK type — gives every bank account
+      // with its native CurrencyCode, even when balance is zero.
+      xeroFetch("Accounts", `${BASE}/Accounts?where=${encodeURIComponent('Type=="BANK"')}`),
+      // Bills to pay (ACCPAY)
+      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCPAY"')}`),
+      // Draft invoices owed to you
+      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=DRAFT&where=${encodeURIComponent('Type=="ACCREC"')}`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
     const balData = balS.status === "fulfilled" ? balS.value : null;
     const cashData = cashS.status === "fulfilled" ? cashS.value : null;
     const invData  = invS.status === "fulfilled" ? invS.value  : null;
+    const accData  = accS.status === "fulfilled" ? accS.value  : null;
+    const billData = billS.status === "fulfilled" ? billS.value : null;
+    const draftData = draftS.status === "fulfilled" ? draftS.value : null;
 
     // ── Parse P&L report ─────────────────────────────────────────────────────
     const revenueByMonth:     Record<string, number> = {};
