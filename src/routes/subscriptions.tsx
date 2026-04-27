@@ -121,13 +121,16 @@ function SubscriptionsPage() {
           <KpiCard label="Active subs" value={(totals.active ?? 0).toLocaleString()} />
           <KpiCard label="Canceled" value={(totals.canceled ?? 0).toLocaleString()} />
           <KpiCard label="ARPU" value={fmtMoney(totals.arpu, currency)} />
-          <KpiCard label="Total in range" value={(totals.total ?? 0).toLocaleString()} />
+          <KpiCard label="New in range" value={(totals.newInRange ?? 0).toLocaleString()} />
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Subscriptions</CardTitle>
-            <CardDescription>{subs.length} subscriptions in selected range</CardDescription>
+            <CardDescription>
+              {subs.length} subscriptions on file ·{" "}
+              <span className="text-foreground font-medium">{totals.newInRange ?? 0}</span> created in selected range
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border max-h-[600px] overflow-auto">
