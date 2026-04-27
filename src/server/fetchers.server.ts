@@ -612,7 +612,7 @@ async function getXeroToken(): Promise<string | null> {
   try {
     const { data } = await serviceClient()
       .from("integrations")
-      .select("access_token, expires_at, metadata")
+      .select("access_token, refresh_token, expires_at, metadata")
       .eq("provider", "xero")
       .single();
     row = data;
@@ -630,7 +630,7 @@ async function getXeroToken(): Promise<string | null> {
   }
 
   // Refresh using stored refresh_token
-  const refreshToken = row.metadata?.refresh_token;
+  const refreshToken = row.refresh_token ?? row.metadata?.refresh_token;
   if (!refreshToken) {
     console.warn("Xero: access token expired and no refresh_token — reconnect via /api/auth/xero");
     return null;
@@ -659,6 +659,7 @@ async function getXeroToken(): Promise<string | null> {
       {
         provider: "xero",
         access_token,
+        refresh_token: new_refresh ?? refreshToken,
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
         metadata: { ...row.metadata, refresh_token: new_refresh ?? refreshToken },
@@ -732,7 +733,7 @@ export async function fetchXero() {
 
   try {
     const [plS, balS, cashS, invS] = await Promise.allSettled([
-      fetch(`${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&periods=12&timeframe=MONTH`, { headers: h, cache: "no-store" })
+      fetch(`${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&periods=11&timeframe=MONTH`, { headers: h, cache: "no-store" })
         .then(r => r.ok ? r.json() : (console.error(`Xero P&L: ${r.status}`), null)).catch(() => null),
       fetch(`${BASE}/Reports/BalanceSheet?date=${toDateStr}`, { headers: h, cache: "no-store" })
         .then(r => r.ok ? r.json() : (console.error(`Xero BalanceSheet: ${r.status}`), null)).catch(() => null),
