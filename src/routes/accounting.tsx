@@ -134,6 +134,45 @@ function AccountingPage() {
       }
     >
       <div className="p-6 space-y-6">
+        {syncReports && (
+          <Card
+            className={
+              syncOk
+                ? "border-emerald-500/40 bg-emerald-500/5"
+                : "border-destructive/40 bg-destructive/5"
+            }
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {syncOk
+                  ? "Xero sync complete"
+                  : "Xero sync incomplete — cache not updated"}
+              </CardTitle>
+              {syncError && !syncOk && (
+                <CardDescription>{syncError}</CardDescription>
+              )}
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-1.5 text-sm">
+                {syncReports.map((r) => (
+                  <li key={r.key} className="flex items-start gap-2">
+                    {r.ok ? (
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+                    )}
+                    <span className="font-medium">{r.label}:</span>
+                    <span className={r.ok ? "text-muted-foreground" : "text-destructive"}>
+                      {r.ok ? "OK" : r.reason ?? "failed"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+
         {data?.source === "cache" && (
           <Card className="border-yellow-500/40 bg-yellow-500/5">
             <CardContent className="pt-6 text-sm">
