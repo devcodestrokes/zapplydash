@@ -2417,7 +2417,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
-      router.refresh(); // soft refresh — re-runs server component without full page reload
+      router.invalidate(); // re-run loaders to fetch fresh data
     } catch (err) {
       setSyncError(err.message);
     } finally {
