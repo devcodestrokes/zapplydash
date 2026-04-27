@@ -1071,6 +1071,30 @@ export async function fetchXero() {
       overdueAmount:        overdueAmount        > 0 ? Math.round(overdueAmount)        : null,
       overdueInvoiceCount:  overdueInvoices.length,
       currency: "EUR",
+      _diagnostics: {
+        profitAndLoss: {
+          reportPresent: !!plReport,
+          sectionTitles: plLabels.sections,
+          rowLabels: plLabels.rows.slice(0, 80),
+          parsedRevenueMonths: Object.keys(revenueByMonth),
+          parsedExpenseMonths: Object.keys(expensesByMonth),
+          parsedNetProfitMonths: Object.keys(netProfitByMonth),
+        },
+        balanceSheet: {
+          reportPresent: balRows.length > 0,
+          sectionTitles: bsLabels.sections,
+          rowLabels: bsLabels.rows.slice(0, 80),
+          lookups: bsLookups,
+        },
+        bankSummary: {
+          reportPresent: !!cashReport,
+          accountsFound: bankAccounts.map((b) => b.name),
+        },
+        invoices: {
+          endpointResponded: invData !== null,
+          totalReturned: invoices.length,
+        },
+      },
     };
   } catch (err: any) {
     console.error("Xero fetch error:", err.message);
