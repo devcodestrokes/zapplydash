@@ -18,6 +18,7 @@ import { Route as ApiJorttRouteImport } from './routes/api.jortt'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
+import { Route as ApiPublicEnvCheckRouteImport } from './routes/api.public.env-check'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
@@ -69,6 +70,11 @@ const ApiPublicSyncRoute = ApiPublicSyncRouteImport.update({
   path: '/api/public/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicEnvCheckRoute = ApiPublicEnvCheckRouteImport.update({
+  id: '/api/public/env-check',
+  path: '/api/public/env-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiJorttConnectRoute = ApiJorttConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/env-check': typeof ApiPublicEnvCheckRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/env-check': typeof ApiPublicEnvCheckRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/env-check': typeof ApiPublicEnvCheckRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/env-check'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/env-check'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/env-check'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   AuthLogoutRoute: typeof AuthLogoutRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
+  ApiPublicEnvCheckRoute: typeof ApiPublicEnvCheckRoute
   ApiPublicSyncRoute: typeof ApiPublicSyncRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/sync'
       fullPath: '/api/public/sync'
       preLoaderRoute: typeof ApiPublicSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/env-check': {
+      id: '/api/public/env-check'
+      path: '/api/public/env-check'
+      fullPath: '/api/public/env-check'
+      preLoaderRoute: typeof ApiPublicEnvCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/jortt/connect': {
@@ -347,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLogoutRoute: AuthLogoutRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
+  ApiPublicEnvCheckRoute: ApiPublicEnvCheckRoute,
   ApiPublicSyncRoute: ApiPublicSyncRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
