@@ -362,7 +362,8 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
   const fromMs = new Date(`${fromDate}T00:00:00Z`).getTime();
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
-  let nextUrl: string | null = `${BASE}/admin/v1/subscriptions?limit=100`;
+  // Sort desc so we cap on the most recent 1,500 subs (Juo defaults to asc).
+  let nextUrl: string | null = `${BASE}/admin/v1/subscriptions?limit=100&sort=createdAt%3Adesc`;
   // Cap to keep response fast. 15 × 100 = 1,500 most-recent subs.
   const MAX_PAGES = 15;
   let page = 0;
@@ -398,33 +399,47 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
 
   if (!apiReached) return { live: false, error: "Juo API unreachable", market: "NL", subscriptions: [], totals: {} };
 
-  const filtered = allSubs.filter((s) => {
-    const created = s.createdAt ? new Date(s.createdAt).getTime() : 0;
-    return created >= fromMs && created <= toMs;
-  });
+  // Subscription dashboards show the live book (active subs persist for years).
+  // Tag in-range without excluding others.
+  const tagged = allSubs.map((s) => ({
+    ...s,
+    __inRange: (() => {
+      const created = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+      return created >= fromMs && created <= toMs;
+    })(),
+  }));
 
-  const subs = filtered.map((s) => {
+  // Customer can be either an object or just an ID string in Juo responses.
+  const subs = tagged.map((s) => {
     const items = s.items ?? [];
-    const itemTotal = items.reduce((sum: number, it: any) => sum + parseFloat(it.price ?? it.unitPrice ?? "0"), 0);
+    const itemTotal = items.reduce(
+      (sum: number, it: any) => sum + parseFloat(it.totalPrice ?? it.price ?? it.unitPrice ?? "0"),
+      0
+    );
+    const customer = typeof s.customer === "object" ? s.customer : null;
     return {
-      id: s.id,
+      id: String(s.id),
       status: s.status ?? null,
       price: itemTotal,
       currency: s.currencyCode ?? "EUR",
       createdAt: s.createdAt ?? null,
       canceledAt: s.canceledAt ?? null,
       nextBillingDate: s.nextBillingDate ?? null,
-      customerEmail: s.customer?.email ?? null,
-      customerName: s.customer?.firstName
-        ? `${s.customer.firstName} ${s.customer.lastName ?? ""}`.trim()
+      customerEmail: customer?.email ?? s.deliveryAddress?.email ?? null,
+      customerName: customer?.firstName
+        ? `${customer.firstName} ${customer.lastName ?? ""}`.trim()
+        : s.deliveryAddress?.firstName
+        ? `${s.deliveryAddress.firstName} ${s.deliveryAddress.lastName ?? ""}`.trim()
         : null,
-      interval: s.billingPolicy?.interval ?? "month",
+      interval: (s.billingPolicy?.interval ?? "MONTH").toLowerCase(),
       intervalCount: s.billingPolicy?.intervalCount ?? 1,
+      inRange: !!s.__inRange,
     };
   });
 
-  const active = subs.filter((s) => s.status === "active");
-  const canceled = subs.filter((s) => s.status === "canceled");
+  const active = subs.filter((s) => (s.status ?? "").toLowerCase() === "active");
+  const canceled = subs.filter((s) => (s.status ?? "").toLowerCase() === "canceled");
+  const newInRange = subs.filter((s) => s.inRange);
   function normalizeMonthly(price: number, interval: string, n: number): number {
     const k = n || 1;
     switch (interval) {
@@ -436,6 +451,12 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
   }
   const mrr = active.reduce((sum, s) => sum + normalizeMonthly(s.price, s.interval, s.intervalCount), 0);
 
+  // Sort: in-range first, then most recent
+  subs.sort((a, b) => {
+    if (a.inRange !== b.inRange) return a.inRange ? -1 : 1;
+    return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+  });
+
   return {
     live: true,
     platform: "juo" as const,
@@ -445,6 +466,7 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
       total: subs.length,
       active: active.length,
       canceled: canceled.length,
+      newInRange: newInRange.length,
       mrr: +mrr.toFixed(2),
       arpu: active.length > 0 ? +(mrr / active.length).toFixed(2) : 0,
     },
