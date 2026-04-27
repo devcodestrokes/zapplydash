@@ -731,16 +731,31 @@ export async function fetchXero() {
   const toDateStr = today();
   const monthStartStr = startOfMonth();
 
+  // Helper: fetch + log status & body snippet on failure so we can diagnose
+  // exactly which Xero endpoint rejects the request (scopes, params, etc).
+  const xeroFetch = async (label: string, url: string) => {
+    try {
+      const r = await fetch(url, { headers: h, cache: "no-store" });
+      if (!r.ok) {
+        const body = await r.text().catch(() => "");
+        console.error(`Xero ${label} ${r.status}: ${body.slice(0, 300)}`);
+        return null;
+      }
+      return await r.json();
+    } catch (err: any) {
+      console.error(`Xero ${label} fetch error:`, err?.message);
+      return null;
+    }
+  };
+
   try {
     const [plS, balS, cashS, invS] = await Promise.allSettled([
-      fetch(`${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&periods=11&timeframe=MONTH`, { headers: h, cache: "no-store" })
-        .then(r => r.ok ? r.json() : (console.error(`Xero P&L: ${r.status}`), null)).catch(() => null),
-      fetch(`${BASE}/Reports/BalanceSheet?date=${toDateStr}`, { headers: h, cache: "no-store" })
-        .then(r => r.ok ? r.json() : (console.error(`Xero BalanceSheet: ${r.status}`), null)).catch(() => null),
-      fetch(`${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`, { headers: h, cache: "no-store" })
-        .then(r => r.ok ? r.json() : (console.warn(`Xero BankSummary: ${r.status}`), null)).catch(() => null),
-      fetch(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=Type%3D%3D%22ACCREC%22`, { headers: h, cache: "no-store" })
-        .then(r => r.ok ? r.json() : (console.warn(`Xero Invoices: ${r.status}`), null)).catch(() => null),
+      // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
+      // total for the range; with timeframe=MONTH Xero auto-derives the period count.
+      xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
+      xeroFetch("BalanceSheet", `${BASE}/Reports/BalanceSheet?date=${toDateStr}`),
+      xeroFetch("BankSummary", `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`),
+      xeroFetch("Invoices", `${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
