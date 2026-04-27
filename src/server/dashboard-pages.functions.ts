@@ -278,48 +278,119 @@ export const getAccountingDashboard = createServerFn({ method: "GET" })
   });
 
 /**
- * Strict full Xero sync — fetches P&L + Balance Sheet (+ Bank + Invoices).
- * Cache is ONLY updated if BOTH the Profit & Loss and the full Balance
- * Sheet were parsed successfully. Otherwise the existing cache is left
- * untouched and the call returns an error so the UI can surface it.
+ * Strict full Xero sync — fetches P&L, Balance Sheet, Bank Summary, Invoices.
+ * Returns a per-report status so the UI can show exactly which reports
+ * succeeded and which failed. Cache is ONLY updated when ALL four reports
+ * succeed; otherwise the existing cache is left untouched.
  */
+export type XeroReportKey =
+  | "profitAndLoss"
+  | "balanceSheet"
+  | "bankSummary"
+  | "invoices";
+
+export interface XeroReportStatus {
+  key: XeroReportKey;
+  label: string;
+  ok: boolean;
+  reason?: string;
+}
+
 export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () => {
   const live: any = await fetchXero();
 
   if (!live) {
+    const failed: XeroReportStatus[] = [
+      { key: "profitAndLoss", label: "Profit & Loss", ok: false, reason: "Xero not connected" },
+      { key: "balanceSheet",  label: "Balance Sheet", ok: false, reason: "Xero not connected" },
+      { key: "bankSummary",   label: "Bank Summary",  ok: false, reason: "Xero not connected" },
+      { key: "invoices",      label: "Invoices",      ok: false, reason: "Xero not connected" },
+    ];
     return {
       ok: false as const,
-      error:
-        "Xero is not connected. Visit /api/auth/xero to connect your organization.",
+      error: "Xero is not connected. Visit /api/auth/xero to connect your organization.",
+      reports: failed,
     };
   }
 
-  const missing: string[] = [];
-  const plOk =
-    live.revenueByMonth && Object.keys(live.revenueByMonth).length > 0 &&
-    live.ytdRevenue !== null;
-  const bsOk =
-    live.totalAssets !== null &&
-    live.totalLiabilities !== null &&
-    live.equity !== null;
+  const reports: XeroReportStatus[] = [];
 
-  if (!plOk) missing.push("Profit & Loss");
-  if (!bsOk) missing.push("Balance Sheet");
+  // P&L: monthly revenue rows + YTD figure
+  if (
+    live.revenueByMonth &&
+    Object.keys(live.revenueByMonth).length > 0 &&
+    live.ytdRevenue !== null
+  ) {
+    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: true });
+  } else {
+    const why =
+      !live.revenueByMonth || Object.keys(live.revenueByMonth).length === 0
+        ? "no monthly revenue rows parsed"
+        : "missing YTD revenue total";
+    reports.push({ key: "profitAndLoss", label: "Profit & Loss", ok: false, reason: why });
+  }
 
-  if (missing.length > 0) {
+  // Balance Sheet: needs Assets, Liabilities and Equity totals
+  const bsMissing: string[] = [];
+  if (live.totalAssets === null) bsMissing.push("Total Assets");
+  if (live.totalLiabilities === null) bsMissing.push("Total Liabilities");
+  if (live.equity === null) bsMissing.push("Equity");
+  if (bsMissing.length === 0) {
+    reports.push({ key: "balanceSheet", label: "Balance Sheet", ok: true });
+  } else {
+    reports.push({
+      key: "balanceSheet",
+      label: "Balance Sheet",
+      ok: false,
+      reason: `missing ${bsMissing.join(", ")}`,
+    });
+  }
+
+  // Bank Summary: at least one bank account OR a non-null cash balance
+  if (
+    (Array.isArray(live.bankAccounts) && live.bankAccounts.length > 0) ||
+    live.cashBalance !== null
+  ) {
+    reports.push({ key: "bankSummary", label: "Bank Summary", ok: true });
+  } else {
+    reports.push({
+      key: "bankSummary",
+      label: "Bank Summary",
+      ok: false,
+      reason: "no bank accounts or cash balance returned",
+    });
+  }
+
+  // Invoices (A/R): unpaidInvoiceCount is always set when the endpoint responds
+  if (typeof live.unpaidInvoiceCount === "number") {
+    reports.push({ key: "invoices", label: "Invoices (A/R)", ok: true });
+  } else {
+    reports.push({
+      key: "invoices",
+      label: "Invoices (A/R)",
+      ok: false,
+      reason: "invoice endpoint did not return data",
+    });
+  }
+
+  const failed = reports.filter((r) => !r.ok);
+
+  if (failed.length > 0) {
     return {
       ok: false as const,
-      error: `Sync incomplete — missing: ${missing.join(", ")}. Cache was not updated.`,
+      error: `Sync incomplete — ${failed.length} report${failed.length > 1 ? "s" : ""} failed. Cache was not updated.`,
+      reports,
       partial: live,
     };
   }
 
-  // All required reports succeeded — commit to cache atomically.
+  // All reports succeeded — commit to cache atomically.
   await writeCache("xero", "accounting", live);
 
   return {
     ok: true as const,
     data: live,
+    reports,
     fetchedAt: new Date().toISOString(),
   };
 });
