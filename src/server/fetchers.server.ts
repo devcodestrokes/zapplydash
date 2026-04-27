@@ -16,19 +16,26 @@ function today(): string {
 }
 
 // Service-role Supabase client — no cookies, works anywhere server-side.
-// In the TanStack Worker runtime only VITE_* vars are reliably injected,
-// so fall back to the publishable/anon key if the service role key is missing.
+// In the TanStack Worker runtime, process.env may not contain the Supabase
+// keys, so we read VITE_* values via import.meta.env at MODULE TOP LEVEL.
+// Vite inlines these as string literals at build time, so the Worker bundle
+// always has them available regardless of runtime env injection.
 // The integrations + data_cache tables have permissive RLS for this use case.
+const VITE_SUPABASE_URL =
+  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+const VITE_SUPABASE_PUBLISHABLE_KEY =
+  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+
 function serviceClient() {
   const url =
     process.env.SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
-    (import.meta as any).env?.VITE_SUPABASE_URL;
+    VITE_SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+    VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
     throw new Error(
       `Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`
