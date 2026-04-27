@@ -8,6 +8,7 @@ import {
   fetchJortt,
   fetchJuoRaw,
   fetchLoopRaw,
+  fetchXero,
 } from "@/server/fetchers.server";
 
 // Full sync of all dashboard sources. Writes results to data_cache.
@@ -68,6 +69,7 @@ export const Route = createFileRoute("/api/sync")({
           run("jortt", fetchJortt, "jortt", "invoices"),
           run("juo", fetchJuoRaw, "juo", "subscriptions"),
           run("loop", fetchLoopRaw, "loop", "subscriptions"),
+          run("xero", fetchXero, "xero", "accounting"),
         ]);
 
         return Response.json({
