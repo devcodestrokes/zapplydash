@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 // Visit /api/auth/xero while logged in to connect your Xero organization.
 
 const XERO_SCOPES =
-  "offline_access accounting.invoices openid profile email accounting.contacts accounting.settings accounting.reports.read accounting.transactions";
+  "openid profile email offline_access accounting.transactions accounting.reports.read accounting.settings.read";
 
 export const Route = createFileRoute("/api/auth/xero")({
   server: {
