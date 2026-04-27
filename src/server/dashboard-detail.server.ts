@@ -292,10 +292,17 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
 
   if (!apiReached) return { live: false, error: "Loop API unreachable", market: marketCode, subscriptions: [], totals: {} };
 
-  const filtered = allSubs.filter((s) => {
-    const created = s.createdAt ? new Date(s.createdAt).getTime() : 0;
-    return created >= fromMs && created <= toMs;
-  });
+  // Subscription dashboards show the live subscription book (active subs persist
+  // for years), so we DO NOT exclude subs whose createdAt falls outside the
+  // selected window. Instead we surface every sub and tag those that were
+  // created within the window for "new in range" counting.
+  const filtered = allSubs.map((s) => ({
+    ...s,
+    __inRange: (() => {
+      const created = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+      return created >= fromMs && created <= toMs;
+    })(),
+  }));
 
   const currency = marketCode === "US" ? "USD" : marketCode === "UK" ? "GBP" : "EUR";
   const subs = filtered.map((s) => ({
