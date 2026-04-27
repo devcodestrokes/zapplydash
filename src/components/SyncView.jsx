@@ -358,6 +358,9 @@ export default function SyncView({ initialConnections = {} }) {
         </div>
       </div>
 
+      {/* Sync debug panel */}
+      <SyncDebugPanel debug={debug} loading={debugLoading} onRefresh={refreshDebug} />
+
       {/* Setup notes */}
       <div className="mt-4 space-y-3">
         <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-[12px] text-blue-700">
