@@ -19,6 +19,8 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { LogIn } from "lucide-react";
 
 export const Route = createFileRoute("/accounting")({
   head: () => ({
@@ -66,6 +68,17 @@ function AccountingPage() {
       title="Accounting (Xero)"
       actions={
         <>
+          <Button
+            asChild
+            variant="default"
+            size="sm"
+            className="gap-2"
+          >
+            <a href="/api/auth/xero">
+              <LogIn className="w-4 h-4" />
+              Connect Xero
+            </a>
+          </Button>
           <RefreshButton onRefresh={() => load(true)} isLoading={isLoading} />
         </>
       }
