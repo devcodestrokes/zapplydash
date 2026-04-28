@@ -172,9 +172,19 @@ export default function SyncView({ initialConnections = {} }) {
                       </span>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <span className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500">
-                          Add keys to .env.local
-                        </span>
+                        {src.id === "jortt" ? (
+                          <a
+                            href="/api/jortt/connect"
+                            className="rounded-lg border px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
+                            style={{ backgroundColor: src.color, borderColor: src.color }}
+                          >
+                            Connect Jortt
+                          </a>
+                        ) : (
+                          <span className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-[12px] font-medium text-neutral-500">
+                            Add keys to .env.local
+                          </span>
+                        )}
                         <a
                           href={src.docsUrl}
                           target="_blank"
