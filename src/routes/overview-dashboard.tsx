@@ -79,10 +79,28 @@ type TWRow = {
   roas?: number | null;
 };
 
-const fmtCurrency = (n: number | null | undefined) =>
-  typeof n === "number" && Number.isFinite(n)
-    ? `€${Math.round(n).toLocaleString()}`
-    : "—";
+const CURRENCIES = [
+  { code: "EUR", symbol: "€", flag: "🇪🇺" },
+  { code: "USD", symbol: "$", flag: "🇺🇸" },
+  { code: "GBP", symbol: "£", flag: "🇬🇧" },
+  { code: "AUD", symbol: "A$", flag: "🇦🇺" },
+  { code: "CAD", symbol: "C$", flag: "🇨🇦" },
+  { code: "CHF", symbol: "CHF ", flag: "🇨🇭" },
+  { code: "JPY", symbol: "¥", flag: "🇯🇵" },
+  { code: "SEK", symbol: "kr ", flag: "🇸🇪" },
+] as const;
+type CurrencyCode = (typeof CURRENCIES)[number]["code"];
+
+const makeFmtCurrency =
+  (rate: number, symbol: string) => (n: number | null | undefined) =>
+    typeof n === "number" && Number.isFinite(n)
+      ? `${symbol}${Math.round(n * rate).toLocaleString()}`
+      : "—";
+const makeFmtCurrency2 =
+  (rate: number, symbol: string) => (n: number | null | undefined) =>
+    typeof n === "number" && Number.isFinite(n)
+      ? `${symbol}${(n * rate).toFixed(2)}`
+      : "—";
 const fmtNumber = (n: number | null | undefined) =>
   typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
 const fmtMultiplier = (n: number | null | undefined) =>
@@ -165,6 +183,8 @@ function OverviewDashboardPage() {
   const [tw, setTw] = useState<TWRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>("EUR");
+  const [fxRate, setFxRate] = useState<number>(1);
   const [progress, setProgress] = useState<{
     total: number;
     fetched: number;
@@ -172,6 +192,26 @@ function OverviewDashboardPage() {
     stores: Array<{ market: string; flag: string; status: "pending" | "done" | "error" }>;
     done: boolean;
   } | null>(null);
+
+  // Fetch EUR -> selected currency rate (server data is already EUR)
+  useEffect(() => {
+    if (currency === "EUR") {
+      setFxRate(1);
+      return;
+    }
+    let cancelled = false;
+    fetch(`https://api.frankfurter.app/latest?from=EUR&to=${currency}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const rate = d?.rates?.[currency];
+        if (typeof rate === "number" && Number.isFinite(rate)) setFxRate(rate);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
 
   useEffect(() => {
     if (!user) return;
@@ -234,6 +274,7 @@ function OverviewDashboardPage() {
             from={range.from}
             to={range.to}
           />
+          <CurrencySelect value={currency} onChange={setCurrency} />
           {isRefreshing && (
             <div className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -274,7 +315,12 @@ function OverviewDashboardPage() {
             {errorMsg}
           </div>
         )}
-        <DashboardBody tw={tw} loading={loadingData || loading || !user} />
+        <DashboardBody
+          tw={tw}
+          loading={loadingData || loading || !user}
+          currency={currency}
+          fxRate={fxRate}
+        />
       </div>
     </DashboardShell>
   );
@@ -460,7 +506,72 @@ function DateRangeFilter({
   );
 }
 
-function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
+function CurrencySelect({
+  value,
+  onChange,
+}: {
+  value: CurrencyCode;
+  onChange: (c: CurrencyCode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = CURRENCIES.find((c) => c.code === value) ?? CURRENCIES[0];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-[12px]"
+        >
+          <span>{current.flag}</span>
+          <span className="font-medium">{current.code}</span>
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" align="start">
+        <ul className="max-h-72 overflow-auto">
+          {CURRENCIES.map((c) => (
+            <li key={c.code}>
+              <button
+                onClick={() => {
+                  onChange(c.code);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent",
+                  c.code === value && "bg-accent font-medium"
+                )}
+              >
+                <span>{c.flag}</span>
+                <span>{c.code}</span>
+                <span className="ml-auto text-muted-foreground">
+                  {c.symbol.trim()}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DashboardBody({
+  tw,
+  loading,
+  currency,
+  fxRate,
+}: {
+  tw: TWRow[];
+  loading: boolean;
+  currency: CurrencyCode;
+  fxRate: number;
+}) {
+  const symbol =
+    CURRENCIES.find((c) => c.code === currency)?.symbol ?? "€";
+  const fmtCurrency = makeFmtCurrency(fxRate, symbol);
+  const fmtCurrency2 = makeFmtCurrency2(fxRate, symbol);
+
   const liveRows = tw.filter((r) => r.live);
   const hasData = liveRows.length > 0;
 
@@ -572,15 +683,14 @@ function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
     },
     {
       label: "AOV",
-      value: typeof totalAov === "number" ? `€${totalAov.toFixed(2)}` : "—",
+      value: fmtCurrency2(totalAov),
       sub: "Average order value",
       icon: Target,
       accent: "text-indigo-600",
       breakdown: liveRows.map((r) => ({
         market: r.market,
         flag: r.flag,
-        value:
-          typeof r.aov === "number" ? `€${r.aov.toFixed(2)}` : "—",
+        value: fmtCurrency2(r.aov ?? null),
       })),
     },
     {
