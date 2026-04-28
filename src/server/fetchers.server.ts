@@ -816,7 +816,11 @@ export async function fetchXero() {
   };
 
   try {
-    const [plS, balS, cashS, invS, accS, billS, draftS] = await Promise.allSettled([
+    // Bank Transactions: last 90 days
+    const bankTxSince = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0]; })();
+    const bankTxUrl = `${BASE}/BankTransactions?where=${encodeURIComponent(`Date>=DateTime(${bankTxSince.replaceAll("-", ",")})`)}`;
+
+    const [plS, balS, cashS, invS, accS, billS, draftS, contactsS, itemsS, bankTxS, journalsS, trackingS] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
       // total for the range; with timeframe=MONTH Xero auto-derives the period count.
       xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
@@ -830,6 +834,16 @@ export async function fetchXero() {
       xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCPAY"')}`),
       // Draft invoices owed to you
       xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=DRAFT&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      // Contacts (customers + suppliers)
+      xeroFetch("Contacts", `${BASE}/Contacts?summaryOnly=true&page=1`),
+      // Items / Products
+      xeroFetch("Items", `${BASE}/Items`),
+      // Bank Transactions (recent 90 days)
+      xeroFetch("BankTransactions", bankTxUrl),
+      // Manual Journals
+      xeroFetch("ManualJournals", `${BASE}/ManualJournals`),
+      // Tracking Categories
+      xeroFetch("TrackingCategories", `${BASE}/TrackingCategories`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
@@ -839,6 +853,11 @@ export async function fetchXero() {
     const accData  = accS.status === "fulfilled" ? accS.value  : null;
     const billData = billS.status === "fulfilled" ? billS.value : null;
     const draftData = draftS.status === "fulfilled" ? draftS.value : null;
+    const contactsData = contactsS.status === "fulfilled" ? contactsS.value : null;
+    const itemsData = itemsS.status === "fulfilled" ? itemsS.value : null;
+    const bankTxData = bankTxS.status === "fulfilled" ? bankTxS.value : null;
+    const journalsData = journalsS.status === "fulfilled" ? journalsS.value : null;
+    const trackingData = trackingS.status === "fulfilled" ? trackingS.value : null;
 
     // ── Parse P&L report ─────────────────────────────────────────────────────
     const revenueByMonth:     Record<string, number> = {};
@@ -1160,6 +1179,88 @@ export async function fetchXero() {
     const drafts: any[] = draftData?.Invoices ?? [];
     const draftsAmount  = drafts.reduce((s, d) => s + (d.Total ?? d.AmountDue ?? 0), 0);
 
+    // ── Parse Contacts ──────────────────────────────────────────────────────
+    const contactsList: any[] = contactsData?.Contacts ?? [];
+    const customers = contactsList
+      .filter((c) => c.IsCustomer)
+      .map((c) => ({
+        id: c.ContactID,
+        name: String(c.Name ?? ""),
+        email: c.EmailAddress ?? null,
+        outstanding: c.Balances?.AccountsReceivable?.Outstanding ?? 0,
+        overdue: c.Balances?.AccountsReceivable?.Overdue ?? 0,
+      }))
+      .sort((a, b) => Math.abs(b.outstanding) - Math.abs(a.outstanding));
+    const suppliers = contactsList
+      .filter((c) => c.IsSupplier)
+      .map((c) => ({
+        id: c.ContactID,
+        name: String(c.Name ?? ""),
+        email: c.EmailAddress ?? null,
+        outstanding: c.Balances?.AccountsPayable?.Outstanding ?? 0,
+        overdue: c.Balances?.AccountsPayable?.Overdue ?? 0,
+      }))
+      .sort((a, b) => Math.abs(b.outstanding) - Math.abs(a.outstanding));
+
+    // ── Parse Items ─────────────────────────────────────────────────────────
+    const itemsList: any[] = itemsData?.Items ?? [];
+    const items = itemsList.map((i) => ({
+      id: i.ItemID,
+      code: i.Code ?? "",
+      name: String(i.Name ?? i.Description ?? ""),
+      salesPrice: i.SalesDetails?.UnitPrice ?? null,
+      purchasePrice: i.PurchaseDetails?.UnitPrice ?? null,
+      isTracked: !!i.IsTrackedAsInventory,
+      qtyOnHand: i.QuantityOnHand ?? null,
+    }));
+
+    // ── Parse Bank Transactions ─────────────────────────────────────────────
+    const bankTxList: any[] = bankTxData?.BankTransactions ?? [];
+    const bankTransactions = bankTxList
+      .map((t) => ({
+        id: t.BankTransactionID,
+        date: t.DateString ?? t.Date ?? null,
+        type: t.Type ?? "",
+        contact: t.Contact?.Name ?? "",
+        account: t.BankAccount?.Name ?? "",
+        reference: t.Reference ?? "",
+        total: t.Total ?? 0,
+        currency: t.CurrencyCode ?? "EUR",
+        status: t.Status ?? "",
+      }))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 100);
+
+    // ── Parse Manual Journals ───────────────────────────────────────────────
+    const journalsList: any[] = journalsData?.ManualJournals ?? [];
+    const manualJournals = journalsList
+      .map((j) => ({
+        id: j.ManualJournalID,
+        date: j.Date ?? null,
+        narration: String(j.Narration ?? ""),
+        status: j.Status ?? "",
+        lineCount: (j.JournalLines ?? []).length,
+        total: (j.JournalLines ?? []).reduce(
+          (s: number, l: any) => s + Math.abs(l.LineAmount ?? 0),
+          0,
+        ) / 2,
+      }))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 50);
+
+    // ── Parse Tracking Categories ───────────────────────────────────────────
+    const trackingList: any[] = trackingData?.TrackingCategories ?? [];
+    const trackingCategories = trackingList.map((t) => ({
+      id: t.TrackingCategoryID,
+      name: String(t.Name ?? ""),
+      status: t.Status ?? "",
+      options: (t.Options ?? []).map((o: any) => ({
+        id: o.TrackingOptionID,
+        name: String(o.Name ?? ""),
+        status: o.Status ?? "",
+      })),
+    }));
+
     const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
     return {
@@ -1192,6 +1293,13 @@ export async function fetchXero() {
       // Drafts (ACCREC)
       draftsAmount:         draftsAmount         > 0 ? Math.round(draftsAmount)         : null,
       draftsCount:          drafts.length,
+      // Extended Xero data
+      customers,
+      suppliers,
+      items,
+      bankTransactions,
+      manualJournals,
+      trackingCategories,
       currency: "EUR",
       _diagnostics: {
         profitAndLoss: {
