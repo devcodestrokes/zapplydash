@@ -75,6 +75,13 @@ type TWRow = {
   cogs?: number | null;
   netProfit?: number | null;
   adSpend?: number | null;
+  facebookSpend?: number | null;
+  googleSpend?: number | null;
+  tiktokSpend?: number | null;
+  snapchatSpend?: number | null;
+  pinterestSpend?: number | null;
+  bingSpend?: number | null;
+  klaviyoSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
 };
@@ -675,11 +682,25 @@ function DashboardBody({
       sub: "Blended · all channels",
       icon: Megaphone,
       accent: "text-rose-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
-        flag: r.flag,
-        value: fmtCurrency(r.adSpend ?? null),
-      })),
+      breakdown: liveRows.map((r) => {
+        const platforms = [
+          { key: "Meta", value: r.facebookSpend },
+          { key: "Google", value: r.googleSpend },
+          { key: "TikTok", value: r.tiktokSpend },
+          { key: "Snapchat", value: r.snapchatSpend },
+          { key: "Pinterest", value: r.pinterestSpend },
+          { key: "Bing", value: r.bingSpend },
+          { key: "Klaviyo", value: r.klaviyoSpend },
+        ]
+          .filter((p) => typeof p.value === "number" && Number.isFinite(p.value) && (p.value as number) > 0)
+          .map((p) => ({ market: p.key, value: fmtCurrency(p.value ?? null) }));
+        return {
+          market: r.market,
+          flag: r.flag,
+          value: fmtCurrency(r.adSpend ?? null),
+          children: platforms,
+        };
+      }),
     },
     {
       label: "AOV",
@@ -756,7 +777,7 @@ function KpiWidget({
     sub?: string;
     icon: any;
     accent: string;
-    breakdown: Array<{ market: string; flag?: string; value: string }>;
+    breakdown: Array<{ market: string; flag?: string; value: string; children?: Array<{ market: string; value: string }> }>;
   };
 }) {
   const [open, setOpen] = useState(true);
@@ -793,17 +814,29 @@ function KpiWidget({
           {open && (
             <ul className="mt-2 space-y-1.5">
               {widget.breakdown.map((b) => (
-                <li
-                  key={b.market}
-                  className="flex items-center justify-between text-[13px]"
-                >
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    <span>{b.flag}</span>
-                    <span className="font-medium text-foreground">
-                      {b.market}
+                <li key={b.market} className="text-[13px]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <span>{b.flag}</span>
+                      <span className="font-medium text-foreground">
+                        {b.market}
+                      </span>
                     </span>
-                  </span>
-                  <span className="tabular-nums">{b.value}</span>
+                    <span className="tabular-nums">{b.value}</span>
+                  </div>
+                  {b.children && b.children.length > 0 && (
+                    <ul className="mt-1 ml-6 space-y-1 border-l border-border pl-3">
+                      {b.children.map((c) => (
+                        <li
+                          key={c.market}
+                          className="flex items-center justify-between text-[12px] text-muted-foreground"
+                        >
+                          <span>{c.market}</span>
+                          <span className="tabular-nums">{c.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>

@@ -456,6 +456,11 @@ export async function fetchTripleWhale(
           adSpend:         moneyMetric("blendedAds"),           // Total blended ad spend
           facebookSpend:   moneyMetric("facebookAds"),          // Facebook / Meta
           googleSpend:     moneyMetric("googleAds"),            // Google Ads
+          tiktokSpend:     moneyMetric("tiktokAds"),            // TikTok Ads
+          snapchatSpend:   moneyMetric("snapchatAds"),          // Snapchat Ads
+          pinterestSpend:  moneyMetric("pinterestAds"),         // Pinterest Ads
+          bingSpend:       moneyMetric("bingAds"),              // Microsoft / Bing Ads
+          klaviyoSpend:    moneyMetric("klaviyoCost"),          // Klaviyo cost
           roas:            twMetric(m, "roas"),                  // Blended ROAS
           ncRoas:          twMetric(m, "newCustomersRoas"),     // New Customer ROAS
           fbRoas:          twMetric(m, "facebookRoas"),         // Facebook ROAS
