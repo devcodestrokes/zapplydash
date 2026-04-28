@@ -8,6 +8,11 @@ import {
   LayoutDashboard,
   LogOut,
   RefreshCw,
+  Zap,
+  Globe,
+  CalendarDays,
+  Scale,
+  LineChart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -36,6 +41,14 @@ const navItems: NavItem[] = [
   { to: "/subscriptions", label: "Subscriptions", icon: Repeat },
   { to: "/invoices", label: "Invoices", icon: FileText },
   { to: "/accounting", label: "Accounting", icon: Calculator },
+];
+
+const pillarItems: NavItem[] = [
+  { to: "/pillars/daily-pnl", label: "Daily P&L", icon: Zap },
+  { to: "/pillars/margin-per-market", label: "Margin per market", icon: Globe },
+  { to: "/pillars/monthly-overview", label: "Monthly overview", icon: CalendarDays },
+  { to: "/pillars/balance-sheet", label: "Balance sheet", icon: Scale },
+  { to: "/pillars/forecast", label: "Forecast", icon: LineChart },
 ];
 
 function AppSidebar({ user }: { user: { name: string; email: string; avatar: string | null } | null }) {
@@ -73,6 +86,28 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to, item.exact);
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <Link to={item.to as any}>
+                        <Icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>The 5 Pillars</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {pillarItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.to, item.exact);
                 return (
