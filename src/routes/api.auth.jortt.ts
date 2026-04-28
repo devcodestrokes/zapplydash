@@ -43,7 +43,7 @@ export const Route = createFileRoute("/api/auth/jortt")({
           state,
         });
 
-        const authUrl = `https://app.jortt.nl/oauth/authorize?${params}`;
+        const authUrl = `https://app.jortt.nl/oauth-provider/oauth/authorize?${params}`;
         console.log("[Jortt OAuth] redirect_uri:", redirectUri);
 
         return new Response(null, {
