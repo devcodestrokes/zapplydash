@@ -392,7 +392,10 @@ export async function fetchTripleWhale(
         const row = {
           market, flag,
           revenue:         twMetric(m, "sales"),               // Gross Order Revenue
-          netRevenue:      twMetric(m, "netSales"),             // Net Sales (after discounts)
+          // Total Sales (Shopify definition):
+          // Gross Sales + Shipping + Taxes − Discounts − Refunded Sales − Refunded Shipping − Refunded Taxes
+          // Triple Whale exposes this as the "totalSales" metric. Fall back to netSales if absent.
+          netRevenue:      twMetric(m, "totalSales") ?? twMetric(m, "shopifyTotalSales") ?? twMetric(m, "netSales"),
           newCustomerRev:  twMetric(m, "newCustomerSales"),     // New Customer Revenue
           adSpend:         twMetric(m, "blendedAds"),           // Total blended ad spend
           facebookSpend:   twMetric(m, "facebookAds"),          // Facebook / Meta
