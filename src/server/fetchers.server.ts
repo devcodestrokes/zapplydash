@@ -324,6 +324,16 @@ function twMetric(metrics: any[], id: string): number | null {
   return toNumber(m?.values?.current);
 }
 
+function tripleWhaleTodayHour(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Amsterdam",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  return Math.min(25, Math.max(1, (Number.isFinite(hour) ? hour : 0) + 1));
+}
+
 // Triple Whale: Summary Page endpoint
 // POST https://api.triplewhale.com/api/v2/summary-page/get-data
 // Docs: https://triplewhale.readme.io/reference/get-summary-page-data
@@ -346,7 +356,7 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
         const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
           method: "POST",
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ shopDomain: shop, period: { start, end } }),
+          body: JSON.stringify({ shopDomain: shop, period: { start, end, todayHour: tripleWhaleTodayHour() } }),
           signal: ctrl.signal,
         }).finally(() => clearTimeout(timer));
 
