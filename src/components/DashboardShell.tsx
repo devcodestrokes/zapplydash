@@ -8,6 +8,11 @@ import {
   LayoutDashboard,
   LogOut,
   RefreshCw,
+  Zap,
+  Globe,
+  CalendarDays,
+  Scale,
+  LineChart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
