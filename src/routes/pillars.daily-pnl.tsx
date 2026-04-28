@@ -1,5 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import {
+  DollarSign,
+  TrendingUp,
+  Wallet,
+  Target,
+  ArrowUpRight,
+  ArrowDownRight,
+  type LucideIcon,
+} from "lucide-react";
 // date-fns no longer needed after header redesign
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
