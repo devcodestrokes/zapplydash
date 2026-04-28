@@ -421,9 +421,9 @@ function DailyPnlPage() {
             />
             <KpiTile
               icon="↗"
-              label={period === "today" ? "Profit today (est.)" : period === "wtd" ? "Profit WTD (est.)" : "Profit MTD (est.)"}
-              value={fmtMoney(periodKpis.profit, "EUR")}
-              subtitle="Triple Whale gross − ad spend"
+              label={period === "today" ? "Profit today" : period === "wtd" ? "Profit WTD" : "Profit MTD"}
+              value={periodKpis.profitIsLive ? fmtMoney(periodKpis.profit, "EUR") : "—"}
+              subtitle="Triple Whale net profit (after COGS & ad spend)"
               deltaPct={periodKpis.profitPct}
               positiveIsGood
             />
