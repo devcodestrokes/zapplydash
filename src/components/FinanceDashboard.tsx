@@ -896,19 +896,29 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
       </div>
 
       {/* Market cards */}
-      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {sorted.map(m => (
-          <Card key={m.code} className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[20px]">{m.flag ?? m.code}</span>
-              <span className={`text-[10px] font-medium ${m.contributionMargin != null ? (m.contributionMargin >= 30 ? "text-emerald-600" : m.contributionMargin >= 20 ? "text-neutral-600" : "text-amber-600") : "text-neutral-400"}`}>
-                {m.contributionMargin != null ? `${m.contributionMargin}%` : "—"}
-              </span>
-            </div>
-            <div className="mt-2 text-[11px] font-medium text-neutral-500">{m.name ?? m.code}</div>
-            <div className="mt-1 text-[16px] font-semibold tabular-nums">€{(m.revenue / 1000).toFixed(1)}k</div>
-          </Card>
-        ))}
+      <section className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+        {sorted.map(m => {
+          const cm = m.contributionMargin;
+          const cmClass = cm == null
+            ? "text-neutral-400"
+            : cm >= 30 ? "text-emerald-600"
+            : cm >= 20 ? "text-neutral-600"
+            : "text-amber-600";
+          return (
+            <Card key={m.code} className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="text-[15px] font-semibold tracking-tight">{m.code}</div>
+                <span className={`text-[11px] font-medium tabular-nums ${cmClass}`}>
+                  {cm != null ? `${cm}%` : "—"}
+                </span>
+              </div>
+              <div className="mt-2 text-[12px] text-neutral-500">{m.name ?? m.code}</div>
+              <div className="mt-2 text-[20px] font-semibold tabular-nums tracking-tight">
+                €{(m.revenue / 1000).toFixed(1)}k
+              </div>
+            </Card>
+          );
+        })}
       </section>
 
       {/* Main markets table */}
