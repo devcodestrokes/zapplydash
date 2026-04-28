@@ -329,6 +329,248 @@ function AccountingPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Customers (top by outstanding A/R) */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Customers</CardTitle>
+              <CardDescription>By outstanding receivable</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Outstanding</TableHead>
+                      <TableHead className="text-right">Overdue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(x?.customers ?? []).slice(0, 10).map((c: any) => (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell className="text-right">{fmtMoney(c.outstanding, currency)}</TableCell>
+                        <TableCell className="text-right text-destructive">{fmtMoney(c.overdue, currency)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(!x || (x.customers ?? []).length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                          No customers
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {(x?.customers ?? []).length} customers total
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Suppliers</CardTitle>
+              <CardDescription>By outstanding payable</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Outstanding</TableHead>
+                      <TableHead className="text-right">Overdue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(x?.suppliers ?? []).slice(0, 10).map((s: any) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell className="text-right">{fmtMoney(s.outstanding, currency)}</TableCell>
+                        <TableCell className="text-right text-destructive">{fmtMoney(s.overdue, currency)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(!x || (x.suppliers ?? []).length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                          No suppliers
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {(x?.suppliers ?? []).length} suppliers total
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Items / Products */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Items / Products</CardTitle>
+            <CardDescription>Catalog from Xero</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="text-right">Sales price</TableHead>
+                    <TableHead className="text-right">Purchase price</TableHead>
+                    <TableHead className="text-right">Qty on hand</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(x?.items ?? []).slice(0, 50).map((i: any) => (
+                    <TableRow key={i.id}>
+                      <TableCell className="font-mono text-xs">{i.code}</TableCell>
+                      <TableCell>{i.name}</TableCell>
+                      <TableCell className="text-right">{i.salesPrice != null ? fmtMoney(i.salesPrice, currency) : "—"}</TableCell>
+                      <TableCell className="text-right">{i.purchasePrice != null ? fmtMoney(i.purchasePrice, currency) : "—"}</TableCell>
+                      <TableCell className="text-right">{i.isTracked ? (i.qtyOnHand ?? 0) : "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(!x || (x.items ?? []).length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                        No items
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">
+              {(x?.items ?? []).length} items total
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bank Transactions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Bank Transactions</CardTitle>
+            <CardDescription>Last 90 days (most recent 100)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Account</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(x?.bankTransactions ?? []).map((t: any) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-mono text-xs">{String(t.date ?? "").slice(0, 10)}</TableCell>
+                      <TableCell className="text-xs">{t.type}</TableCell>
+                      <TableCell>{t.account}</TableCell>
+                      <TableCell>{t.contact}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{t.reference}</TableCell>
+                      <TableCell className={`text-right font-medium ${t.type?.startsWith("SPEND") ? "text-destructive" : "text-emerald-500"}`}>
+                        {fmtMoney(t.total, t.currency || currency)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!x || (x.bankTransactions ?? []).length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                        No bank transactions
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Manual Journals + Tracking Categories */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manual Journals</CardTitle>
+              <CardDescription>Most recent</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Narration</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(x?.manualJournals ?? []).map((j: any) => (
+                      <TableRow key={j.id}>
+                        <TableCell className="font-mono text-xs">{String(j.date ?? "").slice(0, 10)}</TableCell>
+                        <TableCell className="text-xs">{j.narration}</TableCell>
+                        <TableCell className="text-xs">{j.status}</TableCell>
+                        <TableCell className="text-right">{fmtMoney(j.total, currency)}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(!x || (x.manualJournals ?? []).length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                          No manual journals
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Tracking Categories</CardTitle>
+              <CardDescription>Reporting dimensions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(x?.trackingCategories ?? []).length === 0 && (
+                <div className="text-center text-muted-foreground py-6 text-sm">
+                  No tracking categories
+                </div>
+              )}
+              <div className="space-y-4">
+                {(x?.trackingCategories ?? []).map((tc: any) => (
+                  <div key={tc.id}>
+                    <div className="font-medium text-sm mb-1">
+                      {tc.name}
+                      <span className="ml-2 text-xs text-muted-foreground">({tc.status})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {tc.options.map((o: any) => (
+                        <span key={o.id} className="px-2 py-0.5 rounded bg-muted text-xs">
+                          {o.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </DashboardShell>
   );
