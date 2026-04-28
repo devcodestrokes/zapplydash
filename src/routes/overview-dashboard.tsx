@@ -164,12 +164,31 @@ function OverviewDashboardPage() {
   const [tw, setTw] = useState<TWRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{
+    total: number;
+    fetched: number;
+    remaining: number;
+    stores: Array<{ market: string; flag: string; status: "pending" | "done" | "error" }>;
+    done: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     setLoadingData(true);
     setErrorMsg(null);
+    setProgress(null);
+
+    // Poll progress every 600ms while the fetch is in flight
+    const pollId = window.setInterval(() => {
+      getTripleWhaleProgress({ data: { from: range.from, to: range.to } })
+        .then((p) => {
+          if (cancelled) return;
+          if (p.total > 0) setProgress(p);
+        })
+        .catch(() => {});
+    }, 600);
+
     getTripleWhaleRange({ data: { from: range.from, to: range.to } })
       .then((res) => {
         if (cancelled) return;
@@ -182,10 +201,15 @@ function OverviewDashboardPage() {
         setTw([]);
       })
       .finally(() => {
-        if (!cancelled) setLoadingData(false);
+        if (!cancelled) {
+          setLoadingData(false);
+          setProgress(null);
+        }
+        window.clearInterval(pollId);
       });
     return () => {
       cancelled = true;
+      window.clearInterval(pollId);
     };
   }, [user, range.from, range.to]);
 
@@ -203,7 +227,7 @@ function OverviewDashboardPage() {
     <DashboardShell user={shellUser} title="Overview Dashboard">
       <div className="p-6 space-y-6">
         <Header range={range} preset={search.preset} />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <DateRangeFilter
             preset={search.preset}
             from={range.from}
@@ -213,6 +237,34 @@ function OverviewDashboardPage() {
             <div className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Refreshing…
+            </div>
+          )}
+          {loadingData && progress && progress.total > 0 && (
+            <div className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1 text-[12px] text-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="font-medium">
+                Fetching stores: {progress.fetched} / {progress.total}
+              </span>
+              <span className="text-muted-foreground">
+                ({progress.remaining} remaining)
+              </span>
+              <span className="flex items-center gap-1">
+                {progress.stores.map((s) => (
+                  <span
+                    key={s.market}
+                    title={`${s.market} — ${s.status}`}
+                    className={
+                      s.status === "done"
+                        ? "opacity-100"
+                        : s.status === "error"
+                        ? "opacity-60 grayscale"
+                        : "opacity-30 animate-pulse"
+                    }
+                  >
+                    {s.flag}
+                  </span>
+                ))}
+              </span>
             </div>
           )}
         </div>
