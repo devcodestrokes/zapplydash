@@ -197,15 +197,25 @@ function OverviewDashboardPage() {
     avatar: null,
   };
 
+  const isRefreshing = loadingData && tw.length > 0;
+
   return (
     <DashboardShell user={shellUser} title="Overview Dashboard">
       <div className="p-6 space-y-6">
         <Header range={range} preset={search.preset} />
-        <DateRangeFilter
-          preset={search.preset}
-          from={range.from}
-          to={range.to}
-        />
+        <div className="flex items-center gap-3">
+          <DateRangeFilter
+            preset={search.preset}
+            from={range.from}
+            to={range.to}
+          />
+          {isRefreshing && (
+            <div className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Refreshing…
+            </div>
+          )}
+        </div>
         {errorMsg && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMsg}
