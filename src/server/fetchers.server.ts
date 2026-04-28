@@ -1463,10 +1463,35 @@ export async function fetchXero() {
 
 // ─── Jortt ───────────────────────────────────────────────────────────────────
 //
-// CONFIRMED WORKING — client_credentials via form params (NOT Basic auth header)
-// Endpoint: POST https://app.jortt.nl/oauth-provider/oauth/token
-// Body params: grant_type, client_id, client_secret, scope
+// Full-scope Jortt integration — uses ALL scopes the OAuth client has access to.
+// Per the Jortt docs (https://developer.jortt.nl/#scopes) the client_credentials
+// flow supports these scopes (one token per scope, since multi-scope requests
+// fail with invalid_scope):
+//
+//   invoices:read       customers:read      estimates:read
+//   expenses:read       financing:read      organizations:read
+//   payroll:read        reports:read
+//
+// Each scope is requested independently; scopes that fail are logged but don't
+// abort the overall fetch. With expenses:read granted the OpEx breakdown is
+// built from real purchase invoices instead of being empty.
 
+const JORTT_BASE = "https://api.jortt.nl";
+const JORTT_TOKEN_URL = "https://app.jortt.nl/oauth-provider/oauth/token";
+
+const JORTT_ALL_SCOPES = [
+  "invoices:read",
+  "expenses:read",
+  "reports:read",
+  "customers:read",
+  "financing:read",
+  "organizations:read",
+  "payroll:read",
+  "estimates:read",
+] as const;
+
+// OpEx categorisation — used to roll real Jortt expense descriptions / ledger
+// account names into the 5 categories the dashboard renders.
 const JORTT_CATEGORY_MAP: Record<string, string> = {
   personeel: "team", salaris: "team", loon: "team", freelance: "team",
   "management fee": "team", managementfee: "team", klantenservice: "team", nodots: "team",
@@ -1478,52 +1503,12 @@ const JORTT_CATEGORY_MAP: Record<string, string> = {
   "triple whale": "software", monday: "software", notion: "software",
 };
 
-function categorise(name: string): string {
-  const lower = name.toLowerCase();
+function categorise(name: string): "team" | "agencies" | "content" | "software" | "other" {
+  const lower = (name ?? "").toLowerCase();
   for (const [kw, cat] of Object.entries(JORTT_CATEGORY_MAP)) {
-    if (lower.includes(kw)) return cat;
+    if (lower.includes(kw)) return cat as any;
   }
   return "other";
-}
-
-// Get a Jortt access_token for ONE specific scope.
-// Confirmed via official docs (https://developer.jortt.nl/) and live testing:
-//   1. credentials must be sent as HTTP Basic Auth (-u CLIENT:SECRET), NOT as form body params
-//   2. only one scope per request — multi-scope requests return invalid_scope
-//   3. requesting a new token invalidates any previously-issued token for the same client
-async function getJorttTokenForScope(scope: string): Promise<string | null> {
-  const clientId     = process.env.JORTT_CLIENT_ID;
-  const clientSecret = process.env.JORTT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
-
-  try {
-    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-    const res = await fetch("https://app.jortt.nl/oauth-provider/oauth/token", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${basic}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        scope,
-      }).toString(),
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      // invalid_scope simply means this OAuth app doesn't have that scope
-      // enabled — log at warn level so it doesn't look like a hard failure.
-      console.warn(`Jortt token (scope=${scope}) ${res.status}:`, err.slice(0, 200));
-      return null;
-    }
-    const json: any = await res.json();
-    return json.access_token ?? null;
-  } catch (err: any) {
-    console.error(`Jortt token (scope=${scope}) fetch failed:`, err.message);
-    return null;
-  }
 }
 
 function monthKey(dateStr: string): string {
@@ -1532,89 +1517,184 @@ function monthKey(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
 }
 
-export async function fetchJortt() {
-  const BASE = "https://api.jortt.nl";
+// Get an access_token for ONE scope (Jortt requires one scope per token).
+async function getJorttTokenForScope(scope: string): Promise<string | null> {
+  const clientId     = process.env.JORTT_CLIENT_ID;
+  const clientSecret = process.env.JORTT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
 
-  // Date range: last 12 months — used to drop very old expenses if we can fetch them.
-  const since = new Date();
-  since.setMonth(since.getMonth() - 12);
-  const sinceStr = since.toISOString().split("T")[0];
+  try {
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const res = await fetch(JORTT_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ grant_type: "client_credentials", scope }).toString(),
+      cache: "no-store",
+    });
 
-  // ── 1. Invoices (revenue + AR) — needs invoices:read ──────────────────────
-  // Jortt rotates tokens, so we MUST do all invoice work with one token before
-  // requesting a new token for a different scope.
-  let invoices: any[] = [];
-  let unpaidInvoices: any[] = [];
-  let invoiceFetchOk = false;
-
-  const invToken = await getJorttTokenForScope("invoices:read");
-  if (invToken) {
-    const headers = { Authorization: `Bearer ${invToken}`, Accept: "application/json" };
-
-    // Sent invoices (revenue) — page sequentially with the SAME token.
-    for (const p of [1, 2, 3]) {
-      try {
-        const r = await fetch(`${BASE}/v1/invoices?per_page=100&page=${p}&invoice_status=sent`, { headers, cache: "no-store" });
-        if (!r.ok) { console.warn(`Jortt invoices p${p}: ${r.status}`); break; }
-        const j: any = await r.json();
-        if (j?.error) { console.warn(`Jortt invoices p${p} error:`, j.error?.key ?? j.error?.message); break; }
-        const batch: any[] = j.data ?? [];
-        invoices.push(...batch);
-        invoiceFetchOk = true;
-        if (batch.length < 100) break;
-      } catch (err: any) {
-        console.warn(`Jortt invoices p${p} fetch error:`, err.message);
-        break;
-      }
+    if (!res.ok) {
+      const err = await res.text();
+      console.warn(`[Jortt] token (scope=${scope}) ${res.status}: ${err.slice(0, 160)}`);
+      return null;
     }
-
-    // Unpaid invoices (AR)
-    try {
-      const r = await fetch(`${BASE}/v1/invoices?per_page=100&page=1&invoice_status=unpaid`, { headers, cache: "no-store" });
-      if (r.ok) {
-        const j: any = await r.json();
-        if (!j?.error) unpaidInvoices = j.data ?? [];
-      }
-    } catch { /* ignore */ }
-  }
-
-  // ── 2. Reports (P&L, cash, balance) — needs reports:read ──────────────────
-  // Optional — if the OAuth client doesn't have reports:read, we just skip it.
-  let plRes: any = null, cashRes: any = null, balanceRes: any = null;
-  const rptToken = await getJorttTokenForScope("reports:read");
-  if (rptToken) {
-    const headers = { Authorization: `Bearer ${rptToken}`, Accept: "application/json" };
-    const safeJson = async (path: string) => {
-      try {
-        const r = await fetch(`${BASE}${path}`, { headers, cache: "no-store" });
-        if (!r.ok) { console.warn(`Jortt ${path}: ${r.status}`); return null; }
-        const j: any = await r.json();
-        return j?.error ? null : j;
-      } catch { return null; }
-    };
-    plRes      = await safeJson("/v1/reports/summaries/profit_and_loss");
-    cashRes    = await safeJson("/v1/reports/summaries/cash_and_bank");
-    balanceRes = await safeJson("/v1/reports/summaries/balance");
-  }
-
-  // If we couldn't even reach invoices, treat as fully failed.
-  if (!invToken && !rptToken) return null;
-  if (!invoiceFetchOk && !plRes && !cashRes && !balanceRes) {
-    // Tokens worked but every read failed — surface as live=false (empty marker).
+    const json: any = await res.json();
+    return json.access_token ?? null;
+  } catch (err: any) {
+    console.error(`[Jortt] token (scope=${scope}) failed:`, err.message);
     return null;
   }
+}
 
-  // ── 3. Aggregate ──────────────────────────────────────────────────────────
-  // Accounts receivable = total outstanding unpaid invoices
-  const accountsReceivable = unpaidInvoices.reduce((sum: number, inv: any) => {
-    const v = parseFloat(inv.invoice_due_amount?.value ?? inv.invoice_total?.value ?? "0");
-    return sum + (Number.isFinite(v) ? v : 0);
-  }, 0);
+// Page through a Jortt list endpoint with the given token. Stops on first
+// non-OK response, error body, or empty page. Caps at maxPages to keep the
+// per-request total inside the Worker time budget.
+async function jorttPaginate(token: string, path: string, maxPages = 20): Promise<any[]> {
+  const out: any[] = [];
+  const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  for (let p = 1; p <= maxPages; p++) {
+    const sep = path.includes("?") ? "&" : "?";
+    const url = `${JORTT_BASE}${path}${sep}per_page=100&page=${p}`;
+    try {
+      const r = await fetch(url, { headers, cache: "no-store" });
+      if (!r.ok) {
+        console.warn(`[Jortt] ${path} p${p}: ${r.status}`);
+        break;
+      }
+      const j: any = await r.json();
+      if (j?.error) {
+        console.warn(`[Jortt] ${path} p${p} error:`, j.error?.key ?? j.error?.message);
+        break;
+      }
+      const batch: any[] = j?.data ?? [];
+      out.push(...batch);
+      if (batch.length < 100) break;
+    } catch (err: any) {
+      console.warn(`[Jortt] ${path} p${p} fetch failed:`, err.message);
+      break;
+    }
+  }
+  return out;
+}
 
-  // Revenue by month from invoices (use invoice_total_incl_vat for top-line)
+async function jorttGet(token: string, path: string): Promise<any | null> {
+  try {
+    const r = await fetch(`${JORTT_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!r.ok) {
+      console.warn(`[Jortt] GET ${path}: ${r.status}`);
+      return null;
+    }
+    const j: any = await r.json();
+    if (j?.error) return null;
+    return j;
+  } catch (err: any) {
+    console.warn(`[Jortt] GET ${path} failed:`, err.message);
+    return null;
+  }
+}
+
+export async function fetchJortt() {
+  // 1. Validate every scope up-front and remember which ones we got.
+  // We grab tokens in parallel — Jortt's token endpoint is independent per scope
+  // (and we serialise all reads under each token before requesting the next).
+  const scopeResults = await Promise.all(
+    JORTT_ALL_SCOPES.map(async (scope) => ({
+      scope,
+      token: await getJorttTokenForScope(scope),
+    })),
+  );
+  const tokens: Record<string, string | null> = Object.fromEntries(
+    scopeResults.map(({ scope, token }) => [scope, token]),
+  );
+  const grantedScopes = scopeResults.filter((s) => s.token).map((s) => s.scope);
+
+  console.log(`[Jortt] granted scopes (${grantedScopes.length}/${JORTT_ALL_SCOPES.length}):`, grantedScopes.join(", ") || "(none)");
+
+  if (grantedScopes.length === 0) return null;
+
+  // 2. Invoices (revenue, AR, invoice list) — invoices:read
+  let invoices: any[] = [];
+  let unpaidInvoices: any[] = [];
+  if (tokens["invoices:read"]) {
+    const t = tokens["invoices:read"]!;
+    invoices       = await jorttPaginate(t, "/v1/invoices?invoice_status=sent", 10);
+    unpaidInvoices = await jorttPaginate(t, "/v1/invoices?invoice_status=unpaid", 5);
+  }
+
+  // 3. Expenses (real OpEx) — expenses:read (v3 endpoint)
+  let expenses: any[] = [];
+  if (tokens["expenses:read"]) {
+    expenses = await jorttPaginate(tokens["expenses:read"]!, "/v3/expenses?expense_type=cost", 20);
+  }
+
+  // 4. Reports — reports:read
+  let plRes: any = null, cashRes: any = null, balanceRes: any = null, btwRes: any = null, dashInvRes: any = null;
+  if (tokens["reports:read"]) {
+    const t = tokens["reports:read"]!;
+    plRes      = await jorttGet(t, "/v1/reports/summaries/profit_and_loss");
+    cashRes    = await jorttGet(t, "/v1/reports/summaries/cash_and_bank");
+    balanceRes = await jorttGet(t, "/v1/reports/summaries/balance");
+    btwRes     = await jorttGet(t, "/v1/reports/summaries/btw");
+    dashInvRes = await jorttGet(t, "/v1/reports/summaries/invoices");
+  }
+
+  // 5. Customers — customers:read
+  let customers: any[] = [];
+  if (tokens["customers:read"]) {
+    customers = await jorttPaginate(tokens["customers:read"]!, "/v1/customers", 10);
+  }
+
+  // 6. Bank accounts + transactions — financing:read (v3)
+  let bankAccounts: any[] = [];
+  let bankTransactions: any[] = [];
+  if (tokens["financing:read"]) {
+    const t = tokens["financing:read"]!;
+    bankAccounts = await jorttPaginate(t, "/v3/bank_accounts", 5);
+    // Pull recent transactions per bank account (cap totals for speed)
+    for (const acct of bankAccounts.slice(0, 5)) {
+      const id = acct?.id;
+      if (!id) continue;
+      const tx = await jorttPaginate(t, `/v3/bank_accounts/${id}/transactions`, 5);
+      bankTransactions.push(...tx.map((x: any) => ({ ...x, _bank_account_id: id })));
+    }
+  }
+
+  // 7. Organization + tradenames + ledger accounts + labels — organizations:read
+  let organization: any = null;
+  let tradenames: any[] = [];
+  let ledgerAccounts: any[] = [];
+  let labels: any[] = [];
+  if (tokens["organizations:read"]) {
+    const t = tokens["organizations:read"]!;
+    organization   = await jorttGet(t, "/v1/organizations");
+    tradenames     = await jorttPaginate(t, "/v1/tradenames", 3);
+    ledgerAccounts = await jorttPaginate(t, "/v1/ledger_accounts/invoices", 5);
+    labels         = await jorttPaginate(t, "/v1/labels", 3);
+  }
+
+  // 8. Payroll — payroll:read
+  let payroll: any[] = [];
+  if (tokens["payroll:read"]) {
+    payroll = await jorttPaginate(tokens["payroll:read"]!, "/v1/loonjournaalposten", 10);
+  }
+
+  // 9. Estimates — estimates:read
+  let estimates: any[] = [];
+  if (tokens["estimates:read"]) {
+    estimates = await jorttPaginate(tokens["estimates:read"]!, "/v2/estimates", 5);
+  }
+
+  // ── Aggregations ────────────────────────────────────────────────────────────
+
+  // Revenue by month from invoices
   const revenueByMonth: Record<string, number> = {};
   for (const inv of invoices) {
-    const mk = monthKey(inv.invoice_date ?? "");
+    const mk = monthKey(inv.invoice_date ?? inv.created_at ?? "");
     if (!mk) continue;
     const total = parseFloat(
       inv.invoice_total_incl_vat?.value ??
@@ -1625,41 +1705,140 @@ export async function fetchJortt() {
     revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
   }
 
-  // Cash position from summary (best-effort)
+  // Expenses by month + OpEx breakdown from real expenses
+  const expensesByMonth: Record<string, number> = {};
+  // monthKey -> { team, agencies, content, software, other }
+  const opexBuckets: Record<string, { team: number; agencies: number; content: number; software: number; other: number }> = {};
+  // category -> name -> amount  (rolled-up detail items)
+  const opexDetailMap: Record<string, Record<string, number>> = {
+    team: {}, agencies: {}, content: {}, software: {}, other: {},
+  };
+
+  for (const ex of expenses) {
+    const dateStr = ex.vat_date ?? ex.delivery_period ?? ex.created_at ?? "";
+    const mk = monthKey(dateStr);
+    if (!mk) continue;
+    const amountStr =
+      ex.raw_total_amount?.value ??
+      ex.raw_total_amount?.amount ??
+      ex.total_amount?.value ??
+      ex.amount?.value ??
+      "0";
+    const amount = parseFloat(String(amountStr));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
+
+    // category from description / ledger account name
+    const ledgerName = ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
+    const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
+    const cat = categorise(`${desc} ${ledgerName}`);
+
+    if (!opexBuckets[mk]) opexBuckets[mk] = { team: 0, agencies: 0, content: 0, software: 0, other: 0 };
+    opexBuckets[mk][cat] += amount;
+
+    const itemName = (desc || "Unknown").trim().slice(0, 80);
+    opexDetailMap[cat][itemName] = (opexDetailMap[cat][itemName] ?? 0) + amount;
+  }
+
+  // Sort months chronologically for opexByMonth
+  const sortedMonths = Object.keys(opexBuckets).sort((a, b) => {
+    const pa = new Date(a.replace(" '", " 20"));
+    const pb = new Date(b.replace(" '", " 20"));
+    return pa.getTime() - pb.getTime();
+  });
+  const opexByMonth = sortedMonths.map((m) => ({ month: m, ...opexBuckets[m] }));
+
+  // opexDetail in shape consumed by OpExBreakdownSection
+  const opexDetail: Record<string, { label: string; items: Array<{ name: string; amount: number }> }> = {};
+  const catLabels: Record<string, string> = {
+    team: "Team", agencies: "Agencies", content: "Content samenwerkingen", software: "Software", other: "Other costs",
+  };
+  for (const cat of Object.keys(opexDetailMap)) {
+    const items = Object.entries(opexDetailMap[cat])
+      .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100 }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 25);
+    opexDetail[cat] = { label: catLabels[cat] ?? cat, items };
+  }
+
+  // AR + cash + P&L summary
+  const accountsReceivable = unpaidInvoices.reduce((sum: number, inv: any) => {
+    const v = parseFloat(inv.invoice_due_amount?.value ?? inv.invoice_total?.value ?? "0");
+    return sum + (Number.isFinite(v) ? v : 0);
+  }, 0);
+
   const cashBalance: number | null = (() => {
-    if (!cashRes) return null;
-    const v = cashRes?.total_balance?.value ?? cashRes?.balance?.value ?? cashRes?.cash ?? null;
-    if (v == null) return null;
-    const n = parseFloat(String(v));
-    return Number.isFinite(n) ? n : null;
+    if (cashRes) {
+      const v = cashRes?.total_balance?.value ?? cashRes?.balance?.value ?? cashRes?.cash ?? null;
+      if (v != null) {
+        const n = parseFloat(String(v));
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    // Fall back to summing live bank account balances
+    if (bankAccounts.length > 0) {
+      const sum = bankAccounts.reduce((s: number, a: any) => {
+        const v = parseFloat(String(a?.current_balance?.value ?? a?.balance?.value ?? a?.balance ?? "0"));
+        return s + (Number.isFinite(v) ? v : 0);
+      }, 0);
+      return sum > 0 ? sum : null;
+    }
+    return null;
   })();
 
-  // P&L totals from summary (best-effort)
   const plSummary = plRes ? {
     revenue:     parseFloat(plRes?.revenue?.value      ?? plRes?.turnover?.value     ?? "0"),
     costs:       parseFloat(plRes?.costs?.value        ?? plRes?.expenses?.value     ?? "0"),
     grossProfit: parseFloat(plRes?.gross_profit?.value ?? plRes?.net_result?.value   ?? "0"),
   } : null;
 
+  const expenseCount = expenses.filter((e: any) => {
+    const v = parseFloat(String(e.raw_total_amount?.value ?? e.total_amount?.value ?? "0"));
+    return Number.isFinite(v) && v > 0;
+  }).length;
+  const invoiceCount = invoices.filter((i: any) =>
+    parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0
+  ).length;
+
   const live =
     Object.keys(revenueByMonth).length > 0 ||
     cashBalance !== null ||
     plSummary !== null ||
-    invoices.length > 0;
+    invoices.length > 0 ||
+    expenses.length > 0;
 
   return {
+    // Core financials (consumed by FinanceDashboard)
     revenueByMonth,
-    expensesByMonth: {} as Record<string, number>, // expenses:read not granted to OAuth client
+    expensesByMonth,
+    opexByMonth,
+    opexDetail,
     cashBalance,
+    accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
     plSummary,
     balanceReport: balanceRes,
-    accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
     unpaidInvoiceCount: unpaidInvoices.length,
-    invoiceCount: invoices.filter(i => parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0).length,
-    expenseCount: 0,
+    invoiceCount,
+    expenseCount,
     live,
-    // Legacy fields
-    opexByMonth: [],
-    opexDetail:  {},
+
+    // Extended data — available to any UI that wants to surface it
+    bankAccounts,
+    bankTransactionsCount: bankTransactions.length,
+    customersCount: customers.length,
+    customers: customers.slice(0, 50),
+    organization,
+    tradenames,
+    ledgerAccountsCount: ledgerAccounts.length,
+    labels,
+    payrollCount: payroll.length,
+    estimatesCount: estimates.length,
+    btwSummary: btwRes,
+    dashboardInvoices: dashInvRes,
+
+    // Diagnostics — useful for the sync/debug screens
+    grantedScopes,
+    deniedScopes: JORTT_ALL_SCOPES.filter((s) => !tokens[s]),
   };
 }
