@@ -829,53 +829,59 @@ function DashboardBody({
     },
   ];
 
-  // ---- Subscriptions ----
-  const totalSubRevenue = sumField(tw, "subRevenue");
-  const totalSubOrders = sumField(tw, "subOrders");
-  const totalActiveSubs = sumField(tw, "activeSubscribers");
-  const totalNewSubs = sumField(tw, "newSubscribers");
-  const totalCancelledSubs = sumField(tw, "cancelledSubs");
-  const totalMrr = sumField(tw, "mrr");
-  // Average churn across stores that report it
-  const churnVals = liveRows
+  // ---- Subscriptions: real Juo (NL) + Loop (UK/US/EU) data ----
+  const sumNum = (rows: SubRow[], field: keyof SubRow): number | null => {
+    const vals = rows
+      .map((r) => r[field] as number | null | undefined)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0);
+  };
+  const sumMrrEur = (rows: SubRow[]) => {
+    const vals = rows
+      .map((r) => toEur(r.mrr ?? null, r.currency))
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length === 0 ? null : vals.reduce((a, b) => a + b, 0);
+  };
+
+  const totalActiveSubs = sumNum(subRows, "activeSubs");
+  const totalNewSubs = sumNum(subRows, "newThisMonth");
+  const totalCancelledSubs = sumNum(subRows, "churnedThisMonth");
+  const totalPausedSubs = sumNum(subRows, "pausedSubs");
+  const totalFetched = sumNum(subRows, "totalFetched");
+  const totalMrrEur = sumMrrEur(subRows);
+  const totalArpuEur =
+    totalMrrEur != null && totalActiveSubs && totalActiveSubs > 0
+      ? totalMrrEur / totalActiveSubs
+      : null;
+
+  const churnVals = subRows
     .map((r) => r.churnRate)
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const avgChurn =
     churnVals.length > 0
       ? churnVals.reduce((a, b) => a + b, 0) / churnVals.length
       : null;
-  const subShare =
-    totalRevenue && totalSubRevenue ? (totalSubRevenue / totalRevenue) * 100 : null;
 
+  // Subscription revenue contribution = annualised MRR / period revenue is unreliable;
+  // show MRR as monthly recurring revenue instead and compute share of MRR vs current
+  // monthly revenue when available.
   const fmtPct = (n: number | null) =>
     typeof n === "number" && Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
 
+  const subLabel = (r: SubRow) =>
+    `${r.market} · ${r.platform === "juo" ? "Juo" : "Loop"}`;
+
   const subWidgets = [
     {
-      label: "Subscription revenue",
-      value: fmtCurrency(totalSubRevenue),
-      sub:
-        subShare != null
-          ? `${subShare.toFixed(1)}% of total revenue`
-          : "Recurring revenue",
-      icon: Repeat,
-      accent: "text-emerald-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
+      label: "MRR",
+      value: fmtCurrency(totalMrrEur),
+      sub: "Monthly recurring revenue",
+      icon: CalendarClock,
+      accent: "text-purple-600",
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
         flag: r.flag,
-        value: fmtCurrency(r.subRevenue ?? null),
-      })),
-    },
-    {
-      label: "Subscription orders",
-      value: fmtNumber(totalSubOrders),
-      sub: "Orders on a subscription",
-      icon: ShoppingCart,
-      accent: "text-blue-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
-        flag: r.flag,
-        value: fmtNumber(r.subOrders ?? null),
+        value: fmtCurrency(toEur(r.mrr ?? null, r.currency)),
       })),
     },
     {
@@ -884,77 +890,89 @@ function DashboardBody({
       sub: "Currently active contracts",
       icon: Users,
       accent: "text-indigo-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
         flag: r.flag,
-        value: fmtNumber(r.activeSubscribers ?? null),
+        value: fmtNumber(r.activeSubs ?? null),
       })),
     },
     {
       label: "New subscribers",
       value: fmtNumber(totalNewSubs),
-      sub: "Started in this period",
+      sub: "Started this month",
       icon: UserPlus,
       accent: "text-emerald-700",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
         flag: r.flag,
-        value: fmtNumber(r.newSubscribers ?? null),
+        value: fmtNumber(r.newThisMonth ?? null),
       })),
     },
     {
-      label: "Cancelled subscribers",
+      label: "Cancelled this month",
       value: fmtNumber(totalCancelledSubs),
-      sub: "Cancelled in this period",
+      sub: "Churned in current month",
       icon: UserMinus,
       accent: "text-rose-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
         flag: r.flag,
-        value: fmtNumber(r.cancelledSubs ?? null),
-      })),
-    },
-    {
-      label: "MRR",
-      value: fmtCurrency(totalMrr),
-      sub: "Monthly recurring revenue",
-      icon: CalendarClock,
-      accent: "text-purple-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
-        flag: r.flag,
-        value: fmtCurrency(r.mrr ?? null),
+        value: fmtNumber(r.churnedThisMonth ?? null),
       })),
     },
     {
       label: "Churn rate",
       value: fmtPct(avgChurn),
-      sub: "Avg across stores",
+      sub: "Avg across stores · this month",
       icon: TrendingDown,
       accent: "text-amber-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
         flag: r.flag,
         value: fmtPct(r.churnRate ?? null),
       })),
     },
     {
-      label: "Subs % of revenue",
-      value: fmtPct(subShare),
-      sub: "Share of total revenue",
-      icon: PieChart,
+      label: "ARPU",
+      value: fmtCurrency2(totalArpuEur),
+      sub: "Avg revenue per active subscriber",
+      icon: Target,
       accent: "text-cyan-600",
-      breakdown: liveRows.map((r) => {
-        const share =
-          r.revenue && r.subRevenue ? (r.subRevenue / r.revenue) * 100 : null;
-        return {
-          market: r.market,
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
+        flag: r.flag,
+        value: fmtCurrency2(toEur(r.arpu ?? null, r.currency)),
+      })),
+    },
+    {
+      label: "Paused subscribers",
+      value: fmtNumber(totalPausedSubs),
+      sub: "Juo only · currently paused",
+      icon: Repeat,
+      accent: "text-blue-600",
+      breakdown: subRows
+        .filter((r) => r.platform === "juo")
+        .map((r) => ({
+          market: subLabel(r),
           flag: r.flag,
-          value: fmtPct(share),
-        };
-      }),
+          value: fmtNumber(r.pausedSubs ?? null),
+        })),
+    },
+    {
+      label: "Total subscribers",
+      value: fmtNumber(totalFetched),
+      sub: "All statuses combined",
+      icon: PieChart,
+      accent: "text-emerald-600",
+      breakdown: subRows.map((r) => ({
+        market: subLabel(r),
+        flag: r.flag,
+        value: fmtNumber(r.totalFetched ?? null),
+      })),
     },
   ];
+
+  const hasSubData = subRows.length > 0;
 
   if (loading && !hasData) {
     return (
