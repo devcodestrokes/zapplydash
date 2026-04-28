@@ -272,40 +272,24 @@ function DailyPnlPage() {
     const contributionMargin =
       revenue > 0 && profit != null ? (profit / revenue) * 100 : null;
 
-    // Comparison baselines — only "today" has a real baseline (4-week same-weekday
-    // average). WTD / MTD baselines aren't fetched, so we omit the delta rather
-    // than show a misleading 0%.
-    let baseRev = 0;
-    let baseAd = 0;
-    let baseProfit = 0;
-    let baseRevenueLabel = "";
-    let hasBaseline = false;
-    if (period === "today") {
-      const wd = new Date().getUTCDay();
-      const daysOfThisWd = [7, 14, 21, 28].filter((n) => {
-        const d = new Date();
-        d.setUTCDate(d.getUTCDate() - n);
-        return d.getUTCDay() === wd;
-      });
-      const count = Math.max(1, daysOfThisWd.length);
-      const tot = sumTw(twPrevTuesdays, "revenue");
-      const adTot = sumTw(twPrevTuesdays, "adSpend");
-      const gpTot = sumTw(twPrevTuesdays, "grossProfit");
-      const npTot = hasField(twPrevTuesdays, "netProfit")
-        ? sumTw(twPrevTuesdays, "netProfit")
-        : null;
-      baseRev = tot / (28 / count);
-      baseAd = adTot / (28 / count);
-      baseProfit = (npTot != null ? npTot : gpTot - adTot) / (28 / count);
-      hasBaseline = tot > 0;
-      baseRevenueLabel = hasBaseline
-        ? `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`
-        : "Triple Whale · live";
-    } else if (period === "wtd") {
-      baseRevenueLabel = "Triple Whale · week-to-date";
-    } else {
-      baseRevenueLabel = "Triple Whale · month-to-date";
-    }
+    // Comparison baselines:
+    //  - today  → vs yesterday
+    //  - wtd    → vs same span of previous week
+    //  - mtd    → vs same span of previous month
+    const baseArr =
+      period === "today" ? twYesterday : period === "wtd" ? twPrevWeek : twPrevMonth;
+    const baseRev = sumTw(baseArr, "revenue");
+    const baseAd = sumTw(baseArr, "adSpend");
+    const baseGp = sumTw(baseArr, "grossProfit");
+    const baseNp = hasField(baseArr, "netProfit") ? sumTw(baseArr, "netProfit") : null;
+    const baseProfit = baseNp != null ? baseNp : baseGp - baseAd;
+    const hasBaseline = baseRev > 0;
+    const baseRevenueLabel =
+      period === "today"
+        ? hasBaseline ? "vs yesterday" : "Triple Whale · live"
+        : period === "wtd"
+        ? hasBaseline ? "vs previous week" : "Triple Whale · week-to-date"
+        : hasBaseline ? "vs previous month" : "Triple Whale · month-to-date";
 
     const pct = (cur: number | null, base: number) =>
       hasBaseline && cur != null && base > 0 ? ((cur - base) / base) * 100 : null;
@@ -322,7 +306,7 @@ function DailyPnlPage() {
       cmDeltaPp: null as number | null,
       revenueLabel: baseRevenueLabel,
     };
-  }, [period, today, twToday, wtd, mtd, twPrevTuesdays]);
+  }, [period, today, twToday, wtd, mtd, twYesterday, twPrevWeek, twPrevMonth]);
 
   // ---- Full P&L breakdown rows (sourced from existing data) ----
   const [jorttData, setJorttData] = useState<{
