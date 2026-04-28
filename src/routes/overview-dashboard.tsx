@@ -189,16 +189,16 @@ function OverviewDashboardPage() {
     };
   }, [user, range.from, range.to]);
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-sm text-muted-foreground">Loading dashboard…</div>
-      </div>
-    );
-  }
+  // Render the shell immediately — show skeletons inside instead of a blank page.
+  // This avoids the "Loading dashboard…" blank screen while session/data resolve.
+  const shellUser = user ?? {
+    email: "",
+    name: "Loading…",
+    avatar: null,
+  };
 
   return (
-    <DashboardShell user={user} title="Overview Dashboard">
+    <DashboardShell user={shellUser} title="Overview Dashboard">
       <div className="p-6 space-y-6">
         <Header range={range} preset={search.preset} />
         <DateRangeFilter
@@ -211,7 +211,7 @@ function OverviewDashboardPage() {
             {errorMsg}
           </div>
         )}
-        <DashboardBody tw={tw} loading={loadingData} />
+        <DashboardBody tw={tw} loading={loadingData || loading || !user} />
       </div>
     </DashboardShell>
   );
