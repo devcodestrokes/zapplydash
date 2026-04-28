@@ -170,6 +170,14 @@ function DailyPnlPage() {
     ? `${Math.max(1, Math.round((Date.now() - new Date(syncedAt).getTime()) / 60000))}m ago`
     : "—";
 
+  if (loading) {
+    return (
+      <DashboardShell user={user} title="Daily P&L">
+        <DailyPnlSkeleton />
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell user={user} title="Daily P&L">
       <div className="bg-muted/20 min-h-full p-6 md:p-8">
