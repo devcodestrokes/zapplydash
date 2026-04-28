@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { readCacheKeys, ageMinutes } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
 import { fetchTripleWhale } from "./fetchers.server";
+import { getProgress } from "./progress.server";
 
 // In-memory range cache (per Worker instance). Triple Whale aggregates are
 // expensive (4 stores × external API). For a given (from,to) range the data
@@ -41,7 +42,7 @@ export const getTripleWhaleRange = createServerFn({ method: "POST" })
     const task = (async () => {
       try {
         const rows = await withTimeout(
-          fetchTripleWhale(data.from, data.to),
+          fetchTripleWhale(data.from, data.to, key),
           25_000,
           "Triple Whale fetch"
         );
@@ -66,6 +67,23 @@ export const getTripleWhaleRange = createServerFn({ method: "POST" })
 
     inflight.set(key, task);
     return await task;
+  });
+
+export const getTripleWhaleProgress = createServerFn({ method: "POST" })
+  .inputValidator((input: { from: string; to: string }) => input)
+  .handler(async ({ data }) => {
+    const key = `${data.from}|${data.to}`;
+    const p = getProgress(key);
+    if (!p) {
+      return { total: 0, fetched: 0, remaining: 0, stores: [], done: true } as const;
+    }
+    return {
+      total: p.total,
+      fetched: p.fetched,
+      remaining: p.remaining,
+      stores: p.stores,
+      done: p.done,
+    };
   });
 
 function getConnections(): Record<string, string> {
