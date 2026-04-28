@@ -15,6 +15,7 @@ import {
   ChevronRight,
   CalendarIcon,
   Loader2,
+  Check,
 } from "lucide-react";
 import { getTripleWhaleRange } from "@/server/dashboard.functions";
 import { DashboardShell } from "@/components/DashboardShell";
