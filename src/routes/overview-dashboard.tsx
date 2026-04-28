@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
@@ -41,14 +40,17 @@ const PRESETS = [
   "custom",
 ] as const;
 
+type SearchParams = { preset: Preset; from: string; to: string };
+
 const searchSchema = z.object({
-  preset: fallback(z.enum(PRESETS), "mtd").default("mtd"),
-  from: fallback(z.string(), "").default(""),
-  to: fallback(z.string(), "").default(""),
+  preset: z.enum(PRESETS).catch("mtd").default("mtd"),
+  from: z.string().catch("").default(""),
+  to: z.string().catch("").default(""),
 });
 
 export const Route = createFileRoute("/overview-dashboard")({
-  validateSearch: zodValidator(searchSchema),
+  validateSearch: (input: Record<string, unknown>): SearchParams =>
+    searchSchema.parse(input),
   head: () => ({
     meta: [
       { title: "Overview Dashboard — Zapply" },
@@ -273,16 +275,16 @@ function DateRangeFilter({
 
   const setPreset = (p: Preset) => {
     navigate({
-      search: (prev) => ({ ...prev, preset: p, from: "", to: "" }),
+      search: (prev: SearchParams) => ({ ...prev, preset: p, from: "", to: "" }),
     });
   };
 
   const applyCustom = () => {
     if (!draftFrom || !draftTo) return;
     navigate({
-      search: (prev) => ({
+      search: (prev: SearchParams) => ({
         ...prev,
-        preset: "custom",
+        preset: "custom" as const,
         from: iso(draftFrom),
         to: iso(draftTo),
       }),
