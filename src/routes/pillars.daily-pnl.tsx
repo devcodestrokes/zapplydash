@@ -175,41 +175,56 @@ function DailyPnlPage() {
   void rows;
 
   // ---- Period KPIs (Today / WTD / MTD) ----
+  // All values come from Triple Whale (already converted to EUR via fxRate).
+  // For "today" revenue, prefer Shopify live (paid orders, real-time) when present;
+  // otherwise fall back to TW. Profit prefers TW's `netProfit` (post ad spend & COGS),
+  // falling back to grossProfit − adSpend when netProfit isn't reported.
   const periodKpis = useMemo(() => {
     const sumRev = (arr: TodayRow[]) =>
       arr.reduce((s, r) => s + (r.revenue || 0), 0);
-    const sumTw = (arr: TwRow[], k: "revenue" | "adSpend" | "grossProfit") =>
-      arr.reduce((s, r: any) => s + (r?.[k] || 0), 0);
+    const sumTw = (
+      arr: TwRow[],
+      k: "revenue" | "adSpend" | "grossProfit" | "netProfit"
+    ) =>
+      arr.reduce((s, r: any) => s + (typeof r?.[k] === "number" ? r[k] : 0), 0);
+    const hasField = (arr: TwRow[], k: string) =>
+      arr.some((r: any) => typeof r?.[k] === "number");
 
-    let revenue = 0;
-    let adSpend = 0;
-    let grossProfit = 0;
+    const periodArr =
+      period === "today" ? twToday : period === "wtd" ? wtd : mtd;
+
+    const twRevenue = sumTw(periodArr, "revenue");
+    const adSpend = sumTw(periodArr, "adSpend");
+    const grossProfit = sumTw(periodArr, "grossProfit");
+    const twNetProfit = hasField(periodArr, "netProfit")
+      ? sumTw(periodArr, "netProfit")
+      : null;
+
+    // Revenue: for "today", prefer real-time Shopify totals if available
+    let revenue = twRevenue;
     if (period === "today") {
-      // Prefer Shopify live revenue; fallback to TW today.
-      revenue = sumRev(today) || sumTw(twToday, "revenue");
-      adSpend = sumTw(twToday, "adSpend");
-      grossProfit = sumTw(twToday, "grossProfit");
-    } else if (period === "wtd") {
-      revenue = sumTw(wtd, "revenue");
-      adSpend = sumTw(wtd, "adSpend");
-      grossProfit = sumTw(wtd, "grossProfit");
-    } else {
-      revenue = sumTw(mtd, "revenue");
-      adSpend = sumTw(mtd, "adSpend");
-      grossProfit = sumTw(mtd, "grossProfit");
+      const shopRev = sumRev(today);
+      if (shopRev > 0) revenue = shopRev;
     }
 
-    const profit = grossProfit ? grossProfit - adSpend : 0;
-    const contributionMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const profit =
+      twNetProfit != null
+        ? twNetProfit
+        : grossProfit !== 0 || adSpend !== 0
+        ? grossProfit - adSpend
+        : null;
 
-    // Comparison baseline:
-    // - today: avg of same weekday over last 4 weeks
-    // - wtd: prior 7 days (rough)
-    // - mtd: same length last month — approximated by prior month total / N
+    const contributionMargin =
+      revenue > 0 && profit != null ? (profit / revenue) * 100 : null;
+
+    // Comparison baselines — only "today" has a real baseline (4-week same-weekday
+    // average). WTD / MTD baselines aren't fetched, so we omit the delta rather
+    // than show a misleading 0%.
     let baseRev = 0;
     let baseAd = 0;
     let baseProfit = 0;
     let baseRevenueLabel = "";
+    let hasBaseline = false;
     if (period === "today") {
       const wd = new Date().getUTCDay();
       const daysOfThisWd = [7, 14, 21, 28].filter((n) => {
@@ -218,27 +233,33 @@ function DailyPnlPage() {
         return d.getUTCDay() === wd;
       });
       const count = Math.max(1, daysOfThisWd.length);
-      // Coarse: divide the 4-week aggregate by 28/count
       const tot = sumTw(twPrevTuesdays, "revenue");
       const adTot = sumTw(twPrevTuesdays, "adSpend");
       const gpTot = sumTw(twPrevTuesdays, "grossProfit");
+      const npTot = hasField(twPrevTuesdays, "netProfit")
+        ? sumTw(twPrevTuesdays, "netProfit")
+        : null;
       baseRev = tot / (28 / count);
       baseAd = adTot / (28 / count);
-      baseProfit = (gpTot - adTot) / (28 / count);
-      baseRevenueLabel = `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`;
+      baseProfit = (npTot != null ? npTot : gpTot - adTot) / (28 / count);
+      hasBaseline = tot > 0;
+      baseRevenueLabel = hasBaseline
+        ? `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`
+        : "Triple Whale · live";
     } else if (period === "wtd") {
-      baseRevenueLabel = "vs prior 7 days";
+      baseRevenueLabel = "Triple Whale · week-to-date";
     } else {
-      baseRevenueLabel = "vs prior month avg";
+      baseRevenueLabel = "Triple Whale · month-to-date";
     }
 
-    const pct = (cur: number, base: number) =>
-      base > 0 ? ((cur - base) / base) * 100 : null;
+    const pct = (cur: number | null, base: number) =>
+      hasBaseline && cur != null && base > 0 ? ((cur - base) / base) * 100 : null;
 
     return {
       revenue,
       adSpend,
-      profit,
+      profit: profit ?? 0,
+      profitIsLive: profit != null,
       contributionMargin,
       revenuePct: pct(revenue, baseRev),
       adPct: pct(adSpend, baseAd),
