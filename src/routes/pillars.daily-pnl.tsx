@@ -82,13 +82,50 @@ function isoNDaysAgo(n: number) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+function fmtIso(d: Date) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 function weekStartIso() {
   // ISO week start = Monday
   const d = new Date();
   const day = d.getUTCDay(); // 0..6 (Sun..Sat)
   const diff = day === 0 ? 6 : day - 1;
   d.setUTCDate(d.getUTCDate() - diff);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  return fmtIso(d);
+}
+
+// Previous week: same weekday-span as WTD, shifted back 7 days.
+// e.g. if today is Wed and WTD = Mon..Wed, prev = Mon-7..Wed-7
+function prevWeekRange() {
+  const d = new Date();
+  const day = d.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monThis = new Date(d);
+  monThis.setUTCDate(monThis.getUTCDate() - diff);
+  const fromD = new Date(monThis);
+  fromD.setUTCDate(fromD.getUTCDate() - 7);
+  const toD = new Date(d);
+  toD.setUTCDate(toD.getUTCDate() - 7);
+  return { from: fmtIso(fromD), to: fmtIso(toD) };
+}
+
+// Previous month: same day-of-month span. e.g. if today is Apr 15,
+// prev = Mar 1..Mar 15 (or last day of Mar if shorter).
+function prevMonthRange() {
+  const d = new Date();
+  const dayOfMonth = d.getUTCDate();
+  const fromD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
+  // Clamp end to last day of previous month if needed
+  const lastDayPrev = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate();
+  const toD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, Math.min(dayOfMonth, lastDayPrev)));
+  return { from: fmtIso(fromD), to: fmtIso(toD) };
+}
+
+function yesterdayIso() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return fmtIso(d);
 }
 
 type Period = "today" | "wtd" | "mtd";
@@ -99,7 +136,9 @@ function DailyPnlPage() {
   const [twToday, setTwToday] = useState<TwRow[]>([]);
   const [wtd, setWtd] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
-  const [twPrevTuesdays, setTwPrevTuesdays] = useState<TwRow[]>([]);
+  const [twYesterday, setTwYesterday] = useState<TwRow[]>([]);
+  const [twPrevWeek, setTwPrevWeek] = useState<TwRow[]>([]);
+  const [twPrevMonth, setTwPrevMonth] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("today");
@@ -108,16 +147,21 @@ function DailyPnlPage() {
     let alive = true;
     setLoading(true);
     const t = todayIso();
+    const y = yesterdayIso();
+    const pw = prevWeekRange();
+    const pm = prevMonthRange();
     Promise.all([
       getDashboardData(),
       getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: weekStartIso(), to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
-      // Same weekday last 4 weeks (rough comparison baseline for "Today")
-      getTripleWhaleRange({ data: { from: isoNDaysAgo(28), to: isoNDaysAgo(7) } }).catch(() => ({ rows: [] })),
+      // Baselines: yesterday, previous week (same span), previous month (same span)
+      getTripleWhaleRange({ data: { from: y, to: y } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: pw.from, to: pw.to } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: pm.from, to: pm.to } }).catch(() => ({ rows: [] })),
     ])
       .then((results: any[]) => {
-        const [d, twT, twW, twM, twPrev] = results;
+        const [d, twT, twW, twM, twY, twPW, twPM] = results;
         if (!alive) return;
         const rawToday = d?.shopifyToday as any;
         const todayArr: TodayRow[] = Array.isArray(rawToday)
@@ -130,7 +174,9 @@ function DailyPnlPage() {
         setTwToday((twT?.rows as TwRow[]) || []);
         setWtd((twW?.rows as TwRow[]) || []);
         setMtd((twM?.rows as TwRow[]) || []);
-        setTwPrevTuesdays((twPrev?.rows as TwRow[]) || []);
+        setTwYesterday((twY?.rows as TwRow[]) || []);
+        setTwPrevWeek((twPW?.rows as TwRow[]) || []);
+        setTwPrevMonth((twPM?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -226,40 +272,24 @@ function DailyPnlPage() {
     const contributionMargin =
       revenue > 0 && profit != null ? (profit / revenue) * 100 : null;
 
-    // Comparison baselines — only "today" has a real baseline (4-week same-weekday
-    // average). WTD / MTD baselines aren't fetched, so we omit the delta rather
-    // than show a misleading 0%.
-    let baseRev = 0;
-    let baseAd = 0;
-    let baseProfit = 0;
-    let baseRevenueLabel = "";
-    let hasBaseline = false;
-    if (period === "today") {
-      const wd = new Date().getUTCDay();
-      const daysOfThisWd = [7, 14, 21, 28].filter((n) => {
-        const d = new Date();
-        d.setUTCDate(d.getUTCDate() - n);
-        return d.getUTCDay() === wd;
-      });
-      const count = Math.max(1, daysOfThisWd.length);
-      const tot = sumTw(twPrevTuesdays, "revenue");
-      const adTot = sumTw(twPrevTuesdays, "adSpend");
-      const gpTot = sumTw(twPrevTuesdays, "grossProfit");
-      const npTot = hasField(twPrevTuesdays, "netProfit")
-        ? sumTw(twPrevTuesdays, "netProfit")
-        : null;
-      baseRev = tot / (28 / count);
-      baseAd = adTot / (28 / count);
-      baseProfit = (npTot != null ? npTot : gpTot - adTot) / (28 / count);
-      hasBaseline = tot > 0;
-      baseRevenueLabel = hasBaseline
-        ? `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`
-        : "Triple Whale · live";
-    } else if (period === "wtd") {
-      baseRevenueLabel = "Triple Whale · week-to-date";
-    } else {
-      baseRevenueLabel = "Triple Whale · month-to-date";
-    }
+    // Comparison baselines:
+    //  - today  → vs yesterday
+    //  - wtd    → vs same span of previous week
+    //  - mtd    → vs same span of previous month
+    const baseArr =
+      period === "today" ? twYesterday : period === "wtd" ? twPrevWeek : twPrevMonth;
+    const baseRev = sumTw(baseArr, "revenue");
+    const baseAd = sumTw(baseArr, "adSpend");
+    const baseGp = sumTw(baseArr, "grossProfit");
+    const baseNp = hasField(baseArr, "netProfit") ? sumTw(baseArr, "netProfit") : null;
+    const baseProfit = baseNp != null ? baseNp : baseGp - baseAd;
+    const hasBaseline = baseRev > 0;
+    const baseRevenueLabel =
+      period === "today"
+        ? hasBaseline ? "vs yesterday" : "Triple Whale · live"
+        : period === "wtd"
+        ? hasBaseline ? "vs previous week" : "Triple Whale · week-to-date"
+        : hasBaseline ? "vs previous month" : "Triple Whale · month-to-date";
 
     const pct = (cur: number | null, base: number) =>
       hasBaseline && cur != null && base > 0 ? ((cur - base) / base) * 100 : null;
@@ -276,7 +306,7 @@ function DailyPnlPage() {
       cmDeltaPp: null as number | null,
       revenueLabel: baseRevenueLabel,
     };
-  }, [period, today, twToday, wtd, mtd, twPrevTuesdays]);
+  }, [period, today, twToday, wtd, mtd, twYesterday, twPrevWeek, twPrevMonth]);
 
   // ---- Full P&L breakdown rows (sourced from existing data) ----
   const [jorttData, setJorttData] = useState<{
@@ -475,10 +505,10 @@ function DailyPnlPage() {
               <div>
                 <div className="text-[12px] text-muted-foreground">
                   {period === "today"
-                    ? `Intraday revenue — today vs avg of last 4 ${["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][new Date().getUTCDay()]}`
+                    ? "Intraday revenue — today vs yesterday"
                     : period === "wtd"
-                    ? "Week-to-date revenue"
-                    : "Month-to-date revenue"}
+                    ? "Week-to-date revenue — vs previous week"
+                    : "Month-to-date revenue — vs previous month"}
                 </div>
                 <div className="mt-1 flex items-baseline gap-3">
                   <div className="text-2xl font-bold">{fmtMoney(periodKpis.revenue, "EUR")}</div>
@@ -499,11 +529,10 @@ function DailyPnlPage() {
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> {period === "today" ? "Today" : period.toUpperCase()}
                 </span>
-                {period === "today" && (
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" /> 4-{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getUTCDay()]} avg
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" />
+                  {period === "today" ? "Yesterday" : period === "wtd" ? "Prev week" : "Prev month"}
+                </span>
               </div>
             </div>
           </div>
