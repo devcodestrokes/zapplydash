@@ -17,6 +17,13 @@ import {
   CalendarIcon,
   Loader2,
   Check,
+  Repeat,
+  Users,
+  UserPlus,
+  UserMinus,
+  CalendarClock,
+  PieChart,
+  TrendingDown,
 } from "lucide-react";
 import { getTripleWhaleRange, getTripleWhaleProgress } from "@/server/dashboard.functions";
 import { DashboardShell } from "@/components/DashboardShell";
