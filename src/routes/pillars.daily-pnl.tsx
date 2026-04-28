@@ -863,3 +863,125 @@ function KpiTile({
   );
 }
 
+type PnlBreakdownData = {
+  grossRevenue: number;
+  refunds: number;
+  discounts: number;
+  netRevenue: number;
+  cogs: number;
+  fulfillment: number;
+  payments: number;
+  grossProfit: number;
+  adMeta: number;
+  adGoogle: number;
+  adTikTok: number;
+  contributionMargin: number;
+  salaries: number;
+  software: number;
+  rent: number;
+  otherOpex: number;
+  netProfit: number;
+  jorttLive: boolean;
+};
+
+function PnlBreakdown({
+  period,
+  data,
+}: {
+  period: Period;
+  data: PnlBreakdownData;
+}) {
+  const periodLabel =
+    period === "today" ? "today" : period === "wtd" ? "week-to-date" : "month-to-date";
+
+  type Line = {
+    label: string;
+    source: string;
+    value: number;
+    dot: string;
+    kind?: "header" | "subtotal" | "highlight" | "final";
+  };
+
+  const lines: Line[] = [
+    { label: "Gross revenue", source: "Shopify", value: data.grossRevenue, dot: "bg-lime-500", kind: "header" },
+    { label: "Refunds & returns", source: "Shopify", value: data.refunds, dot: "bg-lime-400" },
+    { label: "Discounts", source: "Shopify", value: data.discounts, dot: "bg-lime-300" },
+    { label: "Net revenue", source: "Calculated", value: data.netRevenue, dot: "bg-foreground", kind: "subtotal" },
+    { label: "COGS (Supplier supplier)", source: "Supplier × Shopify", value: data.cogs, dot: "bg-pink-400" },
+    { label: "Fulfillment costs", source: "Fulfillment", value: data.fulfillment, dot: "bg-slate-400" },
+    { label: "Payment processing", source: "Shopify Payments", value: data.payments, dot: "bg-lime-400" },
+    { label: "Gross profit", source: "Calculated", value: data.grossProfit, dot: "bg-foreground", kind: "subtotal" },
+    { label: "Ad spend — Meta", source: "Meta Ads", value: data.adMeta, dot: "bg-violet-400" },
+    { label: "Ad spend — Google", source: "Google Ads", value: data.adGoogle, dot: "bg-blue-400" },
+    { label: "Ad spend — TikTok", source: "TikTok Ads", value: data.adTikTok, dot: "bg-violet-500" },
+    { label: "Contribution margin", source: "Calculated", value: data.contributionMargin, dot: "bg-foreground", kind: "highlight" },
+    { label: "OpEx — Salaries", source: data.jorttLive ? "Jortt" : "Jortt (est.)", value: data.salaries, dot: "bg-teal-400" },
+    { label: "OpEx — Software", source: data.jorttLive ? "Jortt" : "Jortt (est.)", value: data.software, dot: "bg-teal-400" },
+    { label: "OpEx — Rent & utilities", source: data.jorttLive ? "Jortt" : "Jortt (est.)", value: data.rent, dot: "bg-teal-500" },
+    { label: "OpEx — Other", source: data.jorttLive ? "Jortt" : "Jortt (est.)", value: data.otherOpex, dot: "bg-teal-400" },
+    { label: "Net profit", source: "Calculated", value: data.netProfit, dot: "bg-foreground", kind: "final" },
+  ];
+
+  const fmt = (v: number) => {
+    const sign = v < 0 ? "-" : "";
+    const abs = Math.abs(Math.round(v));
+    return `${sign}€${abs.toLocaleString("en-GB")}`;
+  };
+
+  return (
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b">
+        <div className="text-sm font-semibold">
+          Full P&L breakdown — {periodLabel}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Every line traced to its source system.
+        </div>
+      </div>
+      <div className="divide-y">
+        {lines.map((l, i) => {
+          const isNegative = l.value < 0;
+          const isFinal = l.kind === "final";
+          const isHighlight = l.kind === "highlight";
+          const isSubtotal = l.kind === "subtotal";
+          const isHeader = l.kind === "header";
+          return (
+            <div
+              key={i}
+              className={cn(
+                "grid grid-cols-[1fr_180px_140px] items-center gap-4 px-5 py-2.5 text-sm",
+                isSubtotal && "bg-muted/40",
+                isHighlight && "bg-amber-50/60 ring-1 ring-amber-200",
+                isFinal && "bg-emerald-50/60"
+              )}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", l.dot)} />
+                <span
+                  className={cn(
+                    "truncate",
+                    (isHeader || isSubtotal || isHighlight || isFinal) && "font-semibold"
+                  )}
+                >
+                  {l.label}
+                </span>
+              </div>
+              <div className="text-xs text-muted-foreground truncate">{l.source}</div>
+              <div
+                className={cn(
+                  "text-right tabular-nums font-medium",
+                  isNegative && !isFinal && "text-red-600",
+                  isFinal && (l.value >= 0 ? "text-emerald-700 font-bold" : "text-red-600 font-bold"),
+                  (isHeader || isSubtotal || isHighlight) && "font-semibold text-foreground"
+                )}
+              >
+                {fmt(l.value)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
