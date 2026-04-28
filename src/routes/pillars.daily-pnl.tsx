@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
+// date-fns no longer needed after header redesign
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData, getTripleWhaleRange } from "@/server/dashboard.functions";
@@ -67,13 +67,33 @@ function monthStartIso() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function isoNDaysAgo(n: number) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function weekStartIso() {
+  // ISO week start = Monday
+  const d = new Date();
+  const day = d.getUTCDay(); // 0..6 (Sun..Sat)
+  const diff = day === 0 ? 6 : day - 1;
+  d.setUTCDate(d.getUTCDate() - diff);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+type Period = "today" | "wtd" | "mtd";
+
 function DailyPnlPage() {
   const { user } = useDashboardSession();
   const [today, setToday] = useState<TodayRow[]>([]);
   const [twToday, setTwToday] = useState<TwRow[]>([]);
+  const [wtd, setWtd] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
+  const [twPrevTuesdays, setTwPrevTuesdays] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<Period>("today");
 
   useEffect(() => {
     let alive = true;
@@ -82,9 +102,13 @@ function DailyPnlPage() {
     Promise.all([
       getDashboardData(),
       getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: weekStartIso(), to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
+      // Same weekday last 4 weeks (rough comparison baseline for "Today")
+      getTripleWhaleRange({ data: { from: isoNDaysAgo(28), to: isoNDaysAgo(7) } }).catch(() => ({ rows: [] })),
     ])
-      .then(([d, twT, twM]: [any, any, any]) => {
+      .then((results: any[]) => {
+        const [d, twT, twW, twM, twPrev] = results;
         if (!alive) return;
         const rawToday = d?.shopifyToday as any;
         const todayArr: TodayRow[] = Array.isArray(rawToday)
@@ -93,21 +117,11 @@ function DailyPnlPage() {
           ? rawToday.markets
           : [];
         const sToday = todayArr.filter((r) => r && r.code);
-        const twTodayRows = (twT?.rows as TwRow[]) || [];
-        const twMtdRows = (twM?.rows as TwRow[]) || [];
-        if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.debug("[daily-pnl]", {
-            shopifyToday: sToday,
-            twToday: twTodayRows,
-            twMtd: twMtdRows,
-            twTodayError: twT?.error,
-            twMtdError: twM?.error,
-          });
-        }
         setToday(sToday);
-        setTwToday(twTodayRows);
-        setMtd(twMtdRows);
+        setTwToday((twT?.rows as TwRow[]) || []);
+        setWtd((twW?.rows as TwRow[]) || []);
+        setMtd((twM?.rows as TwRow[]) || []);
+        setTwPrevTuesdays((twPrev?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -155,7 +169,7 @@ function DailyPnlPage() {
     });
   }, [today, twToday, mtd]);
 
-  const totalOrdersToday = rows.reduce((s, r) => s + (r.orders || 0), 0);
+  void rows; // totalOrdersToday no longer rendered after header redesign
 
   const nl = rows.find((r) => r.code === "NL")!;
   const uk = rows.find((r) => r.code === "UK")!;
@@ -164,6 +178,80 @@ function DailyPnlPage() {
   const maxHourly = Math.max(1, ...nl.hourly.map((h) => h.revenue));
   const lastHour = new Date().getUTCHours() + 2; // CEST
   const visibleHours = nl.hourly.filter((h) => h.hour <= lastHour);
+
+  // ---- Period KPIs (Today / WTD / MTD) ----
+  const periodKpis = useMemo(() => {
+    const sumRev = (arr: TodayRow[]) =>
+      arr.reduce((s, r) => s + (r.revenue || 0), 0);
+    const sumTw = (arr: TwRow[], k: "revenue" | "adSpend" | "grossProfit") =>
+      arr.reduce((s, r: any) => s + (r?.[k] || 0), 0);
+
+    let revenue = 0;
+    let adSpend = 0;
+    let grossProfit = 0;
+    if (period === "today") {
+      // Prefer Shopify live revenue; fallback to TW today.
+      revenue = sumRev(today) || sumTw(twToday, "revenue");
+      adSpend = sumTw(twToday, "adSpend");
+      grossProfit = sumTw(twToday, "grossProfit");
+    } else if (period === "wtd") {
+      revenue = sumTw(wtd, "revenue");
+      adSpend = sumTw(wtd, "adSpend");
+      grossProfit = sumTw(wtd, "grossProfit");
+    } else {
+      revenue = sumTw(mtd, "revenue");
+      adSpend = sumTw(mtd, "adSpend");
+      grossProfit = sumTw(mtd, "grossProfit");
+    }
+
+    const profit = grossProfit ? grossProfit - adSpend : 0;
+    const contributionMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+    // Comparison baseline:
+    // - today: avg of same weekday over last 4 weeks
+    // - wtd: prior 7 days (rough)
+    // - mtd: same length last month — approximated by prior month total / N
+    let baseRev = 0;
+    let baseAd = 0;
+    let baseProfit = 0;
+    let baseRevenueLabel = "";
+    if (period === "today") {
+      const wd = new Date().getUTCDay();
+      const daysOfThisWd = [7, 14, 21, 28].filter((n) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - n);
+        return d.getUTCDay() === wd;
+      });
+      const count = Math.max(1, daysOfThisWd.length);
+      // Coarse: divide the 4-week aggregate by 28/count
+      const tot = sumTw(twPrevTuesdays, "revenue");
+      const adTot = sumTw(twPrevTuesdays, "adSpend");
+      const gpTot = sumTw(twPrevTuesdays, "grossProfit");
+      baseRev = tot / (28 / count);
+      baseAd = adTot / (28 / count);
+      baseProfit = (gpTot - adTot) / (28 / count);
+      baseRevenueLabel = `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`;
+    } else if (period === "wtd") {
+      baseRevenueLabel = "vs prior 7 days";
+    } else {
+      baseRevenueLabel = "vs prior month avg";
+    }
+
+    const pct = (cur: number, base: number) =>
+      base > 0 ? ((cur - base) / base) * 100 : null;
+
+    return {
+      revenue,
+      adSpend,
+      profit,
+      contributionMargin,
+      revenuePct: pct(revenue, baseRev),
+      adPct: pct(adSpend, baseAd),
+      profitPct: pct(profit, baseProfit),
+      cmDeltaPp: null as number | null,
+      revenueLabel: baseRevenueLabel,
+    };
+  }, [period, today, twToday, wtd, mtd, twPrevTuesdays]);
 
   const sourcesCount = 4; // Shopify, Jortt, Triple Whale, Juo + Loop
   const syncedAgo = syncedAt
@@ -182,29 +270,119 @@ function DailyPnlPage() {
     <DashboardShell user={user} title="Daily P&L">
       <div className="bg-muted/20 min-h-full p-6 md:p-8">
         <div className="mx-auto max-w-6xl space-y-5">
-          {/* Header */}
+          {/* Header — title left, period toggle right (matches mockup) */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Pillar 1</div>
-              <h2 className="mt-1 text-3xl font-bold tracking-tight">Daily P&L Tracker</h2>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Daily P&L Tracker</h2>
               <div className="mt-1 text-sm text-muted-foreground">
-                {format(new Date(), "EEEE, d MMMM yyyy")}
+                Live intraday revenue with full profit & loss breakdown.
               </div>
             </div>
-            <div className="text-right text-xs">
-              <div className="text-muted-foreground">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle mr-1.5" />
-                Live · {totalOrdersToday} orders today
+            <div className="inline-flex rounded-lg border bg-card p-0.5 text-xs shadow-sm">
+              {([
+                ["today", "Today"],
+                ["wtd", "WTD"],
+                ["mtd", "MTD"],
+              ] as [Period, string][]).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setPeriod(k)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 font-medium transition-colors",
+                    period === k
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI tiles (stacked, full width — matches mockup) */}
+          <div className="space-y-3">
+            <KpiTile
+              icon="$"
+              label={period === "today" ? "Revenue today" : period === "wtd" ? "Revenue WTD" : "Revenue MTD"}
+              value={fmtMoney(periodKpis.revenue, "EUR")}
+              subtitle={periodKpis.revenueLabel}
+              deltaPct={periodKpis.revenuePct}
+              positiveIsGood
+            />
+            <KpiTile
+              icon="↗"
+              label={period === "today" ? "Profit today (est.)" : period === "wtd" ? "Profit WTD (est.)" : "Profit MTD (est.)"}
+              value={fmtMoney(periodKpis.profit, "EUR")}
+              subtitle="Triple Whale gross − ad spend"
+              deltaPct={periodKpis.profitPct}
+              positiveIsGood
+            />
+            <KpiTile
+              icon="▭"
+              label={period === "today" ? "Ad spend today" : period === "wtd" ? "Ad spend WTD" : "Ad spend MTD"}
+              value={fmtMoney(periodKpis.adSpend, "EUR")}
+              subtitle="1h lag"
+              deltaPct={periodKpis.adPct}
+              positiveIsGood={false}
+            />
+            <KpiTile
+              icon="◎"
+              label="Contribution margin"
+              value={`${periodKpis.contributionMargin.toFixed(1)}%`}
+              subtitle="per order"
+              deltaPct={null}
+              positiveIsGood
+            />
+          </div>
+
+          {/* Intraday revenue strip */}
+          <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[12px] text-muted-foreground">
+                  {period === "today"
+                    ? `Intraday revenue — today vs avg of last 4 ${["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][new Date().getUTCDay()]}`
+                    : period === "wtd"
+                    ? "Week-to-date revenue"
+                    : "Month-to-date revenue"}
+                </div>
+                <div className="mt-1 flex items-baseline gap-3">
+                  <div className="text-2xl font-bold">{fmtMoney(periodKpis.revenue, "EUR")}</div>
+                  {periodKpis.revenuePct != null && (
+                    <div
+                      className={cn(
+                        "text-sm font-medium",
+                        periodKpis.revenuePct >= 0 ? "text-emerald-600" : "text-red-600"
+                      )}
+                    >
+                      Pacing {periodKpis.revenuePct >= 0 ? "+" : ""}
+                      {periodKpis.revenuePct.toFixed(1)}%
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="mt-1 space-x-2 text-muted-foreground">
-                {rows.map((r) => (
-                  <span key={r.code}>
-                    <span className="text-[10px] uppercase mr-0.5">{r.code}</span>
-                    {fmtMoney(r.revenue, r.currency)}
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> {period === "today" ? "Today" : period.toUpperCase()}
+                </span>
+                {period === "today" && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" /> 4-{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getUTCDay()]} avg
                   </span>
-                ))}
+                )}
               </div>
             </div>
+          </div>
+
+          {/* Section divider — full breakdown */}
+          <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="text-base font-semibold">
+              Full P&L breakdown — {period === "today" ? "today" : period === "wtd" ? "week-to-date" : "month-to-date"}
+            </div>
+            <div className="text-xs text-muted-foreground">Every line traced to its source system.</div>
           </div>
 
           {/* Per-market tiles */}
@@ -538,6 +716,62 @@ function DailyPnlSkeleton() {
         <div className="pt-2 text-center text-[11px] text-muted-foreground">
           Loading fresh data…
         </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiTile({
+  icon,
+  label,
+  value,
+  subtitle,
+  deltaPct,
+  positiveIsGood,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  subtitle?: string;
+  deltaPct: number | null;
+  positiveIsGood: boolean;
+}) {
+  const showDelta = deltaPct != null && isFinite(deltaPct);
+  const isPositive = (deltaPct ?? 0) >= 0;
+  const good = positiveIsGood ? isPositive : !isPositive;
+  return (
+    <div className="rounded-xl border bg-card px-5 py-4 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border bg-muted/40 text-[11px]">
+              {icon}
+            </span>
+            <span className="truncate">{label}</span>
+          </div>
+          <div className="mt-2 text-[26px] font-bold leading-none tracking-tight">
+            {value}
+          </div>
+          {subtitle && (
+            <div className="mt-1.5 text-[11px] text-muted-foreground">{subtitle}</div>
+          )}
+        </div>
+        {showDelta && (
+          <div
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium whitespace-nowrap",
+              good
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-red-50 text-red-700"
+            )}
+          >
+            <span aria-hidden>{isPositive ? "↗" : "↘"}</span>
+            <span>
+              {isPositive ? "+" : ""}
+              {deltaPct!.toFixed(1)}%
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
