@@ -281,15 +281,15 @@ export default function SyncView({ initialConnections = {} }) {
                             errorMessage={getSourceErrorMessage("jortt")}
                           />
                           <a
-                            href="/api/auth/jortt"
+                            href="/api/jortt/connect"
                             className="rounded-md border border-neutral-200 px-2 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
                           >
-                            Re-authorize
+                            Re-check
                           </a>
                         </div>
                       ) : (
                         <a
-                          href="/api/auth/jortt"
+                          href="/api/jortt/connect"
                           className="rounded-lg border px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90"
                           style={{ backgroundColor: src.color, borderColor: src.color }}
                         >
