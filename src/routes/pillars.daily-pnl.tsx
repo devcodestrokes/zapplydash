@@ -179,6 +179,80 @@ function DailyPnlPage() {
   const lastHour = new Date().getUTCHours() + 2; // CEST
   const visibleHours = nl.hourly.filter((h) => h.hour <= lastHour);
 
+  // ---- Period KPIs (Today / WTD / MTD) ----
+  const periodKpis = useMemo(() => {
+    const sumRev = (arr: TodayRow[]) =>
+      arr.reduce((s, r) => s + (r.revenue || 0), 0);
+    const sumTw = (arr: TwRow[], k: "revenue" | "adSpend" | "grossProfit") =>
+      arr.reduce((s, r: any) => s + (r?.[k] || 0), 0);
+
+    let revenue = 0;
+    let adSpend = 0;
+    let grossProfit = 0;
+    if (period === "today") {
+      // Prefer Shopify live revenue; fallback to TW today.
+      revenue = sumRev(today) || sumTw(twToday, "revenue");
+      adSpend = sumTw(twToday, "adSpend");
+      grossProfit = sumTw(twToday, "grossProfit");
+    } else if (period === "wtd") {
+      revenue = sumTw(wtd, "revenue");
+      adSpend = sumTw(wtd, "adSpend");
+      grossProfit = sumTw(wtd, "grossProfit");
+    } else {
+      revenue = sumTw(mtd, "revenue");
+      adSpend = sumTw(mtd, "adSpend");
+      grossProfit = sumTw(mtd, "grossProfit");
+    }
+
+    const profit = grossProfit ? grossProfit - adSpend : 0;
+    const contributionMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+    // Comparison baseline:
+    // - today: avg of same weekday over last 4 weeks
+    // - wtd: prior 7 days (rough)
+    // - mtd: same length last month — approximated by prior month total / N
+    let baseRev = 0;
+    let baseAd = 0;
+    let baseProfit = 0;
+    let baseRevenueLabel = "";
+    if (period === "today") {
+      const wd = new Date().getUTCDay();
+      const daysOfThisWd = [7, 14, 21, 28].filter((n) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - n);
+        return d.getUTCDay() === wd;
+      });
+      const count = Math.max(1, daysOfThisWd.length);
+      // Coarse: divide the 4-week aggregate by 28/count
+      const tot = sumTw(twPrevTuesdays, "revenue");
+      const adTot = sumTw(twPrevTuesdays, "adSpend");
+      const gpTot = sumTw(twPrevTuesdays, "grossProfit");
+      baseRev = tot / (28 / count);
+      baseAd = adTot / (28 / count);
+      baseProfit = (gpTot - adTot) / (28 / count);
+      baseRevenueLabel = `vs ${count}-${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][wd]} avg`;
+    } else if (period === "wtd") {
+      baseRevenueLabel = "vs prior 7 days";
+    } else {
+      baseRevenueLabel = "vs prior month avg";
+    }
+
+    const pct = (cur: number, base: number) =>
+      base > 0 ? ((cur - base) / base) * 100 : null;
+
+    return {
+      revenue,
+      adSpend,
+      profit,
+      contributionMargin,
+      revenuePct: pct(revenue, baseRev),
+      adPct: pct(adSpend, baseAd),
+      profitPct: pct(profit, baseProfit),
+      cmDeltaPp: null as number | null,
+      revenueLabel: baseRevenueLabel,
+    };
+  }, [period, today, twToday, wtd, mtd, twPrevTuesdays]);
+
   const sourcesCount = 4; // Shopify, Jortt, Triple Whale, Juo + Loop
   const syncedAgo = syncedAt
     ? `${Math.max(1, Math.round((Date.now() - new Date(syncedAt).getTime()) / 60000))}m ago`
