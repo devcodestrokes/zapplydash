@@ -562,12 +562,7 @@ function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
           No live Triple Whale data available for this range.
         </div>
       )}
-      <div
-        className={cn(
-          "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4",
-          loading && "opacity-60 transition-opacity"
-        )}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {widgets.map((w) => (
           <KpiWidget key={w.label} widget={w} />
         ))}
