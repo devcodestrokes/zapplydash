@@ -850,17 +850,54 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
-  const activeMarkets = (liveMarkets ?? [])
-    .filter(m => m.live)
-    .map(m => {
-      const tw = twData.find(t => t.market === m.code && t.live);
+  // Total ad spend across all markets (used for "revenue-weighted" reallocation)
+  const totalTwRevenue = (twData ?? []).filter((t: any) => t?.live).reduce((s: number, t: any) => s + (t.revenue ?? 0), 0);
+  const totalAdSpend = (twData ?? []).filter((t: any) => t?.live).reduce((s: number, t: any) => s + (t.adSpend ?? 0), 0);
+
+  const baseMarkets = (liveMarkets ?? [])
+    .filter((m: any) => m.live)
+    .map((m: any) => {
+      const tw = twData.find((t: any) => t.market === m.code && t.live);
+      // Shopify revenue is canonical for cards/table (matches Shopify Markets)
       const revenue = m.revenue ?? 0;
-      const adSpend = tw?.adSpend ?? null;
-      const grossMarginPct = tw?.grossProfit != null && revenue > 0 ? +(tw.grossProfit / revenue * 100).toFixed(1) : null;
-      const contributionMarginPct = tw?.grossProfit != null && adSpend != null && revenue > 0
-        ? +((tw.grossProfit - adSpend) / revenue * 100).toFixed(1) : null;
-      return { ...m, adSpend, grossMargin: grossMarginPct, contributionMargin: contributionMarginPct, roas: tw?.roas ?? null, cac: tw?.ncpa ?? null };
+      const twRevenue = tw?.revenue ?? null;
+      const grossProfit = tw?.grossProfit ?? null;
+      // Gross margin % must use TW revenue (its own denominator), not Shopify revenue
+      const grossMarginPct = grossProfit != null && twRevenue != null && twRevenue > 0
+        ? +((grossProfit / twRevenue) * 100).toFixed(1) : null;
+      return {
+        ...m,
+        twRevenue,
+        grossProfit,
+        grossMargin: grossMarginPct,
+        twAdSpend: tw?.adSpend ?? null,
+        twNetProfit: tw?.netProfit ?? null,
+        roas: tw?.roas ?? null,
+        ncpa: tw?.ncpa ?? null,
+      };
     });
+
+  // Apply allocation method to derive ad spend, CAC, contribution margin
+  const activeMarkets = baseMarkets.map((m: any) => {
+    let adSpend: number | null;
+    if (allocation === "revenue-weighted") {
+      // Reallocate total ad spend proportionally to each market's TW revenue share
+      adSpend = totalTwRevenue > 0 && m.twRevenue != null
+        ? +((m.twRevenue / totalTwRevenue) * totalAdSpend).toFixed(2)
+        : null;
+    } else if (allocation === "attribution") {
+      // TW's attributed spend per market (same as direct in this dataset)
+      adSpend = m.twAdSpend;
+    } else {
+      // "direct" — platform-direct targeting (TW per-market spend)
+      adSpend = m.twAdSpend;
+    }
+    const cac = adSpend != null && m.newCustomers > 0 ? +(adSpend / m.newCustomers).toFixed(2) : null;
+    const contributionMarginPct = m.grossProfit != null && adSpend != null && m.twRevenue != null && m.twRevenue > 0
+      ? +(((m.grossProfit - adSpend) / m.twRevenue) * 100).toFixed(1) : null;
+    return { ...m, adSpend, cac, contributionMargin: contributionMarginPct };
+  });
+
   if (activeMarkets.length === 0) {
     return (
       <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-8 text-center text-[13px] text-neutral-500">
@@ -869,7 +906,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
     );
   }
 
-  const sorted = [...activeMarkets].sort((a, b) => b[sortBy] - a[sortBy]);
+  const sorted = [...activeMarkets].sort((a: any, b: any) => (b[sortBy] ?? 0) - (a[sortBy] ?? 0));
   const maxRev = sorted[0]?.revenue ?? 1;
 
   return (
@@ -960,10 +997,10 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
                         <span className="font-medium text-neutral-900">{m.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{Math.round(m.revenue).toLocaleString()}</td>
                     <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.orders}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{(m.revenue / m.orders).toFixed(0)}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${m.adSpend.toLocaleString()}` : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{m.orders > 0 ? Math.round(m.revenue / m.orders).toLocaleString() : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${Math.round(m.adSpend).toLocaleString()}` : "—"}</td>
                     <td className="px-3 py-3.5 text-right tabular-nums">
                       {m.cac != null ? (
                         <span className={m.cac > 40 ? "text-rose-600 font-medium" : m.cac > 30 ? "text-amber-600" : "text-neutral-900"}>
