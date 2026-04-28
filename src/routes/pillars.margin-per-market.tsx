@@ -4,8 +4,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
 import { MarketsView as MarketsViewRaw } from "@/components/FinanceDashboard";
-import type { ReactElement } from "react";
-const MarketsView = MarketsViewRaw as unknown as (props: any) => ReactElement;
+const MarketsView: any = MarketsViewRaw;
 
 export const Route = createFileRoute("/pillars/margin-per-market")({
   head: () => ({ meta: [{ title: "Margin per Market — Zapply" }] }),
