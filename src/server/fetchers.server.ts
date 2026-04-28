@@ -348,8 +348,10 @@ async function getEurRate(currency: string, start: string, end: string): Promise
       if (res.ok) {
         const data = await res.json();
         const rates = data.rates ?? {};
-        const values = Object.values(rates)
-          .map((r: any) => toNumber(r?.EUR))
+        const values = (typeof rates.EUR === "number" || typeof rates.EUR === "string"
+          ? [rates.EUR]
+          : Object.values(rates).map((r: any) => r?.EUR))
+          .map((r: any) => toNumber(r))
           .filter((n): n is number => typeof n === "number");
         if (values.length > 0) return values.reduce((a, b) => a + b, 0) / values.length;
       }
