@@ -25,7 +25,7 @@ import {
   PieChart,
   TrendingDown,
 } from "lucide-react";
-import { getTripleWhaleRange, getTripleWhaleProgress } from "@/server/dashboard.functions";
+import { getTripleWhaleRange, getTripleWhaleProgress, getDashboardData } from "@/server/dashboard.functions";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { Button } from "@/components/ui/button";
