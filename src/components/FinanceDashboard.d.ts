@@ -17,6 +17,19 @@ interface LiveData {
   xero?: Record<string, any> | null;
 }
 
+export function MarketsView(props?: {
+  liveMarkets?: any[] | null;
+  twData?: any[];
+}): React.JSX.Element;
+
+export function MonthlyView(props?: {
+  opexByMonth?: any[] | null;
+  opexDetail?: Record<string, any> | null;
+  jorttLive?: boolean;
+  shopifyMonthly?: any[];
+  twData?: any[];
+}): React.JSX.Element;
+
 export default function FinanceDashboard(props: {
   user?: DashboardUser | null;
   liveData?: LiveData | null;

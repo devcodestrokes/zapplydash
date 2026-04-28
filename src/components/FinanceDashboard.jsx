@@ -1282,7 +1282,7 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
@@ -1673,7 +1673,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] } = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] } = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
