@@ -816,7 +816,11 @@ export async function fetchXero() {
   };
 
   try {
-    const [plS, balS, cashS, invS, accS, billS, draftS] = await Promise.allSettled([
+    // Bank Transactions: last 90 days
+    const bankTxSince = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0]; })();
+    const bankTxUrl = `${BASE}/BankTransactions?where=${encodeURIComponent(`Date>=DateTime(${bankTxSince.replaceAll("-", ",")})`)}`;
+
+    const [plS, balS, cashS, invS, accS, billS, draftS, contactsS, itemsS, bankTxS, journalsS, trackingS] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
       // total for the range; with timeframe=MONTH Xero auto-derives the period count.
       xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
@@ -830,6 +834,16 @@ export async function fetchXero() {
       xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCPAY"')}`),
       // Draft invoices owed to you
       xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=DRAFT&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      // Contacts (customers + suppliers)
+      xeroFetch("Contacts", `${BASE}/Contacts?summaryOnly=true&page=1`),
+      // Items / Products
+      xeroFetch("Items", `${BASE}/Items`),
+      // Bank Transactions (recent 90 days)
+      xeroFetch("BankTransactions", bankTxUrl),
+      // Manual Journals
+      xeroFetch("ManualJournals", `${BASE}/ManualJournals`),
+      // Tracking Categories
+      xeroFetch("TrackingCategories", `${BASE}/TrackingCategories`),
     ]);
 
     const plData  = plS.status  === "fulfilled" ? plS.value  : null;
@@ -839,6 +853,11 @@ export async function fetchXero() {
     const accData  = accS.status === "fulfilled" ? accS.value  : null;
     const billData = billS.status === "fulfilled" ? billS.value : null;
     const draftData = draftS.status === "fulfilled" ? draftS.value : null;
+    const contactsData = contactsS.status === "fulfilled" ? contactsS.value : null;
+    const itemsData = itemsS.status === "fulfilled" ? itemsS.value : null;
+    const bankTxData = bankTxS.status === "fulfilled" ? bankTxS.value : null;
+    const journalsData = journalsS.status === "fulfilled" ? journalsS.value : null;
+    const trackingData = trackingS.status === "fulfilled" ? trackingS.value : null;
 
     // ── Parse P&L report ─────────────────────────────────────────────────────
     const revenueByMonth:     Record<string, number> = {};
