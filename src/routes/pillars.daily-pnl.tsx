@@ -627,14 +627,14 @@ function DailyPnlSkeleton() {
 }
 
 function KpiTile({
-  icon,
+  icon: Icon,
   label,
   value,
   subtitle,
   deltaPct,
   positiveIsGood,
 }: {
-  icon: string;
+  icon: LucideIcon;
   label: string;
   value: string;
   subtitle?: string;
@@ -644,13 +644,14 @@ function KpiTile({
   const showDelta = deltaPct != null && isFinite(deltaPct);
   const isPositive = (deltaPct ?? 0) >= 0;
   const good = positiveIsGood ? isPositive : !isPositive;
+  const DeltaArrow = isPositive ? ArrowUpRight : ArrowDownRight;
   return (
     <div className="rounded-xl border bg-card px-5 py-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border bg-muted/40 text-[11px]">
-              {icon}
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border bg-muted/40">
+              <Icon className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2} />
             </span>
             <span className="truncate">{label}</span>
           </div>
@@ -670,7 +671,7 @@ function KpiTile({
                 : "bg-red-50 text-red-700"
             )}
           >
-            <span aria-hidden>{isPositive ? "↗" : "↘"}</span>
+            <DeltaArrow className="h-3 w-3" strokeWidth={2.5} aria-hidden />
             <span>
               {isPositive ? "+" : ""}
               {deltaPct!.toFixed(1)}%
