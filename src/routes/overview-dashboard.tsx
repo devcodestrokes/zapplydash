@@ -315,7 +315,12 @@ function OverviewDashboardPage() {
             {errorMsg}
           </div>
         )}
-        <DashboardBody tw={tw} loading={loadingData || loading || !user} />
+        <DashboardBody
+          tw={tw}
+          loading={loadingData || loading || !user}
+          currency={currency}
+          fxRate={fxRate}
+        />
       </div>
     </DashboardShell>
   );
