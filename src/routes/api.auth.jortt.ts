@@ -3,7 +3,16 @@ import { createFileRoute } from "@tanstack/react-router";
 // Initiates the Jortt OAuth 2.0 Authorization Code flow.
 // Visit /api/auth/jortt to connect or re-authorize the Jortt account.
 
-const JORTT_SCOPES = "read";
+const JORTT_SCOPES = [
+  "invoices:read",
+  "expenses:read",
+  "reports:read",
+  "customers:read",
+  "financing:read",
+  "organizations:read",
+  "payroll:read",
+  "estimates:read",
+].join(" ");
 
 export const Route = createFileRoute("/api/auth/jortt")({
   server: {

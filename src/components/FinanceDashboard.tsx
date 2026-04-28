@@ -1003,12 +1003,13 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
 
 /* ============================= OPEX BREAKDOWN (used in MonthlyView) ============================= */
 
-const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false } = {}) => {
+const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false, deniedScopes = [] } = {}) => {
   const [activeCategory, setActiveCategory] = useState("team");
   if (!data || data.length === 0) {
+    const missingExpensesScope = Array.isArray(deniedScopes) && deniedScopes.includes("expenses:read");
     return (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
-        <strong>OpEx breakdown not available</strong> — requires Jortt with purchase invoice scope.
+        <strong>OpEx breakdown not available</strong> — {missingExpensesScope ? "Jortt is connected, but expenses:read is not granted." : "no Jortt expense rows were returned yet."}
       </div>
     );
   }
@@ -1237,7 +1238,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [] }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
@@ -1349,7 +1350,7 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
       </section>
 
       {/* OpEx breakdown — 5 categories */}
-      <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} />
+      <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} deniedScopes={deniedScopes} />
 
       {/* Month close status */}
       <Card className="mt-3 p-5">
