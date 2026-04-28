@@ -37,10 +37,6 @@ const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/overview-dashboard", label: "Overview Dashboard", icon: LayoutDashboard },
   { to: "/store", label: "Store Dashboard", icon: Store },
-  { to: "/triple-whale", label: "Triple Whale", icon: TrendingUp },
-  { to: "/subscriptions", label: "Subscriptions", icon: Repeat },
-  { to: "/invoices", label: "Invoices", icon: FileText },
-  { to: "/accounting", label: "Accounting", icon: Calculator },
 ];
 
 const pillarItems: NavItem[] = [
