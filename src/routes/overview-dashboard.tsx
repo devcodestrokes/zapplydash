@@ -200,7 +200,7 @@ function OverviewDashboardPage() {
       return;
     }
     let cancelled = false;
-    fetch(`https://api.frankfurter.app/latest?from=EUR&to=${currency}`)
+    fetch(`https://api.frankfurter.dev/v1/latest?base=EUR&symbols=${currency}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
