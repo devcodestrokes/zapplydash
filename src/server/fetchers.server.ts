@@ -486,6 +486,14 @@ export async function fetchTripleWhale(
           cogs:            moneyMetric("cogs"),                  // Cost of Goods Sold
           newCustomersPct: twMetric(m, "newCustomersPercent"),  // % new customers
           uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
+          // Subscription metrics
+          subRevenue:        moneyMetric("subscriptionSales", "recurringRevenue", "subscriptionRevenue"),
+          subOrders:         metric("subscriptionOrders"),
+          activeSubscribers: metric("activeSubscribers", "subscriptionActive"),
+          newSubscribers:    metric("newSubscribers", "subscriptionStarted", "subscriptionNew"),
+          cancelledSubs:     metric("cancelledSubscribers", "subscriptionCancelled", "subscriptionChurned"),
+          mrr:               moneyMetric("mrr", "monthlyRecurringRevenue"),
+          churnRate:         metric("subscriptionChurnRate", "churnRate"),
         };
 
         const hasMetrics = Array.isArray(m) && m.length > 0;
