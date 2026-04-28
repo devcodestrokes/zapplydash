@@ -107,7 +107,8 @@ function DailyPnlPage() {
       // Same weekday last 4 weeks (rough comparison baseline for "Today")
       getTripleWhaleRange({ data: { from: isoNDaysAgo(28), to: isoNDaysAgo(7) } }).catch(() => ({ rows: [] })),
     ])
-      .then(([d, twT, twM]: [any, any, any]) => {
+      .then((results: any[]) => {
+        const [d, twT, twW, twM, twPrev] = results;
         if (!alive) return;
         const rawToday = d?.shopifyToday as any;
         const todayArr: TodayRow[] = Array.isArray(rawToday)
@@ -116,21 +117,11 @@ function DailyPnlPage() {
           ? rawToday.markets
           : [];
         const sToday = todayArr.filter((r) => r && r.code);
-        const twTodayRows = (twT?.rows as TwRow[]) || [];
-        const twMtdRows = (twM?.rows as TwRow[]) || [];
-        if (typeof window !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.debug("[daily-pnl]", {
-            shopifyToday: sToday,
-            twToday: twTodayRows,
-            twMtd: twMtdRows,
-            twTodayError: twT?.error,
-            twMtdError: twM?.error,
-          });
-        }
         setToday(sToday);
-        setTwToday(twTodayRows);
-        setMtd(twMtdRows);
+        setTwToday((twT?.rows as TwRow[]) || []);
+        setWtd((twW?.rows as TwRow[]) || []);
+        setMtd((twM?.rows as TwRow[]) || []);
+        setTwPrevTuesdays((twPrev?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
