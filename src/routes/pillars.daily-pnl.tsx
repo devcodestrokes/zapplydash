@@ -421,7 +421,7 @@ function DailyPnlPage() {
           {/* KPI tiles (stacked, full width — matches mockup) */}
           <div className="space-y-3">
             <KpiTile
-              icon="$"
+              icon={DollarSign}
               label={period === "today" ? "Revenue today" : period === "wtd" ? "Revenue WTD" : "Revenue MTD"}
               value={fmtMoney(periodKpis.revenue, "EUR")}
               subtitle={periodKpis.revenueLabel}
@@ -429,7 +429,7 @@ function DailyPnlPage() {
               positiveIsGood
             />
             <KpiTile
-              icon="↗"
+              icon={TrendingUp}
               label={period === "today" ? "Profit today" : period === "wtd" ? "Profit WTD" : "Profit MTD"}
               value={periodKpis.profitIsLive ? fmtMoney(periodKpis.profit, "EUR") : "—"}
               subtitle="Triple Whale net profit (after COGS & ad spend)"
@@ -437,7 +437,7 @@ function DailyPnlPage() {
               positiveIsGood
             />
             <KpiTile
-              icon="▭"
+              icon={Wallet}
               label={period === "today" ? "Ad spend today" : period === "wtd" ? "Ad spend WTD" : "Ad spend MTD"}
               value={fmtMoney(periodKpis.adSpend, "EUR")}
               subtitle="1h lag"
@@ -445,7 +445,7 @@ function DailyPnlPage() {
               positiveIsGood={false}
             />
             <KpiTile
-              icon="◎"
+              icon={Target}
               label="Contribution margin"
               value={
                 periodKpis.contributionMargin != null
