@@ -324,37 +324,10 @@ function twMetric(metrics: any[], id: string): number | null {
   return toNumber(m?.values?.current);
 }
 
-// Triple Whale Data-Out: SQL API
-// POST https://api.triplewhale.com/api/v2/tw-metrics/metrics-data
-// Docs: https://triplewhale.readme.io/reference/data-out-execute-custom-sql-query
-// Runs a single aggregated SQL query per shop — returns in seconds vs the
-// 698-metric summary-page endpoint which can take 30s+.
-const TW_SQL = `
-  SELECT
-    SUM(total_price)                                         AS revenue,
-    SUM(total_price - COALESCE(total_discounts, 0))          AS net_revenue,
-    SUM(CASE WHEN customer_order_index = 1 THEN total_price ELSE 0 END) AS new_customer_rev,
-    SUM(total_spend)                                          AS ad_spend,
-    SUM(facebook_spend)                                       AS facebook_spend,
-    SUM(google_spend)                                         AS google_spend,
-    SAFE_DIVIDE(SUM(total_price), NULLIF(SUM(total_spend),0)) AS roas,
-    SAFE_DIVIDE(SUM(facebook_attributed_rev), NULLIF(SUM(facebook_spend),0)) AS fb_roas,
-    SAFE_DIVIDE(SUM(google_attributed_rev), NULLIF(SUM(google_spend),0))     AS google_roas,
-    SAFE_DIVIDE(SUM(total_price), NULLIF(SUM(total_spend),0)) AS mer,
-    SAFE_DIVIDE(SUM(total_price), NULLIF(COUNT(DISTINCT order_id),0))        AS aov,
-    COUNT(DISTINCT order_id)                                  AS orders,
-    SUM(total_price - COALESCE(cogs, 0))                      AS gross_profit,
-    SUM(total_price - COALESCE(cogs,0) - COALESCE(total_spend,0)) AS net_profit,
-    SUM(cogs)                                                 AS cogs,
-    COUNT(DISTINCT customer_id)                               AS unique_customers,
-    SAFE_DIVIDE(
-      COUNT(DISTINCT CASE WHEN customer_order_index = 1 THEN customer_id END),
-      NULLIF(COUNT(DISTINCT customer_id),0)
-    ) * 100                                                    AS new_customers_pct
-  FROM \`triplewhale.summary.summary\`
-  WHERE event_date BETWEEN @start AND @end
-`;
-
+// Triple Whale: Summary Page endpoint
+// POST https://api.triplewhale.com/api/v2/summary-page/get-data
+// Docs: https://triplewhale.readme.io/reference/get-summary-page-data
+// Returns 698 metrics for a given shopDomain + period.
 export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
@@ -369,58 +342,46 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
 
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 15_000); // SQL is fast — 15s is plenty
-        const res = await fetch("https://api.triplewhale.com/api/v2/tw-metrics/metrics-data", {
+        const timer = setTimeout(() => ctrl.abort(), 20_000); // 20s per store
+        const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
           method: "POST",
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            shopId: shop,
-            query: TW_SQL,
-            parameters: [
-              { name: "start", value: start, type: "DATE" },
-              { name: "end",   value: end,   type: "DATE" },
-            ],
-          }),
+          body: JSON.stringify({ shopDomain: shop, period: { start, end } }),
           signal: ctrl.signal,
         }).finally(() => clearTimeout(timer));
 
         if (!res.ok) {
           const body = await res.text();
-          console.error(`Triple Whale SQL ${market} ${res.status}:`, body.slice(0, 300));
-          // Fall back to summary-page endpoint on failure
-          return await fetchTripleWhaleSummary(market, flag, shop, apiKey, start, end);
-        }
-
-        const data = await res.json();
-        // API returns { data: [ { col: value, ... } ] } or { rows: [...] }
-        const r = (data?.data?.[0] ?? data?.rows?.[0] ?? data?.results?.[0]) as any;
-        if (!r) {
-          console.warn(`Triple Whale SQL ${market}: empty result`);
+          console.error(`Triple Whale ${market} ${res.status}:`, body.slice(0, 200));
           return { market, flag, live: false };
         }
 
+        const data = await res.json();
+        const m = data.metrics ?? [];
+
+        // All IDs confirmed from live API (698 metrics) — April 2026
         const row = {
           market, flag,
-          revenue:         toNumber(r.revenue),
-          netRevenue:      toNumber(r.net_revenue),
-          newCustomerRev:  toNumber(r.new_customer_rev),
-          adSpend:         toNumber(r.ad_spend),
-          facebookSpend:   toNumber(r.facebook_spend),
-          googleSpend:     toNumber(r.google_spend),
-          roas:            toNumber(r.roas),
-          ncRoas:          null as number | null,
-          fbRoas:          toNumber(r.fb_roas),
-          googleRoas:      toNumber(r.google_roas),
-          mer:             toNumber(r.mer),
-          ncpa:            null as number | null,
-          ltvCpa:          null as number | null,
-          aov:             toNumber(r.aov),
-          orders:          toNumber(r.orders),
-          grossProfit:     toNumber(r.gross_profit),
-          netProfit:       toNumber(r.net_profit),
-          cogs:            toNumber(r.cogs),
-          newCustomersPct: toNumber(r.new_customers_pct),
-          uniqueCustomers: toNumber(r.unique_customers),
+          revenue:         twMetric(m, "sales"),               // Gross Order Revenue
+          netRevenue:      twMetric(m, "netSales"),             // Net Sales (after discounts)
+          newCustomerRev:  twMetric(m, "newCustomerSales"),     // New Customer Revenue
+          adSpend:         twMetric(m, "blendedAds"),           // Total blended ad spend
+          facebookSpend:   twMetric(m, "facebookAds"),          // Facebook / Meta
+          googleSpend:     twMetric(m, "googleAds"),            // Google Ads
+          roas:            twMetric(m, "roas"),                  // Blended ROAS
+          ncRoas:          twMetric(m, "newCustomersRoas"),     // New Customer ROAS
+          fbRoas:          twMetric(m, "facebookRoas"),         // Facebook ROAS
+          googleRoas:      twMetric(m, "googleRoas"),           // Google ROAS
+          mer:             twMetric(m, "mer"),                   // Marketing Efficiency Ratio
+          ncpa:            twMetric(m, "newCustomersCpa"),      // New Customer CPA
+          ltvCpa:          twMetric(m, "ltvCpa"),                // LTV:CPA ratio
+          aov:             twMetric(m, "shopifyAov"),            // True AOV
+          orders:          twMetric(m, "shopifyOrders"),         // Total orders
+          grossProfit:     twMetric(m, "grossProfit"),           // Gross Profit
+          netProfit:       twMetric(m, "totalNetProfit"),        // Net Profit (after all costs)
+          cogs:            twMetric(m, "cogs"),                  // Cost of Goods Sold
+          newCustomersPct: twMetric(m, "newCustomersPercent"),  // % new customers
+          uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
         };
 
         const hasData = Object.values(row).some((v) => typeof v === "number" && (v as number) !== 0);
@@ -428,7 +389,7 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
 
         return { ...row, live: true };
       } catch (err: any) {
-        console.error(`Triple Whale SQL ${market}:`, err.message);
+        console.error(`Triple Whale ${market}:`, err.message);
         return { market, flag, live: false };
       }
     })
@@ -436,55 +397,6 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
 
   const hasAnyLive = results.some((r) => r.live);
   return hasAnyLive ? results : null;
-}
-
-// Fallback to original summary-page endpoint if SQL API fails for a given shop
-async function fetchTripleWhaleSummary(
-  market: string, flag: string, shop: string, apiKey: string, start: string, end: string
-) {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20_000);
-    const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
-      method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ shopDomain: shop, period: { start, end } }),
-      signal: ctrl.signal,
-    }).finally(() => clearTimeout(timer));
-
-    if (!res.ok) return { market, flag, live: false };
-    const data = await res.json();
-    const m = data.metrics ?? [];
-
-    const row = {
-      market, flag,
-      revenue:         twMetric(m, "sales"),
-      netRevenue:      twMetric(m, "netSales"),
-      newCustomerRev:  twMetric(m, "newCustomerSales"),
-      adSpend:         twMetric(m, "blendedAds"),
-      facebookSpend:   twMetric(m, "facebookAds"),
-      googleSpend:     twMetric(m, "googleAds"),
-      roas:            twMetric(m, "roas"),
-      ncRoas:          twMetric(m, "newCustomersRoas"),
-      fbRoas:          twMetric(m, "facebookRoas"),
-      googleRoas:      twMetric(m, "googleRoas"),
-      mer:             twMetric(m, "mer"),
-      ncpa:            twMetric(m, "newCustomersCpa"),
-      ltvCpa:          twMetric(m, "ltvCpa"),
-      aov:             twMetric(m, "shopifyAov"),
-      orders:          twMetric(m, "shopifyOrders"),
-      grossProfit:     twMetric(m, "grossProfit"),
-      netProfit:       twMetric(m, "totalNetProfit"),
-      cogs:            twMetric(m, "cogs"),
-      newCustomersPct: twMetric(m, "newCustomersPercent"),
-      uniqueCustomers: twMetric(m, "uniqueCustomers"),
-    };
-    const hasData = Object.values(row).some((v) => typeof v === "number" && (v as number) !== 0);
-    if (!hasData) return { market, flag, live: false };
-    return { ...row, live: true };
-  } catch {
-    return { market, flag, live: false };
-  }
 }
 
 // ─── Juo Subscriptions (NL store) ────────────────────────────────────────────
