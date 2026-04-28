@@ -468,13 +468,8 @@ function DailyPnlPage() {
             </div>
           </div>
 
-          {/* Section divider — full breakdown */}
-          <div className="rounded-xl border bg-card p-5 shadow-sm">
-            <div className="text-base font-semibold">
-              Full P&L breakdown — {period === "today" ? "today" : period === "wtd" ? "week-to-date" : "month-to-date"}
-            </div>
-            <div className="text-xs text-muted-foreground">Every line traced to its source system.</div>
-          </div>
+          {/* Full P&L breakdown — line-by-line, traced to source */}
+          <PnlBreakdown period={period} data={pnlBreakdown} />
 
           {/* Per-market tiles */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
