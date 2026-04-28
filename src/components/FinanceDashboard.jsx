@@ -1287,7 +1287,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
   const [allocation, setAllocation] = useState("revenue-weighted");
 
   const activeMarkets = (liveMarkets ?? [])
-    .filter(m => m.live)
+    .filter(m => m.live && m.code !== "DE")
     .map(m => {
       const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
