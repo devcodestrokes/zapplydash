@@ -765,6 +765,133 @@ function DashboardBody({
     },
   ];
 
+  // ---- Subscriptions ----
+  const totalSubRevenue = sumField(tw, "subRevenue");
+  const totalSubOrders = sumField(tw, "subOrders");
+  const totalActiveSubs = sumField(tw, "activeSubscribers");
+  const totalNewSubs = sumField(tw, "newSubscribers");
+  const totalCancelledSubs = sumField(tw, "cancelledSubs");
+  const totalMrr = sumField(tw, "mrr");
+  // Average churn across stores that report it
+  const churnVals = liveRows
+    .map((r) => r.churnRate)
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  const avgChurn =
+    churnVals.length > 0
+      ? churnVals.reduce((a, b) => a + b, 0) / churnVals.length
+      : null;
+  const subShare =
+    totalRevenue && totalSubRevenue ? (totalSubRevenue / totalRevenue) * 100 : null;
+
+  const fmtPct = (n: number | null) =>
+    typeof n === "number" && Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
+
+  const subWidgets = [
+    {
+      label: "Subscription revenue",
+      value: fmtCurrency(totalSubRevenue),
+      sub:
+        subShare != null
+          ? `${subShare.toFixed(1)}% of total revenue`
+          : "Recurring revenue",
+      icon: Repeat,
+      accent: "text-emerald-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtCurrency(r.subRevenue ?? null),
+      })),
+    },
+    {
+      label: "Subscription orders",
+      value: fmtNumber(totalSubOrders),
+      sub: "Orders on a subscription",
+      icon: ShoppingCart,
+      accent: "text-blue-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtNumber(r.subOrders ?? null),
+      })),
+    },
+    {
+      label: "Active subscribers",
+      value: fmtNumber(totalActiveSubs),
+      sub: "Currently active contracts",
+      icon: Users,
+      accent: "text-indigo-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtNumber(r.activeSubscribers ?? null),
+      })),
+    },
+    {
+      label: "New subscribers",
+      value: fmtNumber(totalNewSubs),
+      sub: "Started in this period",
+      icon: UserPlus,
+      accent: "text-emerald-700",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtNumber(r.newSubscribers ?? null),
+      })),
+    },
+    {
+      label: "Cancelled subscribers",
+      value: fmtNumber(totalCancelledSubs),
+      sub: "Cancelled in this period",
+      icon: UserMinus,
+      accent: "text-rose-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtNumber(r.cancelledSubs ?? null),
+      })),
+    },
+    {
+      label: "MRR",
+      value: fmtCurrency(totalMrr),
+      sub: "Monthly recurring revenue",
+      icon: CalendarClock,
+      accent: "text-purple-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtCurrency(r.mrr ?? null),
+      })),
+    },
+    {
+      label: "Churn rate",
+      value: fmtPct(avgChurn),
+      sub: "Avg across stores",
+      icon: TrendingDown,
+      accent: "text-amber-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtPct(r.churnRate ?? null),
+      })),
+    },
+    {
+      label: "Subs % of revenue",
+      value: fmtPct(subShare),
+      sub: "Share of total revenue",
+      icon: PieChart,
+      accent: "text-cyan-600",
+      breakdown: liveRows.map((r) => {
+        const share =
+          r.revenue && r.subRevenue ? (r.subRevenue / r.revenue) * 100 : null;
+        return {
+          market: r.market,
+          flag: r.flag,
+          value: fmtPct(share),
+        };
+      }),
+    },
+  ];
+
   if (loading && !hasData) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
