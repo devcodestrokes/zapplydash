@@ -1546,6 +1546,9 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
       {/* OpEx breakdown — 5 categories */}
       <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} deniedScopes={deniedScopes} />
 
+      {/* Full Jortt live data — all granted scopes */}
+      <JorttLiveSection jortt={jortt} />
+
       {/* Month close status */}
       <Card className="mt-3 p-5">
         <div className="text-[13px] font-semibold">Month close status</div>
