@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData, getTripleWhaleRange } from "@/server/dashboard.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pillars/daily-pnl")({
   head: () => ({ meta: [{ title: "Daily P&L — Zapply" }] }),
@@ -69,6 +70,7 @@ function monthStartIso() {
 function DailyPnlPage() {
   const { user } = useDashboardSession();
   const [today, setToday] = useState<TodayRow[]>([]);
+  const [twToday, setTwToday] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,16 +78,17 @@ function DailyPnlPage() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const t = todayIso();
     Promise.all([
       getDashboardData(),
-      getTripleWhaleRange({ data: { from: monthStartIso(), to: todayIso() } }).catch(() => ({
-        rows: [],
-      })),
+      getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
     ])
-      .then(([d, tw]: [any, any]) => {
+      .then(([d, twT, twM]: [any, any, any]) => {
         if (!alive) return;
         setToday(((d?.shopifyToday as TodayRow[]) || []).filter((r) => r && r.code));
-        setMtd((tw?.rows as TwRow[]) || []);
+        setTwToday((twT?.rows as TwRow[]) || []);
+        setMtd((twM?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -97,22 +100,32 @@ function DailyPnlPage() {
   const rows = useMemo(() => {
     return MARKET_ORDER.map((code) => {
       const t = today.find((r) => r.code === code);
+      const tw = twToday.find((r) => (r.code || r.market) === code);
       const m = mtd.find((r) => (r.code || r.market) === code);
+      const revenue = t?.revenue ?? tw?.revenue ?? 0;
+      const adSpend = tw?.adSpend ?? null;
+      const grossProfit = tw?.grossProfit ?? null;
+      const netProfit =
+        grossProfit != null && adSpend != null ? grossProfit - adSpend : null;
       return {
         code,
         name: NAMES[code],
         flag: FLAGS[code],
         currency: t?.currency || DEFAULT_CCY[code],
-        revenue: t?.revenue ?? 0,
+        revenue,
         orders: t?.orders ?? 0,
         aov: t?.aov ?? 0,
-        roas: m?.roas ?? null,
+        roas: tw?.roas ?? null,
+        adSpend,
+        grossProfit,
+        netProfit,
+        roasMtd: m?.roas ?? null,
         adSpendMtd: m?.adSpend ?? null,
         grossProfitMtd: m?.grossProfit ?? null,
         hourly: t?.hourly || [],
       };
     });
-  }, [today, mtd]);
+  }, [today, twToday, mtd]);
 
   const totalOrdersToday = rows.reduce((s, r) => s + (r.orders || 0), 0);
 
@@ -187,7 +200,81 @@ function DailyPnlPage() {
             ))}
           </div>
 
-          {/* Hourly revenue chart — NL */}
+          {/* Daily P&L per Shopify store */}
+          <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <div>
+                <div className="text-sm font-semibold">Daily P&L by store</div>
+                <div className="text-xs text-muted-foreground">
+                  Today · revenue, ad spend, gross profit and net (gross − ad spend)
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground">Triple Whale + Shopify</div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="text-left font-medium px-5 py-2.5">Store</th>
+                    <th className="text-right font-medium px-3 py-2.5">Revenue</th>
+                    <th className="text-right font-medium px-3 py-2.5">Orders</th>
+                    <th className="text-right font-medium px-3 py-2.5">Ad spend</th>
+                    <th className="text-right font-medium px-3 py-2.5">Gross profit</th>
+                    <th className="text-right font-medium px-3 py-2.5">Net P&L</th>
+                    <th className="text-right font-medium px-5 py-2.5">ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => {
+                    const netPositive = r.netProfit != null && r.netProfit >= 0;
+                    return (
+                      <tr key={r.code} className="border-t">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{r.flag}</span>
+                            <div>
+                              <div className="font-medium leading-tight">{r.name}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {r.code} · Shopify
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold">
+                          {fmtMoney(r.revenue, r.currency)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-muted-foreground">
+                          {r.orders}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          {fmtMoney(r.adSpend, r.currency)}
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          {fmtMoney(r.grossProfit, r.currency)}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-3 py-3 text-right font-semibold",
+                            r.netProfit == null
+                              ? ""
+                              : netPositive
+                              ? "text-emerald-600"
+                              : "text-red-600"
+                          )}
+                        >
+                          {fmtMoney(r.netProfit, r.currency)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {r.roas != null ? `${r.roas.toFixed(2)}×` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
