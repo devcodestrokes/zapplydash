@@ -505,10 +505,10 @@ function DailyPnlPage() {
               <div>
                 <div className="text-[12px] text-muted-foreground">
                   {period === "today"
-                    ? `Intraday revenue — today vs avg of last 4 ${["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][new Date().getUTCDay()]}`
+                    ? "Intraday revenue — today vs yesterday"
                     : period === "wtd"
-                    ? "Week-to-date revenue"
-                    : "Month-to-date revenue"}
+                    ? "Week-to-date revenue — vs previous week"
+                    : "Month-to-date revenue — vs previous month"}
                 </div>
                 <div className="mt-1 flex items-baseline gap-3">
                   <div className="text-2xl font-bold">{fmtMoney(periodKpis.revenue, "EUR")}</div>
@@ -529,11 +529,10 @@ function DailyPnlPage() {
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> {period === "today" ? "Today" : period.toUpperCase()}
                 </span>
-                {period === "today" && (
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" /> 4-{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getUTCDay()]} avg
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" />
+                  {period === "today" ? "Yesterday" : period === "wtd" ? "Prev week" : "Prev month"}
+                </span>
               </div>
             </div>
           </div>
