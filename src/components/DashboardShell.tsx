@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
-  Store,
+  
   LayoutDashboard,
   LogOut,
   RefreshCw,
@@ -32,7 +32,6 @@ type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?
 const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/overview-dashboard", label: "Overview Dashboard", icon: LayoutDashboard },
-  { to: "/store", label: "Store Dashboard", icon: Store },
 ];
 
 const pillarItems: NavItem[] = [
