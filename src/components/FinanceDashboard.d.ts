@@ -26,8 +26,10 @@ export function MonthlyView(props?: {
   opexByMonth?: any[] | null;
   opexDetail?: Record<string, any> | null;
   jorttLive?: boolean;
+  deniedScopes?: string[];
   shopifyMonthly?: any[];
   twData?: any[];
+  jortt?: any;
 }): React.JSX.Element;
 
 export default function FinanceDashboard(props: {
