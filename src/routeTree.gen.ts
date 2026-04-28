@@ -17,6 +17,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as AccountingRouteImport } from './routes/accounting'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PillarsMonthlyOverviewRouteImport } from './routes/pillars.monthly-overview'
+import { Route as PillarsMarginPerMarketRouteImport } from './routes/pillars.margin-per-market'
+import { Route as PillarsForecastRouteImport } from './routes/pillars.forecast'
+import { Route as PillarsDailyPnlRouteImport } from './routes/pillars.daily-pnl'
+import { Route as PillarsBalanceSheetRouteImport } from './routes/pillars.balance-sheet'
 import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
@@ -69,6 +74,31 @@ const AccountingRoute = AccountingRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PillarsMonthlyOverviewRoute = PillarsMonthlyOverviewRouteImport.update({
+  id: '/pillars/monthly-overview',
+  path: '/pillars/monthly-overview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PillarsMarginPerMarketRoute = PillarsMarginPerMarketRouteImport.update({
+  id: '/pillars/margin-per-market',
+  path: '/pillars/margin-per-market',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PillarsForecastRoute = PillarsForecastRouteImport.update({
+  id: '/pillars/forecast',
+  path: '/pillars/forecast',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PillarsDailyPnlRoute = PillarsDailyPnlRouteImport.update({
+  id: '/pillars/daily-pnl',
+  path: '/pillars/daily-pnl',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PillarsBalanceSheetRoute = PillarsBalanceSheetRouteImport.update({
+  id: '/pillars/balance-sheet',
+  path: '/pillars/balance-sheet',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthLogoutRoute = AuthLogoutRouteImport.update({
@@ -150,6 +180,11 @@ export interface FileRoutesByFullPath {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
+  '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
+  '/pillars/forecast': typeof PillarsForecastRoute
+  '/pillars/margin-per-market': typeof PillarsMarginPerMarketRoute
+  '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
@@ -173,6 +208,11 @@ export interface FileRoutesByTo {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
+  '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
+  '/pillars/forecast': typeof PillarsForecastRoute
+  '/pillars/margin-per-market': typeof PillarsMarginPerMarketRoute
+  '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
@@ -197,6 +237,11 @@ export interface FileRoutesById {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
+  '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
+  '/pillars/forecast': typeof PillarsForecastRoute
+  '/pillars/margin-per-market': typeof PillarsMarginPerMarketRoute
+  '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
@@ -222,6 +267,11 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/pillars/balance-sheet'
+    | '/pillars/daily-pnl'
+    | '/pillars/forecast'
+    | '/pillars/margin-per-market'
+    | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
@@ -245,6 +295,11 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/pillars/balance-sheet'
+    | '/pillars/daily-pnl'
+    | '/pillars/forecast'
+    | '/pillars/margin-per-market'
+    | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
@@ -268,6 +323,11 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/pillars/balance-sheet'
+    | '/pillars/daily-pnl'
+    | '/pillars/forecast'
+    | '/pillars/margin-per-market'
+    | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
     | '/api/jortt/callback'
@@ -292,6 +352,11 @@ export interface RootRouteChildren {
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
+  PillarsBalanceSheetRoute: typeof PillarsBalanceSheetRoute
+  PillarsDailyPnlRoute: typeof PillarsDailyPnlRoute
+  PillarsForecastRoute: typeof PillarsForecastRoute
+  PillarsMarginPerMarketRoute: typeof PillarsMarginPerMarketRoute
+  PillarsMonthlyOverviewRoute: typeof PillarsMonthlyOverviewRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
   ApiPublicEnvCheckRoute: typeof ApiPublicEnvCheckRoute
@@ -356,6 +421,41 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pillars/monthly-overview': {
+      id: '/pillars/monthly-overview'
+      path: '/pillars/monthly-overview'
+      fullPath: '/pillars/monthly-overview'
+      preLoaderRoute: typeof PillarsMonthlyOverviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pillars/margin-per-market': {
+      id: '/pillars/margin-per-market'
+      path: '/pillars/margin-per-market'
+      fullPath: '/pillars/margin-per-market'
+      preLoaderRoute: typeof PillarsMarginPerMarketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pillars/forecast': {
+      id: '/pillars/forecast'
+      path: '/pillars/forecast'
+      fullPath: '/pillars/forecast'
+      preLoaderRoute: typeof PillarsForecastRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pillars/daily-pnl': {
+      id: '/pillars/daily-pnl'
+      path: '/pillars/daily-pnl'
+      fullPath: '/pillars/daily-pnl'
+      preLoaderRoute: typeof PillarsDailyPnlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pillars/balance-sheet': {
+      id: '/pillars/balance-sheet'
+      path: '/pillars/balance-sheet'
+      fullPath: '/pillars/balance-sheet'
+      preLoaderRoute: typeof PillarsBalanceSheetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/logout': {
@@ -491,6 +591,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
+  PillarsBalanceSheetRoute: PillarsBalanceSheetRoute,
+  PillarsDailyPnlRoute: PillarsDailyPnlRoute,
+  PillarsForecastRoute: PillarsForecastRoute,
+  PillarsMarginPerMarketRoute: PillarsMarginPerMarketRoute,
+  PillarsMonthlyOverviewRoute: PillarsMonthlyOverviewRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
   ApiPublicEnvCheckRoute: ApiPublicEnvCheckRoute,
