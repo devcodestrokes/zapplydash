@@ -53,6 +53,7 @@ function MonthlyOverviewPage() {
   const opexByMonth = Array.isArray(jorttObj?.opexByMonth) && jorttObj.opexByMonth.length > 0 ? jorttObj.opexByMonth : null;
   const opexDetail = jorttObj?.opexDetail ?? null;
   const jorttLive = !!(jorttObj?.live);
+  const deniedScopes = Array.isArray(jorttObj?.deniedScopes) ? jorttObj.deniedScopes : [];
   const shopifyMonthly = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
   const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
   const shopifyLive = shopifyMonthly.length > 0;
@@ -65,6 +66,7 @@ function MonthlyOverviewPage() {
             opexByMonth={opexByMonth}
             opexDetail={opexDetail}
             jorttLive={jorttLive}
+            deniedScopes={deniedScopes}
             shopifyMonthly={shopifyMonthly}
             twData={twData}
           />
