@@ -253,14 +253,13 @@ function DailyPnlPage() {
                           {fmtMoney(r.grossProfit, r.currency)}
                         </td>
                         <td
-                          className={cn(
-                            "px-3 py-3 text-right font-semibold",
+                          className={`px-3 py-3 text-right font-semibold ${
                             r.netProfit == null
                               ? ""
                               : netPositive
                               ? "text-emerald-600"
                               : "text-red-600"
-                          )}
+                          }`}
                         >
                           {fmtMoney(r.netProfit, r.currency)}
                         </td>
