@@ -488,12 +488,12 @@ export async function fetchTripleWhale(
           uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
           // Subscription metrics
           subRevenue:        moneyMetric("subscriptionSales", "recurringRevenue", "subscriptionRevenue"),
-          subOrders:         twMetric(m, "subscriptionOrders"),
-          activeSubscribers: twMetric(m, "activeSubscribers", "subscriptionActive"),
-          newSubscribers:    twMetric(m, "newSubscribers", "subscriptionStarted", "subscriptionNew"),
-          cancelledSubs:     twMetric(m, "cancelledSubscribers", "subscriptionCancelled", "subscriptionChurned"),
+          subOrders:         metric("subscriptionOrders"),
+          activeSubscribers: metric("activeSubscribers", "subscriptionActive"),
+          newSubscribers:    metric("newSubscribers", "subscriptionStarted", "subscriptionNew"),
+          cancelledSubs:     metric("cancelledSubscribers", "subscriptionCancelled", "subscriptionChurned"),
           mrr:               moneyMetric("mrr", "monthlyRecurringRevenue"),
-          churnRate:         twMetric(m, "subscriptionChurnRate", "churnRate"),
+          churnRate:         metric("subscriptionChurnRate", "churnRate"),
         };
 
         const hasMetrics = Array.isArray(m) && m.length > 0;
