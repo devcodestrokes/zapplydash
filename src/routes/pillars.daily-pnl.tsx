@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData, getTripleWhaleRange } from "@/server/dashboard.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pillars/daily-pnl")({
   head: () => ({ meta: [{ title: "Daily P&L — Zapply" }] }),
