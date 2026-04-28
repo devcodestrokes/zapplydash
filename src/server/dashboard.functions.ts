@@ -1,6 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { readCacheKeys, ageMinutes } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
+import { fetchTripleWhale } from "./fetchers.server";
+
+export const getTripleWhaleRange = createServerFn({ method: "POST" })
+  .inputValidator((input: { from: string; to: string }) => input)
+  .handler(async ({ data }) => {
+    try {
+      const rows = await fetchTripleWhale(data.from, data.to);
+      return { rows: rows ?? [], error: null as string | null };
+    } catch (err: any) {
+      console.error("getTripleWhaleRange failed:", err?.message);
+      return { rows: [], error: "Failed to load Triple Whale data" };
+    }
+  });
 
 function getConnections(): Record<string, string> {
   const connections: Record<string, string> = {};
