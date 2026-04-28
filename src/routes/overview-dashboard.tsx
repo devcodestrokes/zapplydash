@@ -267,6 +267,9 @@ function DateRangeFilter({
 }) {
   const navigate = useNavigate({ from: "/overview-dashboard" });
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Draft state — selections do NOT trigger fetches until Apply is clicked
+  const [draftPreset, setDraftPreset] = useState<Preset>(preset);
   const [draftFrom, setDraftFrom] = useState<Date | undefined>(
     from ? new Date(from) : undefined
   );
@@ -274,22 +277,42 @@ function DateRangeFilter({
     to ? new Date(to) : undefined
   );
 
-  const setPreset = (p: Preset) => {
-    navigate({
-      search: (prev: SearchParams) => ({ ...prev, preset: p, from: "", to: "" }),
-    });
-  };
+  // Sync drafts when URL changes externally (e.g. back/forward)
+  useEffect(() => {
+    setDraftPreset(preset);
+    setDraftFrom(from ? new Date(from) : undefined);
+    setDraftTo(to ? new Date(to) : undefined);
+  }, [preset, from, to]);
 
-  const applyCustom = () => {
-    if (!draftFrom || !draftTo) return;
-    navigate({
-      search: (prev: SearchParams) => ({
-        ...prev,
-        preset: "custom" as const,
-        from: iso(draftFrom),
-        to: iso(draftTo),
-      }),
-    });
+  const dirty =
+    draftPreset !== preset ||
+    (draftPreset === "custom" &&
+      (!draftFrom ||
+        !draftTo ||
+        iso(draftFrom) !== from ||
+        iso(draftTo) !== to));
+
+  const apply = () => {
+    if (draftPreset === "custom") {
+      if (!draftFrom || !draftTo) return;
+      navigate({
+        search: (prev: SearchParams) => ({
+          ...prev,
+          preset: "custom" as const,
+          from: iso(draftFrom),
+          to: iso(draftTo),
+        }),
+      });
+    } else {
+      navigate({
+        search: (prev: SearchParams) => ({
+          ...prev,
+          preset: draftPreset,
+          from: "",
+          to: "",
+        }),
+      });
+    }
     setPickerOpen(false);
   };
 
@@ -299,10 +322,10 @@ function DateRangeFilter({
         {PRESET_BUTTONS.map((b) => (
           <button
             key={b.key}
-            onClick={() => setPreset(b.key)}
+            onClick={() => setDraftPreset(b.key)}
             className={cn(
               "rounded-md px-2.5 py-1 text-[12px] font-medium transition",
-              preset === b.key
+              draftPreset === b.key
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground"
             )}
@@ -317,14 +340,15 @@ function DateRangeFilter({
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setDraftPreset("custom")}
             className={cn(
               "h-8 gap-1.5 text-[12px]",
-              preset === "custom" && "border-foreground"
+              draftPreset === "custom" && "border-foreground"
             )}
           >
             <CalendarIcon className="h-3.5 w-3.5" />
-            {preset === "custom"
-              ? `${from} → ${to}`
+            {draftPreset === "custom" && draftFrom && draftTo
+              ? `${iso(draftFrom)} → ${iso(draftTo)}`
               : "Custom range"}
           </Button>
         </PopoverTrigger>
@@ -337,6 +361,7 @@ function DateRangeFilter({
               mode="range"
               selected={{ from: draftFrom, to: draftTo }}
               onSelect={(r: any) => {
+                setDraftPreset("custom");
                 setDraftFrom(r?.from);
                 setDraftTo(r?.to);
               }}
@@ -350,19 +375,24 @@ function DateRangeFilter({
                 size="sm"
                 onClick={() => setPickerOpen(false)}
               >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={applyCustom}
-                disabled={!draftFrom || !draftTo}
-              >
-                Apply
+                Close
               </Button>
             </div>
           </div>
         </PopoverContent>
       </Popover>
+
+      <Button
+        size="sm"
+        onClick={apply}
+        disabled={
+          !dirty || (draftPreset === "custom" && (!draftFrom || !draftTo))
+        }
+        className="h-8 gap-1.5 text-[12px]"
+      >
+        <Check className="h-3.5 w-3.5" />
+        Apply
+      </Button>
     </div>
   );
 }
