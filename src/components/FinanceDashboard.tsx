@@ -896,19 +896,29 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
       </div>
 
       {/* Market cards */}
-      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {sorted.map(m => (
-          <Card key={m.code} className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[20px]">{m.flag ?? m.code}</span>
-              <span className={`text-[10px] font-medium ${m.contributionMargin != null ? (m.contributionMargin >= 30 ? "text-emerald-600" : m.contributionMargin >= 20 ? "text-neutral-600" : "text-amber-600") : "text-neutral-400"}`}>
-                {m.contributionMargin != null ? `${m.contributionMargin}%` : "—"}
-              </span>
-            </div>
-            <div className="mt-2 text-[11px] font-medium text-neutral-500">{m.name ?? m.code}</div>
-            <div className="mt-1 text-[16px] font-semibold tabular-nums">€{(m.revenue / 1000).toFixed(1)}k</div>
-          </Card>
-        ))}
+      <section className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+        {sorted.map(m => {
+          const cm = m.contributionMargin;
+          const cmClass = cm == null
+            ? "text-neutral-400"
+            : cm >= 30 ? "text-emerald-600"
+            : cm >= 20 ? "text-neutral-600"
+            : "text-amber-600";
+          return (
+            <Card key={m.code} className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="text-[15px] font-semibold tracking-tight">{m.code}</div>
+                <span className={`text-[11px] font-medium tabular-nums ${cmClass}`}>
+                  {cm != null ? `${cm}%` : "—"}
+                </span>
+              </div>
+              <div className="mt-2 text-[12px] text-neutral-500">{m.name ?? m.code}</div>
+              <div className="mt-2 text-[20px] font-semibold tabular-nums tracking-tight">
+                €{(m.revenue / 1000).toFixed(1)}k
+              </div>
+            </Card>
+          );
+        })}
       </section>
 
       {/* Main markets table */}
@@ -916,7 +926,10 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
         <div className="border-b border-neutral-100 px-5 py-4">
           <div className="text-[13px] font-semibold">Full market breakdown</div>
           <div className="text-[12px] text-neutral-400">
-            Ad spend allocation method: <span className="font-medium capitalize">{allocation}</span>
+            Ad spend allocation method:{" "}
+            <span className="font-medium">
+              {allocation === "revenue-weighted" ? "Revenue-Weighted" : allocation === "direct" ? "Direct targeting" : "TW attribution"}
+            </span>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -939,36 +952,36 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
                 const pct = (m.revenue / maxRev) * 100;
                 return (
                   <tr key={m.code} className={i !== sorted.length - 1 ? "border-b border-neutral-50 hover:bg-neutral-50/50" : "hover:bg-neutral-50/50"}>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span>{m.flag}</span>
-                        <span className="font-medium">{m.name}</span>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] bg-neutral-100 px-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-500">
+                          {m.code}
+                        </span>
+                        <span className="font-medium text-neutral-900">{m.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.orders}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">€{(m.revenue / m.orders).toFixed(0)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${m.adSpend.toLocaleString()}` : "—"}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">
+                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.orders}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{(m.revenue / m.orders).toFixed(0)}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${m.adSpend.toLocaleString()}` : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums">
                       {m.cac != null ? (
                         <span className={m.cac > 40 ? "text-rose-600 font-medium" : m.cac > 30 ? "text-amber-600" : "text-neutral-900"}>
                           €{m.cac.toFixed(2)}
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums">
                       {m.contributionMargin != null ? (
                         <span className={m.contributionMargin >= 30 ? "text-emerald-600 font-medium" : m.contributionMargin >= 20 ? "text-neutral-900" : "text-amber-600 font-medium"}>
                           {m.contributionMargin}%
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1 w-20 overflow-hidden rounded-full bg-neutral-100">
-                          <div className="h-full rounded-full bg-neutral-900" style={{ width: `${pct}%` }} />
-                        </div>
+                    <td className="px-5 py-3.5">
+                      <div className="h-[3px] w-32 overflow-hidden rounded-full bg-neutral-100">
+                        <div className="h-full rounded-full bg-neutral-900" style={{ width: `${pct}%` }} />
                       </div>
                     </td>
                   </tr>
