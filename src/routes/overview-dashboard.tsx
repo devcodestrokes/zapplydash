@@ -605,6 +605,70 @@ function DashboardBody({
   const fmtCurrency = makeFmtCurrency(fxRate, symbol);
   const fmtCurrency2 = makeFmtCurrency2(fxRate, symbol);
 
+  // ---- Subscriptions: Juo (NL) + Loop (UK/US/EU) ----
+  type SubRow = {
+    market: string;
+    flag?: string;
+    platform: "juo" | "loop";
+    mrr?: number | null;          // in EUR after conversion
+    activeSubs?: number | null;
+    pausedSubs?: number | null;
+    canceledSubs?: number | null;
+    totalFetched?: number | null;
+    newThisMonth?: number | null;
+    churnedThisMonth?: number | null;
+    arpu?: number | null;          // in EUR after conversion
+    churnRate?: number | null;
+    currency?: string;
+  };
+  const [subRows, setSubRows] = useState<SubRow[]>([]);
+  // EUR→X rates so we can normalise GBP/USD MRR to EUR before display conversion
+  const [eurRates, setEurRates] = useState<Record<string, number>>({ EUR: 1 });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("https://api.frankfurter.dev/v1/latest?base=EUR&symbols=GBP,USD")
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const r = d?.rates ?? {};
+        setEurRates({ EUR: 1, GBP: r.GBP ?? 1, USD: r.USD ?? 1 });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDashboardData()
+      .then((d: any) => {
+        if (cancelled) return;
+        const rows: SubRow[] = [];
+        const juo = d?.juo;
+        if (Array.isArray(juo)) {
+          for (const r of juo) rows.push({ ...r, platform: "juo" });
+        }
+        const loop = d?.loop;
+        if (Array.isArray(loop)) {
+          for (const r of loop) rows.push({ ...r, platform: "loop" });
+        }
+        setSubRows(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Convert any row's local-currency money to EUR
+  const toEur = (val: number | null | undefined, cur?: string) => {
+    if (typeof val !== "number" || !Number.isFinite(val)) return null;
+    const rate = eurRates[cur || "EUR"] ?? 1;
+    return rate ? val / rate : val;
+  };
+
   const liveRows = tw.filter((r) => r.live);
   const hasData = liveRows.length > 0;
 
