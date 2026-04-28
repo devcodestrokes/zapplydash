@@ -381,6 +381,7 @@ export async function fetchTripleWhale(
         if (!res.ok) {
           const body = await res.text();
           console.error(`Triple Whale ${market} ${res.status}:`, body.slice(0, 200));
+          if (progressKey) markStore(progressKey, market, "error");
           return { market, flag, live: false };
         }
 
@@ -413,15 +414,19 @@ export async function fetchTripleWhale(
         };
 
         const hasData = Object.values(row).some((v) => typeof v === "number" && (v as number) !== 0);
+        if (progressKey) markStore(progressKey, market, hasData ? "done" : "error");
         if (!hasData) return { market, flag, live: false };
 
         return { ...row, live: true };
       } catch (err: any) {
         console.error(`Triple Whale ${market}:`, err.message);
+        if (progressKey) markStore(progressKey, market, "error");
         return { market, flag, live: false };
       }
     })
   );
+
+  if (progressKey) finishProgress(progressKey);
 
   const hasAnyLive = results.some((r) => r.live);
   return hasAnyLive ? results : null;
