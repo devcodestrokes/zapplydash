@@ -946,12 +946,14 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
           const cmClass = cm == null
             ? "text-neutral-400"
             : cm >= 30 ? "text-emerald-600"
-            : cm >= 20 ? "text-neutral-600"
-            : "text-amber-600";
+            : cm >= 20 ? "text-amber-600"
+            : "text-rose-600";
+          // Map "UK" → "GB" for display to match ISO country codes
+          const displayCode = m.code === "UK" ? "GB" : m.code;
           return (
             <Card key={m.code} className="p-5">
               <div className="flex items-start justify-between">
-                <div className="text-[15px] font-semibold tracking-tight">{m.code}</div>
+                <div className="text-[15px] font-semibold tracking-tight text-neutral-900">{displayCode}</div>
                 <span className={`text-[11px] font-medium tabular-nums ${cmClass}`}>
                   {cm != null ? `${cm}%` : "—"}
                 </span>
