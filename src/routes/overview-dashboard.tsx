@@ -183,6 +183,8 @@ function OverviewDashboardPage() {
   const [tw, setTw] = useState<TWRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [currency, setCurrency] = useState<CurrencyCode>("EUR");
+  const [fxRate, setFxRate] = useState<number>(1);
   const [progress, setProgress] = useState<{
     total: number;
     fetched: number;
@@ -190,6 +192,26 @@ function OverviewDashboardPage() {
     stores: Array<{ market: string; flag: string; status: "pending" | "done" | "error" }>;
     done: boolean;
   } | null>(null);
+
+  // Fetch EUR -> selected currency rate (server data is already EUR)
+  useEffect(() => {
+    if (currency === "EUR") {
+      setFxRate(1);
+      return;
+    }
+    let cancelled = false;
+    fetch(`https://api.frankfurter.app/latest?from=EUR&to=${currency}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const rate = d?.rates?.[currency];
+        if (typeof rate === "number" && Number.isFinite(rate)) setFxRate(rate);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currency]);
 
   useEffect(() => {
     if (!user) return;
