@@ -274,6 +274,7 @@ function OverviewDashboardPage() {
             from={range.from}
             to={range.to}
           />
+          <CurrencySelect value={currency} onChange={setCurrency} />
           {isRefreshing && (
             <div className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
