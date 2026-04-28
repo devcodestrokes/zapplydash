@@ -57,8 +57,6 @@ export const getTripleWhaleRange = createServerFn({ method: "POST" })
             ? "Triple Whale is taking too long. Please try again."
             : "Failed to load Triple Whale data",
         };
-        // Cache failures briefly so we don't hammer a broken upstream
-        rangeCache.set(key, { ...result, fetchedAt: Date.now() - (RANGE_TTL_MS - 30_000) });
         return result;
       } finally {
         inflight.delete(key);

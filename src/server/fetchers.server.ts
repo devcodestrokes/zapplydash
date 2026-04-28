@@ -373,8 +373,8 @@ export async function fetchTripleWhale(
         const timer = setTimeout(() => ctrl.abort(), 20_000); // 20s per store
         const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
           method: "POST",
-          headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ shopDomain: shop, period: { start, end, todayHour: tripleWhaleTodayHour() } }),
+          headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
           signal: ctrl.signal,
         }).finally(() => clearTimeout(timer));
 
@@ -413,9 +413,9 @@ export async function fetchTripleWhale(
           uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
         };
 
-        const hasData = Object.values(row).some((v) => typeof v === "number" && (v as number) !== 0);
-        if (progressKey) markStore(progressKey, market, hasData ? "done" : "error");
-        if (!hasData) return { market, flag, live: false };
+        const hasMetrics = Array.isArray(m) && m.length > 0;
+        if (progressKey) markStore(progressKey, market, hasMetrics ? "done" : "error");
+        if (!hasMetrics) return { market, flag, live: false };
 
         return { ...row, live: true };
       } catch (err: any) {
