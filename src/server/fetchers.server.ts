@@ -324,6 +324,45 @@ function twMetric(metrics: any[], id: string): number | null {
   return toNumber(m?.values?.current);
 }
 
+const MARKET_CURRENCY: Record<string, string> = {
+  NL: "EUR",
+  UK: "GBP",
+  US: "USD",
+  EU: "EUR",
+};
+
+const fxCache = new Map<string, Promise<number>>();
+
+async function getEurRate(currency: string, start: string, end: string): Promise<number> {
+  if (currency === "EUR") return 1;
+  const key = `${currency}|${start}|${end}`;
+  const cached = fxCache.get(key);
+  if (cached) return cached;
+
+  const task = (async () => {
+    try {
+      const path = start === end ? start : `${start}..${end}`;
+      const res = await fetch(`https://api.frankfurter.app/${path}?from=${currency}&to=EUR`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rates = data.rates ?? {};
+        const values = Object.values(rates)
+          .map((r: any) => toNumber(r?.EUR))
+          .filter((n): n is number => typeof n === "number");
+        if (values.length > 0) return values.reduce((a, b) => a + b, 0) / values.length;
+      }
+    } catch (err: any) {
+      console.warn(`FX ${currency}->EUR failed:`, err?.message);
+    }
+    return 1;
+  })();
+
+  fxCache.set(key, task);
+  return task;
+}
+
 function tripleWhaleTodayHour(): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Amsterdam",
@@ -387,30 +426,46 @@ export async function fetchTripleWhale(
 
         const data = await res.json();
         const m = data.metrics ?? [];
+        const sourceCurrency = MARKET_CURRENCY[market] ?? "EUR";
+        const eurRate = await getEurRate(sourceCurrency, start, end);
+        const metric = (...ids: string[]) => {
+          for (const id of ids) {
+            const value = twMetric(m, id);
+            if (value != null) return value;
+          }
+          return null;
+        };
+        const moneyMetric = (...ids: string[]) => {
+          const value = metric(...ids);
+          return value == null ? null : value * eurRate;
+        };
 
         // All IDs confirmed from live API (698 metrics) — April 2026
         const row = {
           market, flag,
-          revenue:         twMetric(m, "grossSales") ?? twMetric(m, "sales"),  // Gross Sales
-          // Total Sales — matches Triple Whale's "Total Sales" widget exactly.
-          // TW's `sales` metric = Gross + Shipping + Taxes − Discounts − Refunds (Shopify formula).
-          netRevenue:      twMetric(m, "sales") ?? twMetric(m, "netSales"),
-          newCustomerRev:  twMetric(m, "newCustomerSales"),     // New Customer Revenue
-          adSpend:         twMetric(m, "blendedAds"),           // Total blended ad spend
-          facebookSpend:   twMetric(m, "facebookAds"),          // Facebook / Meta
-          googleSpend:     twMetric(m, "googleAds"),            // Google Ads
+          currency: "EUR",
+          sourceCurrency,
+          fxRate: eurRate,
+          revenue:         moneyMetric("grossSales", "sales"),  // Gross Sales
+          // Triple Whale API title for `netSales` is "Total Sales".
+          // Formula: Gross Sales + Shipping + Taxes − Discounts − Refunded Sales − Refunded Shipping − Refunded Taxes.
+          netRevenue:      moneyMetric("netSales", "sales"),
+          newCustomerRev:  moneyMetric("newCustomerSales"),     // New Customer Revenue
+          adSpend:         moneyMetric("blendedAds"),           // Total blended ad spend
+          facebookSpend:   moneyMetric("facebookAds"),          // Facebook / Meta
+          googleSpend:     moneyMetric("googleAds"),            // Google Ads
           roas:            twMetric(m, "roas"),                  // Blended ROAS
           ncRoas:          twMetric(m, "newCustomersRoas"),     // New Customer ROAS
           fbRoas:          twMetric(m, "facebookRoas"),         // Facebook ROAS
           googleRoas:      twMetric(m, "googleRoas"),           // Google ROAS
           mer:             twMetric(m, "mer"),                   // Marketing Efficiency Ratio
-          ncpa:            twMetric(m, "newCustomersCpa"),      // New Customer CPA
+          ncpa:            moneyMetric("newCustomersCpa"),      // New Customer CPA
           ltvCpa:          twMetric(m, "ltvCpa"),                // LTV:CPA ratio
-          aov:             twMetric(m, "shopifyAov"),            // True AOV
+          aov:             moneyMetric("shopifyAov"),            // True AOV
           orders:          twMetric(m, "shopifyOrders"),         // Total orders
-          grossProfit:     twMetric(m, "grossProfit"),           // Gross Profit
-          netProfit:       twMetric(m, "totalNetProfit"),        // Net Profit (after all costs)
-          cogs:            twMetric(m, "cogs"),                  // Cost of Goods Sold
+          grossProfit:     moneyMetric("grossProfit"),           // Gross Profit
+          netProfit:       moneyMetric("totalNetProfit"),        // Net Profit (after all costs)
+          cogs:            moneyMetric("cogs"),                  // Cost of Goods Sold
           newCustomersPct: twMetric(m, "newCustomersPercent"),  // % new customers
           uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
         };
