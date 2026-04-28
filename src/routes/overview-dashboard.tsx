@@ -682,11 +682,25 @@ function DashboardBody({
       sub: "Blended · all channels",
       icon: Megaphone,
       accent: "text-rose-600",
-      breakdown: liveRows.map((r) => ({
-        market: r.market,
-        flag: r.flag,
-        value: fmtCurrency(r.adSpend ?? null),
-      })),
+      breakdown: liveRows.map((r) => {
+        const platforms = [
+          { key: "Meta", value: r.facebookSpend },
+          { key: "Google", value: r.googleSpend },
+          { key: "TikTok", value: r.tiktokSpend },
+          { key: "Snapchat", value: r.snapchatSpend },
+          { key: "Pinterest", value: r.pinterestSpend },
+          { key: "Bing", value: r.bingSpend },
+          { key: "Klaviyo", value: r.klaviyoSpend },
+        ]
+          .filter((p) => typeof p.value === "number" && Number.isFinite(p.value) && (p.value as number) > 0)
+          .map((p) => ({ market: p.key, value: fmtCurrency(p.value ?? null) }));
+        return {
+          market: r.market,
+          flag: r.flag,
+          value: fmtCurrency(r.adSpend ?? null),
+          children: platforms,
+        };
+      }),
     },
     {
       label: "AOV",
