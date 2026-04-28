@@ -79,10 +79,28 @@ type TWRow = {
   roas?: number | null;
 };
 
-const fmtCurrency = (n: number | null | undefined) =>
-  typeof n === "number" && Number.isFinite(n)
-    ? `€${Math.round(n).toLocaleString()}`
-    : "—";
+const CURRENCIES = [
+  { code: "EUR", symbol: "€", flag: "🇪🇺" },
+  { code: "USD", symbol: "$", flag: "🇺🇸" },
+  { code: "GBP", symbol: "£", flag: "🇬🇧" },
+  { code: "AUD", symbol: "A$", flag: "🇦🇺" },
+  { code: "CAD", symbol: "C$", flag: "🇨🇦" },
+  { code: "CHF", symbol: "CHF ", flag: "🇨🇭" },
+  { code: "JPY", symbol: "¥", flag: "🇯🇵" },
+  { code: "SEK", symbol: "kr ", flag: "🇸🇪" },
+] as const;
+type CurrencyCode = (typeof CURRENCIES)[number]["code"];
+
+const makeFmtCurrency =
+  (rate: number, symbol: string) => (n: number | null | undefined) =>
+    typeof n === "number" && Number.isFinite(n)
+      ? `${symbol}${Math.round(n * rate).toLocaleString()}`
+      : "—";
+const makeFmtCurrency2 =
+  (rate: number, symbol: string) => (n: number | null | undefined) =>
+    typeof n === "number" && Number.isFinite(n)
+      ? `${symbol}${(n * rate).toFixed(2)}`
+      : "—";
 const fmtNumber = (n: number | null | undefined) =>
   typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
 const fmtMultiplier = (n: number | null | undefined) =>
