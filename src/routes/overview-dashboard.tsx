@@ -1,5 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
 import {
   DollarSign,
   ShoppingCart,
@@ -11,13 +14,41 @@ import {
   Package,
   ChevronDown,
   ChevronRight,
+  CalendarIcon,
+  Loader2,
 } from "lucide-react";
-import { getDashboardData } from "@/server/dashboard.functions";
+import { getTripleWhaleRange } from "@/server/dashboard.functions";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { useInstantDashboardData } from "@/components/dashboard/useInstantDashboardData";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+
+const PRESETS = [
+  "today",
+  "yesterday",
+  "7d",
+  "30d",
+  "mtd",
+  "last_month",
+  "90d",
+  "ytd",
+  "custom",
+] as const;
+
+const searchSchema = z.object({
+  preset: fallback(z.enum(PRESETS), "mtd").default("mtd"),
+  from: fallback(z.string(), "").default(""),
+  to: fallback(z.string(), "").default(""),
+});
 
 export const Route = createFileRoute("/overview-dashboard")({
+  validateSearch: zodValidator(searchSchema),
   head: () => ({
     meta: [
       { title: "Overview Dashboard — Zapply" },
@@ -26,6 +57,8 @@ export const Route = createFileRoute("/overview-dashboard")({
   }),
   component: OverviewDashboardPage,
 });
+
+type Preset = (typeof PRESETS)[number];
 
 type TWRow = {
   market: string;
@@ -40,37 +73,118 @@ type TWRow = {
   adSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
-  mer?: number | null;
-  ncpa?: number | null;
-  ltvCpa?: number | null;
 };
 
 const fmtCurrency = (n: number | null | undefined) =>
   typeof n === "number" && Number.isFinite(n)
     ? `€${Math.round(n).toLocaleString()}`
     : "—";
-
 const fmtNumber = (n: number | null | undefined) =>
   typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
-
 const fmtMultiplier = (n: number | null | undefined) =>
   typeof n === "number" && Number.isFinite(n) ? `${n.toFixed(2)}×` : "—";
 
 const sumField = (rows: TWRow[], field: keyof TWRow): number | null => {
-  const live = rows.filter((r) => r.live);
-  const vals = live
+  const vals = rows
+    .filter((r) => r.live)
     .map((r) => r[field])
     .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   if (vals.length === 0) return null;
   return vals.reduce((a, b) => a + b, 0);
 };
 
+const iso = (d: Date) => format(d, "yyyy-MM-dd");
+
+function resolveRange(
+  preset: Preset,
+  customFrom: string,
+  customTo: string
+): { from: string; to: string; label: string } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  switch (preset) {
+    case "today":
+      return { from: iso(today), to: iso(today), label: "Today" };
+    case "yesterday": {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      return { from: iso(y), to: iso(y), label: "Yesterday" };
+    }
+    case "7d": {
+      const f = new Date(today);
+      f.setDate(f.getDate() - 6);
+      return { from: iso(f), to: iso(today), label: "Last 7 days" };
+    }
+    case "30d": {
+      const f = new Date(today);
+      f.setDate(f.getDate() - 29);
+      return { from: iso(f), to: iso(today), label: "Last 30 days" };
+    }
+    case "90d": {
+      const f = new Date(today);
+      f.setDate(f.getDate() - 89);
+      return { from: iso(f), to: iso(today), label: "Last 90 days" };
+    }
+    case "mtd":
+      return {
+        from: iso(startOfMonth),
+        to: iso(today),
+        label: "Month to date",
+      };
+    case "last_month": {
+      const f = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const t = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: iso(f), to: iso(t), label: "Last month" };
+    }
+    case "ytd":
+      return { from: iso(startOfYear), to: iso(today), label: "Year to date" };
+    case "custom":
+      return {
+        from: customFrom || iso(startOfMonth),
+        to: customTo || iso(today),
+        label: "Custom range",
+      };
+  }
+}
+
 function OverviewDashboardPage() {
   const { user, loading } = useDashboardSession();
-  const fetchDashboard = useCallback(() => getDashboardData(), []);
-  const { data, isLoading: loadingData } = useInstantDashboardData<
-    Awaited<ReturnType<typeof getDashboardData>>
-  >("overview", fetchDashboard, !!user);
+  const search = Route.useSearch();
+  const range = useMemo(
+    () => resolveRange(search.preset, search.from, search.to),
+    [search.preset, search.from, search.to]
+  );
+
+  const [tw, setTw] = useState<TWRow[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    setLoadingData(true);
+    setErrorMsg(null);
+    getTripleWhaleRange({ data: { from: range.from, to: range.to } })
+      .then((res) => {
+        if (cancelled) return;
+        setTw((res.rows ?? []) as TWRow[]);
+        setErrorMsg(res.error);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setErrorMsg("Failed to load data");
+        setTw([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingData(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, range.from, range.to]);
 
   if (loading || !user) {
     return (
@@ -82,16 +196,175 @@ function OverviewDashboardPage() {
 
   return (
     <DashboardShell user={user} title="Overview Dashboard">
-      {loadingData || !data ? (
-        <div className="p-8 text-sm text-muted-foreground">Loading data…</div>
-      ) : (
-        <DashboardBody tw={(data.tripleWhale ?? []) as TWRow[]} />
-      )}
+      <div className="p-6 space-y-6">
+        <Header range={range} preset={search.preset} />
+        <DateRangeFilter
+          preset={search.preset}
+          from={range.from}
+          to={range.to}
+        />
+        {errorMsg && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {errorMsg}
+          </div>
+        )}
+        <DashboardBody tw={tw} loading={loadingData} />
+      </div>
     </DashboardShell>
   );
 }
 
-function DashboardBody({ tw }: { tw: TWRow[] }) {
+function Header({
+  range,
+  preset,
+}: {
+  range: { from: string; to: string; label: string };
+  preset: Preset;
+}) {
+  return (
+    <div>
+      <div className="text-[12px] font-medium text-muted-foreground">
+        Overview Dashboard
+      </div>
+      <h1 className="mt-1 text-[26px] font-semibold tracking-tight">
+        All stores at a glance
+      </h1>
+      <p className="mt-1 text-[13px] text-muted-foreground">
+        Aggregated KPIs from Triple Whale across every connected store, with
+        per-store breakdowns. Showing{" "}
+        <span className="font-medium text-foreground">
+          {range.label.toLowerCase()}
+        </span>{" "}
+        ({range.from} → {range.to}).
+        {preset === "custom" ? "" : ""}
+      </p>
+    </div>
+  );
+}
+
+const PRESET_BUTTONS: { key: Preset; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7d", label: "7D" },
+  { key: "30d", label: "30D" },
+  { key: "mtd", label: "MTD" },
+  { key: "last_month", label: "Last month" },
+  { key: "90d", label: "90D" },
+  { key: "ytd", label: "YTD" },
+];
+
+function DateRangeFilter({
+  preset,
+  from,
+  to,
+}: {
+  preset: Preset;
+  from: string;
+  to: string;
+}) {
+  const navigate = useNavigate({ from: "/overview-dashboard" });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftFrom, setDraftFrom] = useState<Date | undefined>(
+    from ? new Date(from) : undefined
+  );
+  const [draftTo, setDraftTo] = useState<Date | undefined>(
+    to ? new Date(to) : undefined
+  );
+
+  const setPreset = (p: Preset) => {
+    navigate({
+      search: (prev) => ({ ...prev, preset: p, from: "", to: "" }),
+    });
+  };
+
+  const applyCustom = () => {
+    if (!draftFrom || !draftTo) return;
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        preset: "custom",
+        from: iso(draftFrom),
+        to: iso(draftTo),
+      }),
+    });
+    setPickerOpen(false);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card p-1">
+        {PRESET_BUTTONS.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => setPreset(b.key)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[12px] font-medium transition",
+              preset === b.key
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+
+      <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-8 gap-1.5 text-[12px]",
+              preset === "custom" && "border-foreground"
+            )}
+          >
+            <CalendarIcon className="h-3.5 w-3.5" />
+            {preset === "custom"
+              ? `${from} → ${to}`
+              : "Custom range"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-3" align="start">
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">
+              Select start & end date
+            </div>
+            <Calendar
+              mode="range"
+              selected={{ from: draftFrom, to: draftTo }}
+              onSelect={(r: any) => {
+                setDraftFrom(r?.from);
+                setDraftTo(r?.to);
+              }}
+              numberOfMonths={2}
+              initialFocus
+              className={cn("p-0 pointer-events-auto")}
+            />
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPickerOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={applyCustom}
+                disabled={!draftFrom || !draftTo}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
   const liveRows = tw.filter((r) => r.live);
   const hasData = liveRows.length > 0;
 
@@ -106,24 +379,11 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
   const blendedRoas =
     totalRevenue && totalAdSpend ? totalRevenue / totalAdSpend : null;
 
-  const widgets: Array<{
-    key: keyof TWRow | "aov" | "roas";
-    label: string;
-    value: string;
-    sub?: string;
-    icon: any;
-    accent: string;
-    breakdown: Array<{
-      market: string;
-      flag?: string;
-      value: string;
-    }>;
-  }> = [
+  const widgets = [
     {
-      key: "revenue",
       label: "Revenue",
       value: fmtCurrency(totalRevenue),
-      sub: "All stores · selected period",
+      sub: "All stores · selected range",
       icon: DollarSign,
       accent: "text-emerald-600",
       breakdown: liveRows.map((r) => ({
@@ -133,10 +393,9 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "orders",
       label: "Orders",
       value: fmtNumber(totalOrders),
-      sub: "All stores · selected period",
+      sub: "All stores · selected range",
       icon: ShoppingCart,
       accent: "text-blue-600",
       breakdown: liveRows.map((r) => ({
@@ -146,7 +405,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "grossProfit",
       label: "Gross profit",
       value: fmtCurrency(totalGrossProfit),
       sub:
@@ -162,7 +420,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "cogs",
       label: "COGS",
       value: fmtCurrency(totalCogs),
       sub:
@@ -178,7 +435,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "netProfit",
       label: "Net profit",
       value: fmtCurrency(totalNetProfit),
       sub:
@@ -194,7 +450,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "adSpend",
       label: "Ad spend",
       value: fmtCurrency(totalAdSpend),
       sub: "Blended · all channels",
@@ -207,7 +462,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "aov",
       label: "AOV",
       value: typeof totalAov === "number" ? `€${totalAov.toFixed(2)}` : "—",
       sub: "Average order value",
@@ -221,7 +475,6 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
       })),
     },
     {
-      key: "roas",
       label: "ROAS",
       value: fmtMultiplier(blendedRoas),
       sub: "Blended return on ad spend",
@@ -235,35 +488,35 @@ function DashboardBody({ tw }: { tw: TWRow[] }) {
     },
   ];
 
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <div className="text-[12px] font-medium text-muted-foreground">
-          Overview Dashboard
+  if (loading && !hasData) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-12 text-center">
+        <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+        <div className="mt-2 text-sm text-muted-foreground">
+          Loading data for selected range…
         </div>
-        <h1 className="mt-1 text-[26px] font-semibold tracking-tight">
-          All stores at a glance
-        </h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Aggregated KPIs from Triple Whale across every connected store, with
-          per-store breakdowns.
-        </p>
       </div>
+    );
+  }
 
-      {!hasData && (
+  return (
+    <>
+      {!hasData && !loading && (
         <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          No live Triple Whale data available yet. Once the sync completes,
-          revenue, orders, profit and ad metrics for each store will appear
-          here.
+          No live Triple Whale data available for this range.
         </div>
       )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div
+        className={cn(
+          "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4",
+          loading && "opacity-60 transition-opacity"
+        )}
+      >
         {widgets.map((w) => (
           <KpiWidget key={w.label} widget={w} />
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -284,11 +537,9 @@ function KpiWidget({
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 transition hover:border-foreground/20">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
-          <Icon size={14} className={widget.accent} />
-          <span>{widget.label}</span>
-        </div>
+      <div className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+        <Icon size={14} className={widget.accent} />
+        <span>{widget.label}</span>
       </div>
       <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">
         {widget.value}
