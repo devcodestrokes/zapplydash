@@ -55,6 +55,13 @@ import {
   Truck,
   Zap,
   Sparkles,
+  Receipt,
+  Users2,
+  Banknote,
+  FileText,
+  Briefcase,
+  Building2,
+  Landmark,
 } from "lucide-react";
 
 /* =========================================================================
@@ -1284,11 +1291,148 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
   );
 };
 
+/* ============================= JORTT LIVE DATA SECTION ============================= */
+/* Surfaces all data fetched from Jortt across the granted scopes:
+   cash, AR, P&L, customers, invoices, expenses, payroll, estimates, bank accounts. */
+
+const JorttLiveSection = ({ jortt = null }: any = {}) => {
+  if (!jortt || !jortt.live) {
+    return (
+      <Card className="mt-3 p-5">
+        <div className="flex items-center gap-2">
+          <BrandIcon brand="jortt" size={16} />
+          <div className="text-[13px] font-semibold">Jortt — Live data</div>
+        </div>
+        <div className="mt-2 text-[12px] text-neutral-500">
+          Jortt did not return data yet. Trigger a sync or check granted scopes.
+        </div>
+      </Card>
+    );
+  }
+
+  const fmtEur = (n: number | null | undefined) =>
+    n == null || !Number.isFinite(n) ? "—" : `€${Math.round(n).toLocaleString()}`;
+
+  const tiles = [
+    { label: "Cash balance", value: fmtEur(jortt.cashBalance), sub: `${(jortt.bankAccounts?.length ?? 0)} bank accounts`, Icon: Banknote },
+    { label: "Accounts receivable", value: fmtEur(jortt.accountsReceivable), sub: `${jortt.unpaidInvoiceCount ?? 0} unpaid invoices`, Icon: Receipt },
+    { label: "Revenue (P&L)", value: fmtEur(jortt.plSummary?.revenue), sub: `${jortt.invoiceCount ?? 0} invoices`, Icon: FileText },
+    { label: "Costs (P&L)", value: fmtEur(jortt.plSummary?.costs), sub: `${jortt.expenseCount ?? 0} expenses`, Icon: Wallet },
+    { label: "Gross profit (P&L)", value: fmtEur(jortt.plSummary?.grossProfit), sub: "Revenue − costs", Icon: TrendingUp },
+    { label: "Customers", value: (jortt.customersCount ?? 0).toLocaleString(), sub: "Live from Jortt", Icon: Users2 },
+    { label: "Estimates", value: (jortt.estimatesCount ?? 0).toLocaleString(), sub: "Quotes / proposals", Icon: Briefcase },
+    { label: "Payroll entries", value: (jortt.payrollCount ?? 0).toLocaleString(), sub: "Loonjournaalposten", Icon: Landmark },
+  ];
+
+  const recentInvoices = Array.isArray(jortt.dashboardInvoices?.recent)
+    ? jortt.dashboardInvoices.recent.slice(0, 5)
+    : [];
+  const customers = Array.isArray(jortt.customers) ? jortt.customers.slice(0, 6) : [];
+  const banks = Array.isArray(jortt.bankAccounts) ? jortt.bankAccounts : [];
+
+  return (
+    <>
+      <Card className="mt-3 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BrandIcon brand="jortt" size={16} />
+            <div>
+              <div className="text-[13px] font-semibold">Jortt — Live data</div>
+              <div className="text-[12px] text-neutral-400">
+                {(jortt.grantedScopes?.length ?? 0)}/{(jortt.grantedScopes?.length ?? 0) + (jortt.deniedScopes?.length ?? 0)} scopes granted
+                {jortt.organization?.name ? ` · ${jortt.organization.name}` : ""}
+              </div>
+            </div>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">Live</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {tiles.map(({ label, value, sub, Icon }) => (
+            <div key={label} className="rounded-lg border border-neutral-200/70 p-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+                <Icon size={11} /> {label}
+              </div>
+              <div className="mt-1 text-[18px] font-semibold tabular-nums">{value}</div>
+              <div className="mt-0.5 text-[11px] text-neutral-500">{sub}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {(banks.length > 0 || customers.length > 0 || recentInvoices.length > 0) && (
+        <section className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {banks.length > 0 && (
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
+                <Banknote size={14} /> Bank accounts
+              </div>
+              <ul className="space-y-2">
+                {banks.slice(0, 6).map((b: any, i: number) => {
+                  const bal = parseFloat(String(b?.current_balance?.value ?? b?.balance?.value ?? b?.balance ?? "0"));
+                  return (
+                    <li key={b.id ?? i} className="flex items-center justify-between text-[12px]">
+                      <span className="truncate text-neutral-700">{b.name ?? b.iban ?? "Account"}</span>
+                      <span className="tabular-nums font-medium text-neutral-900">{Number.isFinite(bal) ? fmtEur(bal) : "—"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+
+          {customers.length > 0 && (
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
+                <Users2 size={14} /> Recent customers
+                <span className="ml-auto text-[11px] font-normal text-neutral-400">{jortt.customersCount} total</span>
+              </div>
+              <ul className="space-y-2">
+                {customers.map((c: any, i: number) => (
+                  <li key={c.id ?? i} className="flex items-center justify-between text-[12px]">
+                    <span className="truncate text-neutral-700">{c.company_name ?? c.name ?? c.email ?? "Customer"}</span>
+                    <span className="text-[11px] text-neutral-400">{c.country_code ?? c.country ?? ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          {recentInvoices.length > 0 && (
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
+                <FileText size={14} /> Recent invoices
+              </div>
+              <ul className="space-y-2">
+                {recentInvoices.map((inv: any, i: number) => {
+                  const amt = parseFloat(String(inv?.invoice_total_incl_vat?.value ?? inv?.invoice_total?.value ?? "0"));
+                  return (
+                    <li key={inv.id ?? i} className="flex items-center justify-between text-[12px]">
+                      <span className="truncate text-neutral-700">{inv.invoice_number ?? inv.id?.slice(0, 8) ?? "Invoice"}</span>
+                      <span className="tabular-nums font-medium text-neutral-900">{Number.isFinite(amt) ? fmtEur(amt) : "—"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
+        </section>
+      )}
+
+      {(jortt.deniedScopes?.length ?? 0) > 0 && (
+        <div className="mt-2 text-[11px] text-neutral-400">
+          Denied / unavailable scopes: {jortt.deniedScopes.join(", ")}
+        </div>
+      )}
+    </>
+  );
+};
+
 /* =========================================================================
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [] }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [], jortt = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
@@ -1401,6 +1545,9 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
 
       {/* OpEx breakdown — 5 categories */}
       <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} deniedScopes={deniedScopes} />
+
+      {/* Full Jortt live data — all granted scopes */}
+      <JorttLiveSection jortt={jortt} />
 
       {/* Month close status */}
       <Card className="mt-3 p-5">
@@ -1823,7 +1970,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={(liveData as any)?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={asArr<any>(liveData?.shopifyMonthly)} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={asArr<any>(liveData?.shopifyMonthly)} twData={twData} jortt={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
           {view === "balance" && <BalanceView jorttData={jorttObj} />}
           {view === "forecast" && <ForecastView />}
           {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
