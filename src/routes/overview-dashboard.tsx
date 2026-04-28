@@ -928,6 +928,25 @@ function DashboardBody({
           <KpiWidget key={w.label} widget={w} />
         ))}
       </div>
+
+      {hasData && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center gap-2">
+            <Repeat size={16} className="text-emerald-600" />
+            <h2 className="text-[15px] font-semibold tracking-tight">
+              Subscriptions
+            </h2>
+            <span className="text-[12px] text-muted-foreground">
+              · Triple Whale recurring metrics
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {subWidgets.map((w) => (
+              <KpiWidget key={w.label} widget={w} />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
