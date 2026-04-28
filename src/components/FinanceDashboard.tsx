@@ -1072,8 +1072,8 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
   }
   const current = data[data.length - 1];
   const prev = data[data.length - 2] ?? data[data.length - 1];
-  const totalCurrent = current.team + current.agencies + current.content + current.software + current.other;
-  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + prev.other;
+  const totalCurrent = current.team + current.agencies + current.content + current.software + (current.rent ?? 0) + current.other;
+  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + (prev.rent ?? 0) + prev.other;
   const totalDelta = ((totalCurrent - totalPrev) / totalPrev * 100);
 
   const categories = [
@@ -1081,12 +1081,13 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
     { key: "agencies", label: "Agencies", color: "#6366f1" },
     { key: "content", label: "Content samenwerkingen", color: "#f59e0b" },
     { key: "software", label: "Software", color: "#10b981" },
+    { key: "rent", label: "Rent & utilities", color: "#0ea5e9" },
     { key: "other", label: "Other costs", color: "#6b7280" },
   ];
 
   const donutData = categories.map(c => ({
     name: c.label,
-    value: current[c.key],
+    value: current[c.key] ?? 0,
     color: c.color,
     key: c.key,
   }));

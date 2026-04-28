@@ -325,27 +325,38 @@ function DailyPnlPage() {
     // OpEx from Jortt — current month total, prorated for the period
     const ym = new Date().toISOString().slice(0, 7);
     const monthRow: any =
-      jorttData?.opexByMonth?.find((r: any) => r.month === ym || r.ym === ym) ||
+      jorttData?.opexByMonth?.find((r: any) => r.ym === ym || r.month === ym) ||
       jorttData?.opexByMonth?.[jorttData.opexByMonth.length - 1] ||
       null;
-    const monthOpex = Number(monthRow?.opex || monthRow?.total || 0);
+    const monthOpex = Number(
+      monthRow?.total ??
+        monthRow?.opex ??
+        (Number(monthRow?.team || 0) +
+          Number(monthRow?.agencies || 0) +
+          Number(monthRow?.content || 0) +
+          Number(monthRow?.software || 0) +
+          Number(monthRow?.rent || 0) +
+          Number(monthRow?.other || 0))
+    );
     const today = new Date();
     const dayOfMonth = today.getUTCDate();
-    const daysInMonth = new Date(
-      today.getUTCFullYear(),
-      today.getUTCMonth() + 1,
-      0
-    ).getUTCDate();
     const opexFactor =
-      period === "mtd" ? dayOfMonth / daysInMonth : period === "wtd" ? 7 / daysInMonth : 1 / daysInMonth;
+      period === "mtd" ? 1 : period === "wtd" ? Math.min(dayOfMonth, 7) / Math.max(dayOfMonth, 1) : 1 / Math.max(dayOfMonth, 1);
+    const hasCategoryTotals = ["team", "software", "rent", "agencies", "content", "other"].some(
+      (key) => Number(monthRow?.[key] || 0) > 0
+    );
     const opexTotal = monthOpex * opexFactor;
-    const salaries = -Math.round(opexTotal * 0.5);
-    const software = -Math.round(opexTotal * 0.05);
-    const rent = -Math.round(opexTotal * 0.08);
-    const otherOpex = -Math.round(opexTotal * 0.37);
+    const salaries = -Math.round((hasCategoryTotals ? Number(monthRow?.team || 0) : monthOpex * 0.5) * opexFactor);
+    const software = -Math.round((hasCategoryTotals ? Number(monthRow?.software || 0) : monthOpex * 0.05) * opexFactor);
+    const rent = -Math.round((hasCategoryTotals ? Number(monthRow?.rent || 0) : monthOpex * 0.08) * opexFactor);
+    const otherOpex = -Math.round(
+      (hasCategoryTotals
+        ? Number(monthRow?.other || 0) + Number(monthRow?.agencies || 0) + Number(monthRow?.content || 0)
+        : monthOpex * 0.37) * opexFactor
+    );
 
     const netProfit = contributionMargin + salaries + software + rent + otherOpex;
-    const jorttLive = !!jorttData?.opexByMonth?.length;
+    const jorttLive = monthOpex > 0;
 
     return {
       grossRevenue,

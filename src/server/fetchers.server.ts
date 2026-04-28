@@ -1501,9 +1501,11 @@ const JORTT_CATEGORY_MAP: Record<string, string> = {
   "thor magis": "content", haec: "content", zadero: "content", remy: "content",
   software: "software", saas: "software", klaviyo: "software",
   "triple whale": "software", monday: "software", notion: "software",
+  huur: "rent", rent: "rent", utility: "rent", utilities: "rent", energie: "rent",
+  electricity: "rent", gas: "rent", water: "rent", internet: "rent", kantoor: "rent",
 };
 
-function categorise(name: string): "team" | "agencies" | "content" | "software" | "other" {
+function categorise(name: string): "team" | "agencies" | "content" | "software" | "rent" | "other" {
   const lower = (name ?? "").toLowerCase();
   for (const [kw, cat] of Object.entries(JORTT_CATEGORY_MAP)) {
     if (lower.includes(kw)) return cat as any;
@@ -1515,6 +1517,12 @@ function monthKey(dateStr: string): string {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+}
+
+function monthIsoKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 // Get an access_token for ONE scope (Jortt requires one scope per token).
@@ -1629,7 +1637,7 @@ export async function fetchJortt() {
   // 3. Expenses (real OpEx) — expenses:read (v3 endpoint)
   let expenses: any[] = [];
   if (tokens["expenses:read"]) {
-    expenses = await jorttPaginate(tokens["expenses:read"]!, "/v3/expenses?expense_type=cost", 20);
+    expenses = await jorttPaginate(tokens["expenses:read"]!, "/v3/expenses", 20);
   }
 
   // 4. Reports — reports:read
@@ -1708,33 +1716,39 @@ export async function fetchJortt() {
   // Expenses by month + OpEx breakdown from real expenses
   const expensesByMonth: Record<string, number> = {};
   // monthKey -> { team, agencies, content, software, other }
-  const opexBuckets: Record<string, { team: number; agencies: number; content: number; software: number; other: number }> = {};
+  const opexBuckets: Record<string, { ym: string; team: number; agencies: number; content: number; software: number; rent: number; other: number }> = {};
   // category -> name -> amount  (rolled-up detail items)
   const opexDetailMap: Record<string, Record<string, number>> = {
-    team: {}, agencies: {}, content: {}, software: {}, other: {},
+    team: {}, agencies: {}, content: {}, software: {}, rent: {}, other: {},
   };
 
   for (const ex of expenses) {
+    if (String(ex.expense_type ?? "").toLowerCase() !== "cost") continue;
     const dateStr = ex.vat_date ?? ex.delivery_period ?? ex.created_at ?? "";
     const mk = monthKey(dateStr);
-    if (!mk) continue;
+    const ym = monthIsoKey(dateStr);
+    if (!mk || !ym) continue;
     const amountStr =
       ex.raw_total_amount?.value ??
       ex.raw_total_amount?.amount ??
+      ex.total_amount_incl_vat?.value ??
+      ex.total_amount_incl_vat?.amount ??
       ex.total_amount?.value ??
+      ex.total_amount?.amount ??
       ex.amount?.value ??
+      ex.amount?.amount ??
       "0";
-    const amount = parseFloat(String(amountStr));
+    const amount = Math.abs(parseFloat(String(amountStr)));
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
     expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
 
     // category from description / ledger account name
-    const ledgerName = ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
+    const ledgerName = ex.ledger_account_name ?? ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
     const cat = categorise(`${desc} ${ledgerName}`);
 
-    if (!opexBuckets[mk]) opexBuckets[mk] = { team: 0, agencies: 0, content: 0, software: 0, other: 0 };
+    if (!opexBuckets[mk]) opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
     opexBuckets[mk][cat] += amount;
 
     const itemName = (desc || "Unknown").trim().slice(0, 80);
@@ -1747,12 +1761,16 @@ export async function fetchJortt() {
     const pb = new Date(b.replace(" '", " 20"));
     return pa.getTime() - pb.getTime();
   });
-  const opexByMonth = sortedMonths.map((m) => ({ month: m, ...opexBuckets[m] }));
+  const opexByMonth = sortedMonths.map((m) => {
+    const b = opexBuckets[m];
+    const total = b.team + b.agencies + b.content + b.software + b.rent + b.other;
+    return { month: m, ...b, total };
+  });
 
   // opexDetail in shape consumed by OpExBreakdownSection
   const opexDetail: Record<string, { label: string; items: Array<{ name: string; amount: number }> }> = {};
   const catLabels: Record<string, string> = {
-    team: "Team", agencies: "Agencies", content: "Content samenwerkingen", software: "Software", other: "Other costs",
+    team: "Team", agencies: "Agencies", content: "Content samenwerkingen", software: "Software", rent: "Rent & utilities", other: "Other costs",
   };
   for (const cat of Object.keys(opexDetailMap)) {
     const items = Object.entries(opexDetailMap[cat])
@@ -1794,8 +1812,8 @@ export async function fetchJortt() {
   } : null;
 
   const expenseCount = expenses.filter((e: any) => {
-    const v = parseFloat(String(e.raw_total_amount?.value ?? e.total_amount?.value ?? "0"));
-    return Number.isFinite(v) && v > 0;
+    const v = Math.abs(parseFloat(String(e.raw_total_amount?.value ?? e.raw_total_amount?.amount ?? e.total_amount_incl_vat?.value ?? e.total_amount_incl_vat?.amount ?? e.total_amount?.value ?? e.total_amount?.amount ?? "0")));
+    return String(e.expense_type ?? "").toLowerCase() === "cost" && Number.isFinite(v) && v > 0;
   }).length;
   const invoiceCount = invoices.filter((i: any) =>
     parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0
