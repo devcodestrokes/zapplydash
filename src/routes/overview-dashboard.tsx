@@ -95,6 +95,14 @@ type TWRow = {
   customSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
+  // Subscriptions
+  subRevenue?: number | null;
+  subOrders?: number | null;
+  activeSubscribers?: number | null;
+  newSubscribers?: number | null;
+  cancelledSubs?: number | null;
+  mrr?: number | null;
+  churnRate?: number | null;
 };
 
 const CURRENCIES = [
