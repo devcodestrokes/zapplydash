@@ -1,10 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Store,
-  TrendingUp,
-  Repeat,
-  FileText,
-  Calculator,
   LayoutDashboard,
   LogOut,
   RefreshCw,
