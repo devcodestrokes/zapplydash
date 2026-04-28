@@ -82,6 +82,17 @@ type TWRow = {
   pinterestSpend?: number | null;
   bingSpend?: number | null;
   klaviyoSpend?: number | null;
+  appleSpend?: number | null;
+  amazonSpend?: number | null;
+  linkedinSpend?: number | null;
+  twitterSpend?: number | null;
+  youtubeSpend?: number | null;
+  redditSpend?: number | null;
+  outbrainSpend?: number | null;
+  taboolaSpend?: number | null;
+  criteoSpend?: number | null;
+  influencerSpend?: number | null;
+  customSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
 };
@@ -689,8 +700,19 @@ function DashboardBody({
           { key: "TikTok", value: r.tiktokSpend },
           { key: "Snapchat", value: r.snapchatSpend },
           { key: "Pinterest", value: r.pinterestSpend },
-          { key: "Bing", value: r.bingSpend },
+          { key: "Bing / Microsoft", value: r.bingSpend },
+          { key: "Apple Search", value: r.appleSpend },
+          { key: "Amazon", value: r.amazonSpend },
+          { key: "LinkedIn", value: r.linkedinSpend },
+          { key: "Twitter / X", value: r.twitterSpend },
+          { key: "YouTube", value: r.youtubeSpend },
+          { key: "Reddit", value: r.redditSpend },
+          { key: "Outbrain", value: r.outbrainSpend },
+          { key: "Taboola", value: r.taboolaSpend },
+          { key: "Criteo", value: r.criteoSpend },
+          { key: "Influencer", value: r.influencerSpend },
           { key: "Klaviyo", value: r.klaviyoSpend },
+          { key: "Other / Custom", value: r.customSpend },
         ]
           .filter((p) => typeof p.value === "number" && Number.isFinite(p.value) && (p.value as number) > 0)
           .map((p) => ({ market: p.key, value: fmtCurrency(p.value ?? null) }));

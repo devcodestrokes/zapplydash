@@ -453,14 +453,25 @@ export async function fetchTripleWhale(
           // Formula: Gross Sales + Shipping + Taxes − Discounts − Refunded Sales − Refunded Shipping − Refunded Taxes.
           netRevenue:      moneyMetric("netSales", "sales"),
           newCustomerRev:  moneyMetric("newCustomerSales"),     // New Customer Revenue
-          adSpend:         moneyMetric("blendedAds"),           // Total blended ad spend
-          facebookSpend:   moneyMetric("facebookAds"),          // Facebook / Meta
-          googleSpend:     moneyMetric("googleAds"),            // Google Ads
-          tiktokSpend:     moneyMetric("tiktokAds"),            // TikTok Ads
-          snapchatSpend:   moneyMetric("snapchatAds"),          // Snapchat Ads
-          pinterestSpend:  moneyMetric("pinterestAds"),         // Pinterest Ads
-          bingSpend:       moneyMetric("bingAds"),              // Microsoft / Bing Ads
-          klaviyoSpend:    moneyMetric("klaviyoCost"),          // Klaviyo cost
+          adSpend:         moneyMetric("blendedAds"),                   // Total blended ad spend
+          facebookSpend:   moneyMetric("facebookAds"),                  // Facebook / Meta
+          googleSpend:     moneyMetric("googleAds"),                    // Google Ads
+          tiktokSpend:     moneyMetric("tiktokAds"),                    // TikTok Ads
+          snapchatSpend:   moneyMetric("snapchatAds"),                  // Snapchat Ads
+          pinterestSpend:  moneyMetric("pinterestAds"),                 // Pinterest Ads
+          bingSpend:       moneyMetric("bingAds", "microsoftAds"),      // Microsoft / Bing
+          klaviyoSpend:    moneyMetric("klaviyoCost"),                  // Klaviyo cost
+          appleSpend:      moneyMetric("appleSearchAds"),               // Apple Search Ads
+          amazonSpend:     moneyMetric("amazonAds"),                    // Amazon Ads
+          linkedinSpend:   moneyMetric("linkedinAds"),                  // LinkedIn Ads
+          twitterSpend:    moneyMetric("twitterAds", "xAds"),           // Twitter / X Ads
+          youtubeSpend:    moneyMetric("youtubeAds"),                   // YouTube Ads
+          redditSpend:     moneyMetric("redditAds"),                    // Reddit Ads
+          outbrainSpend:   moneyMetric("outbrainAds"),                  // Outbrain
+          taboolaSpend:    moneyMetric("taboolaAds"),                   // Taboola
+          criteoSpend:     moneyMetric("criteoAds"),                    // Criteo
+          influencerSpend: moneyMetric("influencerAds", "influencerCost"), // Influencer
+          customSpend:     moneyMetric("customAds", "otherAds"),        // Custom / other
           roas:            twMetric(m, "roas"),                  // Blended ROAS
           ncRoas:          twMetric(m, "newCustomersRoas"),     // New Customer ROAS
           fbRoas:          twMetric(m, "facebookRoas"),         // Facebook ROAS
