@@ -86,9 +86,22 @@ function DailyPnlPage() {
     ])
       .then(([d, twT, twM]: [any, any, any]) => {
         if (!alive) return;
-        setToday(((d?.shopifyToday as TodayRow[]) || []).filter((r) => r && r.code));
-        setTwToday((twT?.rows as TwRow[]) || []);
-        setMtd((twM?.rows as TwRow[]) || []);
+        const sToday = ((d?.shopifyToday as TodayRow[]) || []).filter((r) => r && r.code);
+        const twTodayRows = (twT?.rows as TwRow[]) || [];
+        const twMtdRows = (twM?.rows as TwRow[]) || [];
+        if (typeof window !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.debug("[daily-pnl]", {
+            shopifyToday: sToday,
+            twToday: twTodayRows,
+            twMtd: twMtdRows,
+            twTodayError: twT?.error,
+            twMtdError: twM?.error,
+          });
+        }
+        setToday(sToday);
+        setTwToday(twTodayRows);
+        setMtd(twMtdRows);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -100,28 +113,37 @@ function DailyPnlPage() {
   const rows = useMemo(() => {
     return MARKET_ORDER.map((code) => {
       const t = today.find((r) => r.code === code);
-      const tw = twToday.find((r) => (r.code || r.market) === code);
-      const m = mtd.find((r) => (r.code || r.market) === code);
-      const revenue = t?.revenue ?? tw?.revenue ?? 0;
-      const adSpend = tw?.adSpend ?? null;
-      const grossProfit = tw?.grossProfit ?? null;
+      const tw: any = twToday.find((r: any) => (r.code || r.market) === code) || {};
+      const m: any = mtd.find((r: any) => (r.code || r.market) === code) || {};
+      const currency = t?.currency || tw.sourceCurrency || DEFAULT_CCY[code];
+      // TW values are converted to EUR (multiplied by fxRate). Convert back to
+      // the store's local currency so the table reads in £ / US$ / € natively.
+      const fx = typeof tw.fxRate === "number" && tw.fxRate > 0 ? tw.fxRate : 1;
+      const toLocal = (v: number | null | undefined) =>
+        v == null ? null : v / fx;
+
+      const revenue = t?.revenue ?? toLocal(tw.revenue) ?? 0;
+      const orders = t?.orders ?? tw.orders ?? 0;
+      const aov = t?.aov ?? (orders > 0 && revenue ? revenue / orders : 0);
+      const adSpend = toLocal(tw.adSpend);
+      const grossProfit = toLocal(tw.grossProfit);
       const netProfit =
         grossProfit != null && adSpend != null ? grossProfit - adSpend : null;
       return {
         code,
         name: NAMES[code],
         flag: FLAGS[code],
-        currency: t?.currency || DEFAULT_CCY[code],
+        currency,
         revenue,
-        orders: t?.orders ?? 0,
-        aov: t?.aov ?? 0,
-        roas: tw?.roas ?? null,
+        orders,
+        aov,
+        roas: tw.roas ?? null,
         adSpend,
         grossProfit,
         netProfit,
-        roasMtd: m?.roas ?? null,
-        adSpendMtd: m?.adSpend ?? null,
-        grossProfitMtd: m?.grossProfit ?? null,
+        roasMtd: m.roas ?? null,
+        adSpendMtd: m.adSpend != null ? m.adSpend / fx : null,
+        grossProfitMtd: m.grossProfit != null ? m.grossProfit / fx : null,
         hourly: t?.hourly || [],
       };
     });
