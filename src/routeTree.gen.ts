@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TripleWhaleRouteImport } from './routes/triple-whale'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
 import { Route as StoreRouteImport } from './routes/store'
+import { Route as OverviewDashboardRouteImport } from './routes/overview-dashboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as AccountingRouteImport } from './routes/accounting'
@@ -43,6 +44,11 @@ const SubscriptionsRoute = SubscriptionsRouteImport.update({
 const StoreRoute = StoreRouteImport.update({
   id: '/store',
   path: '/store',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OverviewDashboardRoute = OverviewDashboardRouteImport.update({
+  id: '/overview-dashboard',
+  path: '/overview-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/accounting': typeof AccountingRoute
   '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/overview-dashboard': typeof OverviewDashboardRoute
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/accounting': typeof AccountingRoute
   '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/overview-dashboard': typeof OverviewDashboardRoute
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
@@ -181,6 +189,7 @@ export interface FileRoutesById {
   '/accounting': typeof AccountingRoute
   '/invoices': typeof InvoicesRoute
   '/login': typeof LoginRoute
+  '/overview-dashboard': typeof OverviewDashboardRoute
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/accounting'
     | '/invoices'
     | '/login'
+    | '/overview-dashboard'
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/accounting'
     | '/invoices'
     | '/login'
+    | '/overview-dashboard'
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/accounting'
     | '/invoices'
     | '/login'
+    | '/overview-dashboard'
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   AccountingRoute: typeof AccountingRoute
   InvoicesRoute: typeof InvoicesRoute
   LoginRoute: typeof LoginRoute
+  OverviewDashboardRoute: typeof OverviewDashboardRoute
   StoreRoute: typeof StoreRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
   TripleWhaleRoute: typeof TripleWhaleRoute
@@ -308,6 +321,13 @@ declare module '@tanstack/react-router' {
       path: '/store'
       fullPath: '/store'
       preLoaderRoute: typeof StoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/overview-dashboard': {
+      id: '/overview-dashboard'
+      path: '/overview-dashboard'
+      fullPath: '/overview-dashboard'
+      preLoaderRoute: typeof OverviewDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -463,6 +483,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountingRoute: AccountingRoute,
   InvoicesRoute: InvoicesRoute,
   LoginRoute: LoginRoute,
+  OverviewDashboardRoute: OverviewDashboardRoute,
   StoreRoute: StoreRoute,
   SubscriptionsRoute: SubscriptionsRoute,
   TripleWhaleRoute: TripleWhaleRoute,
