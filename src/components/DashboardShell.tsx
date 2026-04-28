@@ -102,6 +102,28 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>The 5 Pillars</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {pillarItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to, item.exact);
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <Link to={item.to as any}>
+                        <Icon className="h-4 w-4" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="border-t">
