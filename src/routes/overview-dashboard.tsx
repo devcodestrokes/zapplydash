@@ -633,15 +633,14 @@ function DashboardBody({
     },
     {
       label: "AOV",
-      value: typeof totalAov === "number" ? `€${totalAov.toFixed(2)}` : "—",
+      value: fmtCurrency2(totalAov),
       sub: "Average order value",
       icon: Target,
       accent: "text-indigo-600",
       breakdown: liveRows.map((r) => ({
         market: r.market,
         flag: r.flag,
-        value:
-          typeof r.aov === "number" ? `€${r.aov.toFixed(2)}` : "—",
+        value: fmtCurrency2(r.aov ?? null),
       })),
     },
     {
