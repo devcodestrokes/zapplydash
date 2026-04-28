@@ -1,33 +1,56 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { runAllInBackground } from "@/server/sync.server";
+import { runAll, runAllInBackground } from "@/server/sync.server";
 
 // POST /api/public/sync
 //   Public-prefixed sync trigger. Bypasses auth on published deployments
-//   so the dashboard's Sync button (and external schedulers) can call it.
-//   Same fire-and-forget semantics as /api/sync.
+//   so the dashboard's Sync button (and external schedulers like the
+//   Supabase scheduled-sync Edge Function + pg_cron) can call it.
+//
+//   By default we AWAIT the full sync — Cloudflare Workers terminate
+//   background promises after the response is sent, so fire-and-forget
+//   silently drops the work. Pass ?async=1 if you want immediate return
+//   and don't care about completion (e.g. user-facing button).
 export const Route = createFileRoute("/api/public/sync")({
   server: {
     handlers: {
-      POST: async () => {
-        runAllInBackground();
+      POST: async ({ request }) => {
+        const { searchParams } = new URL(request.url);
+        const isAsync = searchParams.get("async") === "1";
+        const startedAt = new Date().toISOString();
+
+        if (isAsync) {
+          runAllInBackground();
+          return Response.json({
+            ok: true,
+            started: true,
+            mode: "async",
+            message: "Sync started in background.",
+            startedAt,
+          });
+        }
+
+        const results = await runAll();
         return Response.json({
           ok: true,
-          started: true,
-          message:
-            "Sync started in background. Refresh the dashboard in a moment to see new data.",
-          startedAt: new Date().toISOString(),
+          completed: true,
+          mode: "sync",
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          results,
         });
       },
       GET: async () => {
-        // Convenience: allow GET so it can be hit from a browser or curl.
-        runAllInBackground();
+        const startedAt = new Date().toISOString();
+        const results = await runAll();
         return Response.json({
           ok: true,
-          started: true,
-          message: "Sync started in background.",
-          startedAt: new Date().toISOString(),
+          completed: true,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          results,
         });
       },
     },
   },
 });
+
