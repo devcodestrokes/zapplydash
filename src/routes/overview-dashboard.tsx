@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   DollarSign,
   ShoppingCart,
+  Receipt,
   TrendingUp,
   Wallet,
   Sparkles,
@@ -464,6 +465,7 @@ function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
   const hasData = liveRows.length > 0;
 
   const totalRevenue = sumField(tw, "revenue");
+  const totalNetRevenue = sumField(tw, "netRevenue");
   const totalOrders = sumField(tw, "orders");
   const totalGrossProfit = sumField(tw, "grossProfit");
   const totalCogs = sumField(tw, "cogs");
@@ -476,9 +478,21 @@ function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
 
   const widgets = [
     {
+      label: "Total sales",
+      value: fmtCurrency(totalNetRevenue ?? totalRevenue),
+      sub: "Net sales · after discounts & refunds",
+      icon: Receipt,
+      accent: "text-teal-600",
+      breakdown: liveRows.map((r) => ({
+        market: r.market,
+        flag: r.flag,
+        value: fmtCurrency(r.netRevenue ?? r.revenue ?? null),
+      })),
+    },
+    {
       label: "Revenue",
       value: fmtCurrency(totalRevenue),
-      sub: "All stores · selected range",
+      sub: "Gross · all stores · selected range",
       icon: DollarSign,
       accent: "text-emerald-600",
       breakdown: liveRows.map((r) => ({
