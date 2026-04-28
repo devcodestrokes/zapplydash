@@ -67,13 +67,33 @@ function monthStartIso() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function isoNDaysAgo(n: number) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function weekStartIso() {
+  // ISO week start = Monday
+  const d = new Date();
+  const day = d.getUTCDay(); // 0..6 (Sun..Sat)
+  const diff = day === 0 ? 6 : day - 1;
+  d.setUTCDate(d.getUTCDate() - diff);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+type Period = "today" | "wtd" | "mtd";
+
 function DailyPnlPage() {
   const { user } = useDashboardSession();
   const [today, setToday] = useState<TodayRow[]>([]);
   const [twToday, setTwToday] = useState<TwRow[]>([]);
+  const [wtd, setWtd] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
+  const [twPrevTuesdays, setTwPrevTuesdays] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<Period>("today");
 
   useEffect(() => {
     let alive = true;
@@ -82,7 +102,10 @@ function DailyPnlPage() {
     Promise.all([
       getDashboardData(),
       getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: weekStartIso(), to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
+      // Same weekday last 4 weeks (rough comparison baseline for "Today")
+      getTripleWhaleRange({ data: { from: isoNDaysAgo(28), to: isoNDaysAgo(7) } }).catch(() => ({ rows: [] })),
     ])
       .then(([d, twT, twM]: [any, any, any]) => {
         if (!alive) return;
