@@ -338,12 +338,30 @@ function tripleWhaleTodayHour(): number {
 // POST https://api.triplewhale.com/api/v2/summary-page/get-data
 // Docs: https://triplewhale.readme.io/reference/get-summary-page-data
 // Returns 698 metrics for a given shopDomain + period.
-export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
+import { startProgress, markStore, finishProgress } from "./progress.server";
+
+export async function fetchTripleWhale(
+  fromDate?: string,
+  toDate?: string,
+  progressKey?: string
+) {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
 
   const start = fromDate ?? startOfMonth();
   const end   = toDate   ?? today();
+
+  // Determine which stores will actually be fetched (have an env-mapped shop)
+  const planned = TW_SHOPS
+    .map(({ market, flag, envKeys }: any) => {
+      const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+      return shop ? { market, flag, shop } : null;
+    })
+    .filter(Boolean) as Array<{ market: string; flag: string; shop: string }>;
+
+  if (progressKey) {
+    startProgress(progressKey, planned.map(({ market, flag }) => ({ market, flag })));
+  }
 
   const results = await Promise.all(
     TW_SHOPS.map(async ({ market, flag, envKeys }: any) => {
