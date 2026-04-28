@@ -171,13 +171,8 @@ function DailyPnlPage() {
 
   void rows; // totalOrdersToday no longer rendered after header redesign
 
-  const nl = rows.find((r) => r.code === "NL")!;
-  const uk = rows.find((r) => r.code === "UK")!;
-
-  // Hourly chart for NL
-  const maxHourly = Math.max(1, ...nl.hourly.map((h) => h.revenue));
-  const lastHour = new Date().getUTCHours() + 2; // CEST
-  const visibleHours = nl.hourly.filter((h) => h.hour <= lastHour);
+  // Per-market detail (nl/uk/hourly chart) hidden — values still computed in `rows` for future use
+  void rows;
 
   // ---- Period KPIs (Today / WTD / MTD) ----
   const periodKpis = useMemo(() => {
