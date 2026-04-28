@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
-import { MarketsView } from "@/components/FinanceDashboard";
+import { MarketsView as MarketsViewRaw } from "@/components/FinanceDashboard";
+const MarketsView = MarketsViewRaw as unknown as (props: any) => JSX.Element;
 
 export const Route = createFileRoute("/pillars/margin-per-market")({
   head: () => ({ meta: [{ title: "Margin per Market — Zapply" }] }),
