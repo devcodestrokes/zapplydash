@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
-import { MonthlyView as MonthlyViewRaw } from "@/components/FinanceDashboard";
-const MonthlyView: any = MonthlyViewRaw;
+import { MonthlyView } from "@/components/FinanceDashboard";
 
 export const Route = createFileRoute("/pillars/monthly-overview")({
   head: () => ({ meta: [{ title: "Monthly Overview — Zapply" }] }),
