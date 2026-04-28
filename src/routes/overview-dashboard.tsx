@@ -506,7 +506,22 @@ function DateRangeFilter({
   );
 }
 
-function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
+function DashboardBody({
+  tw,
+  loading,
+  currency,
+  fxRate,
+}: {
+  tw: TWRow[];
+  loading: boolean;
+  currency: CurrencyCode;
+  fxRate: number;
+}) {
+  const symbol =
+    CURRENCIES.find((c) => c.code === currency)?.symbol ?? "€";
+  const fmtCurrency = makeFmtCurrency(fxRate, symbol);
+  const fmtCurrency2 = makeFmtCurrency2(fxRate, symbol);
+
   const liveRows = tw.filter((r) => r.live);
   const hasData = liveRows.length > 0;
 
