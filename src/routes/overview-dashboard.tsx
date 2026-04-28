@@ -75,6 +75,13 @@ type TWRow = {
   cogs?: number | null;
   netProfit?: number | null;
   adSpend?: number | null;
+  facebookSpend?: number | null;
+  googleSpend?: number | null;
+  tiktokSpend?: number | null;
+  snapchatSpend?: number | null;
+  pinterestSpend?: number | null;
+  bingSpend?: number | null;
+  klaviyoSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
 };
