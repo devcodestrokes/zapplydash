@@ -1179,6 +1179,88 @@ export async function fetchXero() {
     const drafts: any[] = draftData?.Invoices ?? [];
     const draftsAmount  = drafts.reduce((s, d) => s + (d.Total ?? d.AmountDue ?? 0), 0);
 
+    // ── Parse Contacts ──────────────────────────────────────────────────────
+    const contactsList: any[] = contactsData?.Contacts ?? [];
+    const customers = contactsList
+      .filter((c) => c.IsCustomer)
+      .map((c) => ({
+        id: c.ContactID,
+        name: String(c.Name ?? ""),
+        email: c.EmailAddress ?? null,
+        outstanding: c.Balances?.AccountsReceivable?.Outstanding ?? 0,
+        overdue: c.Balances?.AccountsReceivable?.Overdue ?? 0,
+      }))
+      .sort((a, b) => Math.abs(b.outstanding) - Math.abs(a.outstanding));
+    const suppliers = contactsList
+      .filter((c) => c.IsSupplier)
+      .map((c) => ({
+        id: c.ContactID,
+        name: String(c.Name ?? ""),
+        email: c.EmailAddress ?? null,
+        outstanding: c.Balances?.AccountsPayable?.Outstanding ?? 0,
+        overdue: c.Balances?.AccountsPayable?.Overdue ?? 0,
+      }))
+      .sort((a, b) => Math.abs(b.outstanding) - Math.abs(a.outstanding));
+
+    // ── Parse Items ─────────────────────────────────────────────────────────
+    const itemsList: any[] = itemsData?.Items ?? [];
+    const items = itemsList.map((i) => ({
+      id: i.ItemID,
+      code: i.Code ?? "",
+      name: String(i.Name ?? i.Description ?? ""),
+      salesPrice: i.SalesDetails?.UnitPrice ?? null,
+      purchasePrice: i.PurchaseDetails?.UnitPrice ?? null,
+      isTracked: !!i.IsTrackedAsInventory,
+      qtyOnHand: i.QuantityOnHand ?? null,
+    }));
+
+    // ── Parse Bank Transactions ─────────────────────────────────────────────
+    const bankTxList: any[] = bankTxData?.BankTransactions ?? [];
+    const bankTransactions = bankTxList
+      .map((t) => ({
+        id: t.BankTransactionID,
+        date: t.DateString ?? t.Date ?? null,
+        type: t.Type ?? "",
+        contact: t.Contact?.Name ?? "",
+        account: t.BankAccount?.Name ?? "",
+        reference: t.Reference ?? "",
+        total: t.Total ?? 0,
+        currency: t.CurrencyCode ?? "EUR",
+        status: t.Status ?? "",
+      }))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 100);
+
+    // ── Parse Manual Journals ───────────────────────────────────────────────
+    const journalsList: any[] = journalsData?.ManualJournals ?? [];
+    const manualJournals = journalsList
+      .map((j) => ({
+        id: j.ManualJournalID,
+        date: j.Date ?? null,
+        narration: String(j.Narration ?? ""),
+        status: j.Status ?? "",
+        lineCount: (j.JournalLines ?? []).length,
+        total: (j.JournalLines ?? []).reduce(
+          (s: number, l: any) => s + Math.abs(l.LineAmount ?? 0),
+          0,
+        ) / 2,
+      }))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 50);
+
+    // ── Parse Tracking Categories ───────────────────────────────────────────
+    const trackingList: any[] = trackingData?.TrackingCategories ?? [];
+    const trackingCategories = trackingList.map((t) => ({
+      id: t.TrackingCategoryID,
+      name: String(t.Name ?? ""),
+      status: t.Status ?? "",
+      options: (t.Options ?? []).map((o: any) => ({
+        id: o.TrackingOptionID,
+        name: String(o.Name ?? ""),
+        status: o.Status ?? "",
+      })),
+    }));
+
     const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
     return {
