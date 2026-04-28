@@ -169,7 +169,7 @@ function DailyPnlPage() {
     });
   }, [today, twToday, mtd]);
 
-  const totalOrdersToday = rows.reduce((s, r) => s + (r.orders || 0), 0);
+  void rows; // totalOrdersToday no longer rendered after header redesign
 
   const nl = rows.find((r) => r.code === "NL")!;
   const uk = rows.find((r) => r.code === "UK")!;
