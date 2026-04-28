@@ -1501,9 +1501,11 @@ const JORTT_CATEGORY_MAP: Record<string, string> = {
   "thor magis": "content", haec: "content", zadero: "content", remy: "content",
   software: "software", saas: "software", klaviyo: "software",
   "triple whale": "software", monday: "software", notion: "software",
+  huur: "rent", rent: "rent", utility: "rent", utilities: "rent", energie: "rent",
+  electricity: "rent", gas: "rent", water: "rent", internet: "rent", kantoor: "rent",
 };
 
-function categorise(name: string): "team" | "agencies" | "content" | "software" | "other" {
+function categorise(name: string): "team" | "agencies" | "content" | "software" | "rent" | "other" {
   const lower = (name ?? "").toLowerCase();
   for (const [kw, cat] of Object.entries(JORTT_CATEGORY_MAP)) {
     if (lower.includes(kw)) return cat as any;
@@ -1629,7 +1631,7 @@ export async function fetchJortt() {
   // 3. Expenses (real OpEx) — expenses:read (v3 endpoint)
   let expenses: any[] = [];
   if (tokens["expenses:read"]) {
-    expenses = await jorttPaginate(tokens["expenses:read"]!, "/v3/expenses?expense_type=cost", 20);
+    expenses = await jorttPaginate(tokens["expenses:read"]!, "/v3/expenses", 20);
   }
 
   // 4. Reports — reports:read
