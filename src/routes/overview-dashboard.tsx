@@ -777,7 +777,7 @@ function KpiWidget({
     sub?: string;
     icon: any;
     accent: string;
-    breakdown: Array<{ market: string; flag?: string; value: string }>;
+    breakdown: Array<{ market: string; flag?: string; value: string; children?: Array<{ market: string; value: string }> }>;
   };
 }) {
   const [open, setOpen] = useState(true);
