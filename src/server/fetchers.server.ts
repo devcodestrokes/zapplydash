@@ -1723,24 +1723,28 @@ export async function fetchJortt() {
   };
 
   for (const ex of expenses) {
+    if (String(ex.expense_type ?? "").toLowerCase() !== "cost") continue;
     const dateStr = ex.vat_date ?? ex.delivery_period ?? ex.created_at ?? "";
     const mk = monthKey(dateStr);
     const ym = monthIsoKey(dateStr);
     if (!mk || !ym) continue;
-    if (String(ex.expense_type ?? "").toLowerCase() === "income") continue;
     const amountStr =
       ex.raw_total_amount?.value ??
       ex.raw_total_amount?.amount ??
+      ex.total_amount_incl_vat?.value ??
+      ex.total_amount_incl_vat?.amount ??
       ex.total_amount?.value ??
+      ex.total_amount?.amount ??
       ex.amount?.value ??
+      ex.amount?.amount ??
       "0";
-    const amount = parseFloat(String(amountStr));
+    const amount = Math.abs(parseFloat(String(amountStr)));
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
     expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
 
     // category from description / ledger account name
-    const ledgerName = ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
+    const ledgerName = ex.ledger_account_name ?? ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
     const cat = categorise(`${desc} ${ledgerName}`);
 
@@ -1808,8 +1812,8 @@ export async function fetchJortt() {
   } : null;
 
   const expenseCount = expenses.filter((e: any) => {
-    const v = parseFloat(String(e.raw_total_amount?.value ?? e.total_amount?.value ?? "0"));
-    return Number.isFinite(v) && v > 0;
+    const v = Math.abs(parseFloat(String(e.raw_total_amount?.value ?? e.raw_total_amount?.amount ?? e.total_amount_incl_vat?.value ?? e.total_amount_incl_vat?.amount ?? e.total_amount?.value ?? e.total_amount?.amount ?? "0")));
+    return String(e.expense_type ?? "").toLowerCase() === "cost" && Number.isFinite(v) && v > 0;
   }).length;
   const invoiceCount = invoices.filter((i: any) =>
     parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0
