@@ -1363,7 +1363,10 @@ export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
         <div className="border-b border-neutral-100 px-5 py-4">
           <div className="text-[13px] font-semibold">Full market breakdown</div>
           <div className="text-[12px] text-neutral-400">
-            Ad spend allocation method: <span className="font-medium capitalize">{allocation}</span>
+            Ad spend allocation method:{" "}
+            <span className="font-medium">
+              {allocation === "revenue-weighted" ? "Revenue-Weighted" : allocation === "direct" ? "Direct targeting" : "TW attribution"}
+            </span>
           </div>
         </div>
         <div className="overflow-x-auto">
