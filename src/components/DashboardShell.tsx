@@ -43,6 +43,14 @@ const navItems: NavItem[] = [
   { to: "/accounting", label: "Accounting", icon: Calculator },
 ];
 
+const pillarItems: NavItem[] = [
+  { to: "/pillars/daily-pnl", label: "Daily P&L", icon: Zap },
+  { to: "/pillars/margin-per-market", label: "Margin per market", icon: Globe },
+  { to: "/pillars/monthly-overview", label: "Monthly overview", icon: CalendarDays },
+  { to: "/pillars/balance-sheet", label: "Balance sheet", icon: Scale },
+  { to: "/pillars/forecast", label: "Forecast", icon: LineChart },
+];
+
 function AppSidebar({ user }: { user: { name: string; email: string; avatar: string | null } | null }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
