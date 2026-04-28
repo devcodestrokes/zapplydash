@@ -862,7 +862,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
   const totalAdSpend = (twData ?? []).filter((t: any) => t?.live).reduce((s: number, t: any) => s + (t.adSpend ?? 0), 0);
 
   const baseMarkets = (liveMarkets ?? [])
-    .filter((m: any) => m.live)
+    .filter((m: any) => m.live && m.code !== "DE")
     .map((m: any) => {
       const tw = twData.find((t: any) => t.market === m.code && t.live);
       // Shopify revenue is canonical for cards/table (matches Shopify Markets)
