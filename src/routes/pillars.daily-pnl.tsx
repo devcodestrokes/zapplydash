@@ -69,6 +69,7 @@ function monthStartIso() {
 function DailyPnlPage() {
   const { user } = useDashboardSession();
   const [today, setToday] = useState<TodayRow[]>([]);
+  const [twToday, setTwToday] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,16 +77,17 @@ function DailyPnlPage() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const t = todayIso();
     Promise.all([
       getDashboardData(),
-      getTripleWhaleRange({ data: { from: monthStartIso(), to: todayIso() } }).catch(() => ({
-        rows: [],
-      })),
+      getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
     ])
-      .then(([d, tw]: [any, any]) => {
+      .then(([d, twT, twM]: [any, any, any]) => {
         if (!alive) return;
         setToday(((d?.shopifyToday as TodayRow[]) || []).filter((r) => r && r.code));
-        setMtd((tw?.rows as TwRow[]) || []);
+        setTwToday((twT?.rows as TwRow[]) || []);
+        setMtd((twM?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -97,22 +99,32 @@ function DailyPnlPage() {
   const rows = useMemo(() => {
     return MARKET_ORDER.map((code) => {
       const t = today.find((r) => r.code === code);
+      const tw = twToday.find((r) => (r.code || r.market) === code);
       const m = mtd.find((r) => (r.code || r.market) === code);
+      const revenue = t?.revenue ?? tw?.revenue ?? 0;
+      const adSpend = tw?.adSpend ?? null;
+      const grossProfit = tw?.grossProfit ?? null;
+      const netProfit =
+        grossProfit != null && adSpend != null ? grossProfit - adSpend : null;
       return {
         code,
         name: NAMES[code],
         flag: FLAGS[code],
         currency: t?.currency || DEFAULT_CCY[code],
-        revenue: t?.revenue ?? 0,
+        revenue,
         orders: t?.orders ?? 0,
         aov: t?.aov ?? 0,
-        roas: m?.roas ?? null,
+        roas: tw?.roas ?? null,
+        adSpend,
+        grossProfit,
+        netProfit,
+        roasMtd: m?.roas ?? null,
         adSpendMtd: m?.adSpend ?? null,
         grossProfitMtd: m?.grossProfit ?? null,
         hourly: t?.hourly || [],
       };
     });
-  }, [today, mtd]);
+  }, [today, twToday, mtd]);
 
   const totalOrdersToday = rows.reduce((s, r) => s + (r.orders || 0), 0);
 
