@@ -1389,10 +1389,12 @@ export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
                 const pct = (m.revenue / maxRev) * 100;
                 return (
                   <tr key={m.code} className={i !== sorted.length - 1 ? "border-b border-neutral-50 hover:bg-neutral-50/50" : "hover:bg-neutral-50/50"}>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <span>{m.flag}</span>
-                        <span className="font-medium">{m.name}</span>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] bg-neutral-100 px-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-500">
+                          {m.code === "UK" ? "GB" : m.code}
+                        </span>
+                        <span className="font-medium text-neutral-900">{m.name}</span>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
