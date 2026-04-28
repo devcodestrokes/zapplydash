@@ -170,6 +170,14 @@ function DailyPnlPage() {
     ? `${Math.max(1, Math.round((Date.now() - new Date(syncedAt).getTime()) / 60000))}m ago`
     : "—";
 
+  if (loading) {
+    return (
+      <DashboardShell user={user} title="Daily P&L">
+        <DailyPnlSkeleton />
+      </DashboardShell>
+    );
+  }
+
   return (
     <DashboardShell user={user} title="Daily P&L">
       <div className="bg-muted/20 min-h-full p-6 md:p-8">
@@ -415,11 +423,123 @@ function DailyPnlPage() {
             {syncedAgo}
           </div>
 
-          {loading && (
-            <div className="text-center text-xs text-muted-foreground">Loading…</div>
-          )}
         </div>
       </div>
     </DashboardShell>
   );
 }
+
+function SkeletonBox({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "animate-pulse rounded-md bg-muted/60",
+        className
+      )}
+    />
+  );
+}
+
+function DailyPnlSkeleton() {
+  return (
+    <div className="bg-muted/20 min-h-full p-6 md:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <SkeletonBox className="h-3 w-16" />
+            <SkeletonBox className="h-8 w-72" />
+            <SkeletonBox className="h-3 w-40" />
+          </div>
+          <div className="space-y-2 text-right">
+            <SkeletonBox className="ml-auto h-3 w-32" />
+            <SkeletonBox className="ml-auto h-3 w-56" />
+          </div>
+        </div>
+
+        {/* Tiles */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+              <div className="flex items-start justify-between">
+                <SkeletonBox className="h-3 w-24" />
+                <SkeletonBox className="h-3 w-10" />
+              </div>
+              <SkeletonBox className="h-7 w-32" />
+              <SkeletonBox className="h-3 w-40" />
+            </div>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b">
+            <div className="space-y-2">
+              <SkeletonBox className="h-3 w-32" />
+              <SkeletonBox className="h-3 w-64" />
+            </div>
+            <SkeletonBox className="h-3 w-24" />
+          </div>
+          <div className="divide-y">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="grid grid-cols-7 gap-3 px-5 py-3 items-center">
+                <SkeletonBox className="h-6 col-span-1" />
+                <SkeletonBox className="h-4" />
+                <SkeletonBox className="h-4" />
+                <SkeletonBox className="h-4" />
+                <SkeletonBox className="h-4" />
+                <SkeletonBox className="h-4" />
+                <SkeletonBox className="h-4" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hourly chart */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <SkeletonBox className="h-3 w-40" />
+              <SkeletonBox className="h-3 w-56" />
+            </div>
+            <SkeletonBox className="h-6 w-24" />
+          </div>
+          <div className="flex h-56 items-end gap-[3px]">
+            {Array.from({ length: 24 }).map((_, i) => (
+              <SkeletonBox
+                key={i}
+                className="flex-1"
+                // varying heights for nicer skeleton
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom strips */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+              <SkeletonBox className="h-3 w-32" />
+              <SkeletonBox className="h-7 w-28" />
+              <SkeletonBox className="h-3 w-40" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+              <SkeletonBox className="h-3 w-32" />
+              <SkeletonBox className="h-7 w-28" />
+              <SkeletonBox className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+
+        <div className="pt-2 text-center text-[11px] text-muted-foreground">
+          Loading fresh data…
+        </div>
+      </div>
+    </div>
+  );
+}
+
