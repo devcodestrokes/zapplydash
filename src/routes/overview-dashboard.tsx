@@ -523,11 +523,24 @@ function DashboardBody({ tw, loading }: { tw: TWRow[]; loading: boolean }) {
 
   if (loading && !hasData) {
     return (
-      <div className="rounded-xl border border-border bg-card p-12 text-center">
-        <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-        <div className="mt-2 text-sm text-muted-foreground">
-          Loading data for selected range…
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {widgets.map((w) => (
+          <div
+            key={w.label}
+            className="rounded-xl border border-border bg-card p-5 animate-pulse"
+          >
+            <div className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+              <w.icon size={14} className={w.accent} />
+              <span>{w.label}</span>
+            </div>
+            <div className="mt-3 h-8 w-2/3 rounded bg-muted" />
+            <div className="mt-2 h-3 w-1/2 rounded bg-muted/70" />
+            <div className="mt-4 border-t border-border pt-3 space-y-2">
+              <div className="h-3 w-full rounded bg-muted/60" />
+              <div className="h-3 w-5/6 rounded bg-muted/60" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
