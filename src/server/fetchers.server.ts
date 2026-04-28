@@ -1293,6 +1293,13 @@ export async function fetchXero() {
       // Drafts (ACCREC)
       draftsAmount:         draftsAmount         > 0 ? Math.round(draftsAmount)         : null,
       draftsCount:          drafts.length,
+      // Extended Xero data
+      customers,
+      suppliers,
+      items,
+      bankTransactions,
+      manualJournals,
+      trackingCategories,
       currency: "EUR",
       _diagnostics: {
         profitAndLoss: {
