@@ -136,7 +136,9 @@ function DailyPnlPage() {
   const [twToday, setTwToday] = useState<TwRow[]>([]);
   const [wtd, setWtd] = useState<TwRow[]>([]);
   const [mtd, setMtd] = useState<TwRow[]>([]);
-  const [twPrevTuesdays, setTwPrevTuesdays] = useState<TwRow[]>([]);
+  const [twYesterday, setTwYesterday] = useState<TwRow[]>([]);
+  const [twPrevWeek, setTwPrevWeek] = useState<TwRow[]>([]);
+  const [twPrevMonth, setTwPrevMonth] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>("today");
@@ -145,16 +147,21 @@ function DailyPnlPage() {
     let alive = true;
     setLoading(true);
     const t = todayIso();
+    const y = yesterdayIso();
+    const pw = prevWeekRange();
+    const pm = prevMonthRange();
     Promise.all([
       getDashboardData(),
       getTripleWhaleRange({ data: { from: t, to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: weekStartIso(), to: t } }).catch(() => ({ rows: [] })),
       getTripleWhaleRange({ data: { from: monthStartIso(), to: t } }).catch(() => ({ rows: [] })),
-      // Same weekday last 4 weeks (rough comparison baseline for "Today")
-      getTripleWhaleRange({ data: { from: isoNDaysAgo(28), to: isoNDaysAgo(7) } }).catch(() => ({ rows: [] })),
+      // Baselines: yesterday, previous week (same span), previous month (same span)
+      getTripleWhaleRange({ data: { from: y, to: y } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: pw.from, to: pw.to } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: pm.from, to: pm.to } }).catch(() => ({ rows: [] })),
     ])
       .then((results: any[]) => {
-        const [d, twT, twW, twM, twPrev] = results;
+        const [d, twT, twW, twM, twY, twPW, twPM] = results;
         if (!alive) return;
         const rawToday = d?.shopifyToday as any;
         const todayArr: TodayRow[] = Array.isArray(rawToday)
@@ -167,7 +174,9 @@ function DailyPnlPage() {
         setTwToday((twT?.rows as TwRow[]) || []);
         setWtd((twW?.rows as TwRow[]) || []);
         setMtd((twM?.rows as TwRow[]) || []);
-        setTwPrevTuesdays((twPrev?.rows as TwRow[]) || []);
+        setTwYesterday((twY?.rows as TwRow[]) || []);
+        setTwPrevWeek((twPW?.rows as TwRow[]) || []);
+        setTwPrevMonth((twPM?.rows as TwRow[]) || []);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
