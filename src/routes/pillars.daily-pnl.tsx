@@ -82,13 +82,50 @@ function isoNDaysAgo(n: number) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+function fmtIso(d: Date) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 function weekStartIso() {
   // ISO week start = Monday
   const d = new Date();
   const day = d.getUTCDay(); // 0..6 (Sun..Sat)
   const diff = day === 0 ? 6 : day - 1;
   d.setUTCDate(d.getUTCDate() - diff);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  return fmtIso(d);
+}
+
+// Previous week: same weekday-span as WTD, shifted back 7 days.
+// e.g. if today is Wed and WTD = Mon..Wed, prev = Mon-7..Wed-7
+function prevWeekRange() {
+  const d = new Date();
+  const day = d.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monThis = new Date(d);
+  monThis.setUTCDate(monThis.getUTCDate() - diff);
+  const fromD = new Date(monThis);
+  fromD.setUTCDate(fromD.getUTCDate() - 7);
+  const toD = new Date(d);
+  toD.setUTCDate(toD.getUTCDate() - 7);
+  return { from: fmtIso(fromD), to: fmtIso(toD) };
+}
+
+// Previous month: same day-of-month span. e.g. if today is Apr 15,
+// prev = Mar 1..Mar 15 (or last day of Mar if shorter).
+function prevMonthRange() {
+  const d = new Date();
+  const dayOfMonth = d.getUTCDate();
+  const fromD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
+  // Clamp end to last day of previous month if needed
+  const lastDayPrev = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate();
+  const toD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, Math.min(dayOfMonth, lastDayPrev)));
+  return { from: fmtIso(fromD), to: fmtIso(toD) };
+}
+
+function yesterdayIso() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return fmtIso(d);
 }
 
 type Period = "today" | "wtd" | "mtd";
