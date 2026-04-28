@@ -1428,10 +1428,11 @@ const JorttLiveSection = ({ jortt = null }: any = {}) => {
   );
 };
 
-
+/* =========================================================================
+   VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [] }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [], jortt = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
