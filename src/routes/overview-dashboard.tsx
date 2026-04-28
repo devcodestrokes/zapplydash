@@ -1011,7 +1011,7 @@ function DashboardBody({
         ))}
       </div>
 
-      {hasData && (
+      {hasSubData && (
         <div className="mt-8">
           <div className="mb-3 flex items-center gap-2">
             <Repeat size={16} className="text-emerald-600" />
@@ -1019,7 +1019,7 @@ function DashboardBody({
               Subscriptions
             </h2>
             <span className="text-[12px] text-muted-foreground">
-              · Triple Whale recurring metrics
+              · Juo (NL) + Loop (UK / US / EU) · live
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
