@@ -997,10 +997,10 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
                         <span className="font-medium text-neutral-900">{m.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{Math.round(m.revenue).toLocaleString()}</td>
                     <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.orders}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{(m.revenue / m.orders).toFixed(0)}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${m.adSpend.toLocaleString()}` : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{m.orders > 0 ? Math.round(m.revenue / m.orders).toLocaleString() : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${Math.round(m.adSpend).toLocaleString()}` : "—"}</td>
                     <td className="px-3 py-3.5 text-right tabular-nums">
                       {m.cac != null ? (
                         <span className={m.cac > 40 ? "text-rose-600 font-medium" : m.cac > 30 ? "text-amber-600" : "text-neutral-900"}>
