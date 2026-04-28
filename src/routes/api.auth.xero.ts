@@ -22,6 +22,10 @@ const XERO_SCOPES =
     "accounting.reports.profitandloss.read",
     "accounting.reports.balancesheet.read",
     "accounting.reports.banksummary.read",
+    "accounting.contacts.read",
+    "accounting.transactions.read",
+    "accounting.settings.read",
+    "accounting.journals.read",
   ].join(" ");
 
 export const Route = createFileRoute("/api/auth/xero")({
