@@ -814,17 +814,29 @@ function KpiWidget({
           {open && (
             <ul className="mt-2 space-y-1.5">
               {widget.breakdown.map((b) => (
-                <li
-                  key={b.market}
-                  className="flex items-center justify-between text-[13px]"
-                >
-                  <span className="flex items-center gap-2 text-muted-foreground">
-                    <span>{b.flag}</span>
-                    <span className="font-medium text-foreground">
-                      {b.market}
+                <li key={b.market} className="text-[13px]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <span>{b.flag}</span>
+                      <span className="font-medium text-foreground">
+                        {b.market}
+                      </span>
                     </span>
-                  </span>
-                  <span className="tabular-nums">{b.value}</span>
+                    <span className="tabular-nums">{b.value}</span>
+                  </div>
+                  {b.children && b.children.length > 0 && (
+                    <ul className="mt-1 ml-6 space-y-1 border-l border-border pl-3">
+                      {b.children.map((c) => (
+                        <li
+                          key={c.market}
+                          className="flex items-center justify-between text-[12px] text-muted-foreground"
+                        >
+                          <span>{c.market}</span>
+                          <span className="tabular-nums">{c.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
