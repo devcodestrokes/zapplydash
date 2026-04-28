@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   DollarSign,
   ShoppingCart,
+  Receipt,
   TrendingUp,
   Wallet,
   Sparkles,
