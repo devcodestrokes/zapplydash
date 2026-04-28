@@ -438,8 +438,12 @@ function DailyPnlPage() {
             <KpiTile
               icon="◎"
               label="Contribution margin"
-              value={`${periodKpis.contributionMargin.toFixed(1)}%`}
-              subtitle="per order"
+              value={
+                periodKpis.contributionMargin != null
+                  ? `${periodKpis.contributionMargin.toFixed(1)}%`
+                  : "—"
+              }
+              subtitle={periodKpis.profitIsLive ? "profit ÷ revenue" : "awaiting Triple Whale"}
               deltaPct={null}
               positiveIsGood
             />
