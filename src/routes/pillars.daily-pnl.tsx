@@ -86,7 +86,13 @@ function DailyPnlPage() {
     ])
       .then(([d, twT, twM]: [any, any, any]) => {
         if (!alive) return;
-        const sToday = ((d?.shopifyToday as TodayRow[]) || []).filter((r) => r && r.code);
+        const rawToday = d?.shopifyToday as any;
+        const todayArr: TodayRow[] = Array.isArray(rawToday)
+          ? rawToday
+          : Array.isArray(rawToday?.markets)
+          ? rawToday.markets
+          : [];
+        const sToday = todayArr.filter((r) => r && r.code);
         const twTodayRows = (twT?.rows as TwRow[]) || [];
         const twMtdRows = (twM?.rows as TwRow[]) || [];
         if (typeof window !== "undefined") {
