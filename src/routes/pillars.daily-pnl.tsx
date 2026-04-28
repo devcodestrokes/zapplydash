@@ -721,3 +721,59 @@ function DailyPnlSkeleton() {
   );
 }
 
+function KpiTile({
+  icon,
+  label,
+  value,
+  subtitle,
+  deltaPct,
+  positiveIsGood,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  subtitle?: string;
+  deltaPct: number | null;
+  positiveIsGood: boolean;
+}) {
+  const showDelta = deltaPct != null && isFinite(deltaPct);
+  const isPositive = (deltaPct ?? 0) >= 0;
+  const good = positiveIsGood ? isPositive : !isPositive;
+  return (
+    <div className="rounded-xl border bg-card px-5 py-4 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border bg-muted/40 text-[11px]">
+              {icon}
+            </span>
+            <span className="truncate">{label}</span>
+          </div>
+          <div className="mt-2 text-[26px] font-bold leading-none tracking-tight">
+            {value}
+          </div>
+          {subtitle && (
+            <div className="mt-1.5 text-[11px] text-muted-foreground">{subtitle}</div>
+          )}
+        </div>
+        {showDelta && (
+          <div
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium whitespace-nowrap",
+              good
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-red-50 text-red-700"
+            )}
+          >
+            <span aria-hidden>{isPositive ? "↗" : "↘"}</span>
+            <span>
+              {isPositive ? "+" : ""}
+              {deltaPct!.toFixed(1)}%
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
