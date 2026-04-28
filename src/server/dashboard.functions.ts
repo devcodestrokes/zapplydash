@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { readCacheKeys, ageMinutes } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
 import { fetchTripleWhale } from "./fetchers.server";
+import { getProgress } from "./progress.server";
 
 // In-memory range cache (per Worker instance). Triple Whale aggregates are
 // expensive (4 stores × external API). For a given (from,to) range the data
