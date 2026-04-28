@@ -337,11 +337,14 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string) {
       if (!shop) return { market, flag, live: false };
 
       try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 20_000); // 20s per store
         const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
           method: "POST",
           headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
           body: JSON.stringify({ shopDomain: shop, period: { start, end } }),
-        });
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(timer));
 
         if (!res.ok) {
           const body = await res.text();
