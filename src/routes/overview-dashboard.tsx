@@ -82,6 +82,17 @@ type TWRow = {
   pinterestSpend?: number | null;
   bingSpend?: number | null;
   klaviyoSpend?: number | null;
+  appleSpend?: number | null;
+  amazonSpend?: number | null;
+  linkedinSpend?: number | null;
+  twitterSpend?: number | null;
+  youtubeSpend?: number | null;
+  redditSpend?: number | null;
+  outbrainSpend?: number | null;
+  taboolaSpend?: number | null;
+  criteoSpend?: number | null;
+  influencerSpend?: number | null;
+  customSpend?: number | null;
   aov?: number | null;
   roas?: number | null;
 };
