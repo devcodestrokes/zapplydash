@@ -270,29 +270,119 @@ function DailyPnlPage() {
     <DashboardShell user={user} title="Daily P&L">
       <div className="bg-muted/20 min-h-full p-6 md:p-8">
         <div className="mx-auto max-w-6xl space-y-5">
-          {/* Header */}
+          {/* Header — title left, period toggle right (matches mockup) */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Pillar 1</div>
-              <h2 className="mt-1 text-3xl font-bold tracking-tight">Daily P&L Tracker</h2>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Daily P&L Tracker</h2>
               <div className="mt-1 text-sm text-muted-foreground">
-                {format(new Date(), "EEEE, d MMMM yyyy")}
+                Live intraday revenue with full profit & loss breakdown.
               </div>
             </div>
-            <div className="text-right text-xs">
-              <div className="text-muted-foreground">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 align-middle mr-1.5" />
-                Live · {totalOrdersToday} orders today
+            <div className="inline-flex rounded-lg border bg-card p-0.5 text-xs shadow-sm">
+              {([
+                ["today", "Today"],
+                ["wtd", "WTD"],
+                ["mtd", "MTD"],
+              ] as [Period, string][]).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setPeriod(k)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 font-medium transition-colors",
+                    period === k
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* KPI tiles (stacked, full width — matches mockup) */}
+          <div className="space-y-3">
+            <KpiTile
+              icon="$"
+              label={period === "today" ? "Revenue today" : period === "wtd" ? "Revenue WTD" : "Revenue MTD"}
+              value={fmtMoney(periodKpis.revenue, "EUR")}
+              subtitle={periodKpis.revenueLabel}
+              deltaPct={periodKpis.revenuePct}
+              positiveIsGood
+            />
+            <KpiTile
+              icon="↗"
+              label={period === "today" ? "Profit today (est.)" : period === "wtd" ? "Profit WTD (est.)" : "Profit MTD (est.)"}
+              value={fmtMoney(periodKpis.profit, "EUR")}
+              subtitle="Triple Whale gross − ad spend"
+              deltaPct={periodKpis.profitPct}
+              positiveIsGood
+            />
+            <KpiTile
+              icon="▭"
+              label={period === "today" ? "Ad spend today" : period === "wtd" ? "Ad spend WTD" : "Ad spend MTD"}
+              value={fmtMoney(periodKpis.adSpend, "EUR")}
+              subtitle="1h lag"
+              deltaPct={periodKpis.adPct}
+              positiveIsGood={false}
+            />
+            <KpiTile
+              icon="◎"
+              label="Contribution margin"
+              value={`${periodKpis.contributionMargin.toFixed(1)}%`}
+              subtitle="per order"
+              deltaPct={null}
+              positiveIsGood
+            />
+          </div>
+
+          {/* Intraday revenue strip */}
+          <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-[12px] text-muted-foreground">
+                  {period === "today"
+                    ? `Intraday revenue — today vs avg of last 4 ${["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"][new Date().getUTCDay()]}`
+                    : period === "wtd"
+                    ? "Week-to-date revenue"
+                    : "Month-to-date revenue"}
+                </div>
+                <div className="mt-1 flex items-baseline gap-3">
+                  <div className="text-2xl font-bold">{fmtMoney(periodKpis.revenue, "EUR")}</div>
+                  {periodKpis.revenuePct != null && (
+                    <div
+                      className={cn(
+                        "text-sm font-medium",
+                        periodKpis.revenuePct >= 0 ? "text-emerald-600" : "text-red-600"
+                      )}
+                    >
+                      Pacing {periodKpis.revenuePct >= 0 ? "+" : ""}
+                      {periodKpis.revenuePct.toFixed(1)}%
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="mt-1 space-x-2 text-muted-foreground">
-                {rows.map((r) => (
-                  <span key={r.code}>
-                    <span className="text-[10px] uppercase mr-0.5">{r.code}</span>
-                    {fmtMoney(r.revenue, r.currency)}
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> {period === "today" ? "Today" : period.toUpperCase()}
+                </span>
+                {period === "today" && (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" /> 4-{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getUTCDay()]} avg
                   </span>
-                ))}
+                )}
               </div>
             </div>
+          </div>
+
+          {/* Section divider — full breakdown */}
+          <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="text-base font-semibold">
+              Full P&L breakdown — {period === "today" ? "today" : period === "wtd" ? "week-to-date" : "month-to-date"}
+            </div>
+            <div className="text-xs text-muted-foreground">Every line traced to its source system.</div>
           </div>
 
           {/* Per-market tiles */}
