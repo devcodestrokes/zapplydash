@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/jortt/callback")({
         }
 
         try {
-          const tokenRes = await fetch("https://app.jortt.nl/oauth/token", {
+          const tokenRes = await fetch("https://app.jortt.nl/oauth-provider/oauth/token", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({
