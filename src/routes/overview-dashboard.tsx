@@ -275,16 +275,16 @@ function DateRangeFilter({
 
   const setPreset = (p: Preset) => {
     navigate({
-      search: (prev) => ({ ...prev, preset: p, from: "", to: "" }),
+      search: (prev: SearchParams) => ({ ...prev, preset: p, from: "", to: "" }),
     });
   };
 
   const applyCustom = () => {
     if (!draftFrom || !draftTo) return;
     navigate({
-      search: (prev) => ({
+      search: (prev: SearchParams) => ({
         ...prev,
-        preset: "custom",
+        preset: "custom" as const,
         from: iso(draftFrom),
         to: iso(draftTo),
       }),
