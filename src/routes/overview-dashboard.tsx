@@ -506,6 +506,56 @@ function DateRangeFilter({
   );
 }
 
+function CurrencySelect({
+  value,
+  onChange,
+}: {
+  value: CurrencyCode;
+  onChange: (c: CurrencyCode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = CURRENCIES.find((c) => c.code === value) ?? CURRENCIES[0];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-[12px]"
+        >
+          <span>{current.flag}</span>
+          <span className="font-medium">{current.code}</span>
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" align="start">
+        <ul className="max-h-72 overflow-auto">
+          {CURRENCIES.map((c) => (
+            <li key={c.code}>
+              <button
+                onClick={() => {
+                  onChange(c.code);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent",
+                  c.code === value && "bg-accent font-medium"
+                )}
+              >
+                <span>{c.flag}</span>
+                <span>{c.code}</span>
+                <span className="ml-auto text-muted-foreground">
+                  {c.symbol.trim()}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function DashboardBody({
   tw,
   loading,
