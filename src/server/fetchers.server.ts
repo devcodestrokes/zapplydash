@@ -15,6 +15,12 @@ function today(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+}
+
 // Service-role Supabase client — no cookies, works anywhere server-side.
 // In the TanStack Worker runtime, process.env may not contain the Supabase
 // keys, so we read VITE_* values via import.meta.env at MODULE TOP LEVEL.
@@ -536,6 +542,33 @@ export async function fetchTripleWhale(
 
   const hasAnyLive = results.some((r) => r.live);
   return hasAnyLive ? results : null;
+}
+
+export async function fetchTripleWhaleCustomerEconomics() {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  const shop = process.env.SHOPIFY_NL_STORE;
+  if (!apiKey || !shop) return null;
+
+  const end = today();
+  const fetchWindow = async (days: number) => {
+    const start = daysAgo(days);
+    const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+    });
+    if (!res.ok) throw new Error(`Triple Whale customer economics ${days}D: ${res.status}`);
+    const data = await res.json();
+    return twMetric(data.metrics ?? [], "uniqueCustomerSales");
+  };
+
+  try {
+    const [ltv90, ltv365] = await Promise.all([fetchWindow(90), fetchWindow(365)]);
+    return { market: "NL", currency: "EUR", ltv90, ltv365, live: ltv90 != null || ltv365 != null };
+  } catch (err: any) {
+    console.error("Triple Whale customer economics:", err?.message);
+    return null;
+  }
 }
 
 // ─── Daily Profit Fetchers (Shopify daily revenue + TW daily ad spend) ────────
