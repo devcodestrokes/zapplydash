@@ -1330,12 +1330,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
               <div className="mt-0.5 text-[12px] text-neutral-500">
                 {hasCohort
-                  ? `${f.cohortMonth ?? "Selected cohort"} first-time buyers · ${f.cohortWindowDays ?? 0}+ days observed`
+                  ? `${f.cohortMonth ?? fallbackCohort?.month ?? "Selected cohort"} first-time buyers · ${(f.cohortWindowDays ?? 0) || "latest"} days observed`
                   : "Monthly Shopify cohorts loaded · no mature repeat cohort yet"}
               </div>
             </div>
             <div className="text-right text-[11px] text-neutral-400">
-              Cohort size: <span className="font-semibold text-neutral-700">{(f.cohortSize ?? 0).toLocaleString()} first-time buyers</span>
+              Cohort size: <span className="font-semibold text-neutral-700">{cohortSize.toLocaleString()} first-time buyers</span>
             </div>
           </div>
 
@@ -1349,12 +1349,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                   </div>
                 </div>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate.toFixed(1)}%</div>
-                  <div className="text-[12px] text-neutral-500">{subs[i]}</div>
+                  <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
+                  <div className="text-[12px] text-neutral-500">{row.maturing ? "Still maturing" : subs[i]}</div>
                 </div>
-                <div className="mt-2 text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                <div className="mt-2 text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Needs more observation time"}</div>
                 <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-                  <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate)}%` }} />
+                  <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate ?? 0)}%` }} />
                 </div>
               </div>
             ))}
@@ -1377,10 +1377,10 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                       <span className={`h-2 w-2 rounded-full ${orderDotColors[i + 4]}`} />
                       {labels[i + 4]}
                     </div>
-                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate.toFixed(1)}%</div>
-                    <div className="text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
+                    <div className="text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Still maturing"}</div>
                     <div className="mt-2 h-1 w-full rounded-full bg-neutral-100 overflow-hidden">
-                      <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, row.rate * 4)}%` }} />
+                      <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, (row.rate ?? 0) * 4)}%` }} />
                     </div>
                   </div>
                 ))}
