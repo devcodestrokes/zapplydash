@@ -697,7 +697,28 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const twTotalAdSpend     = effectiveTWData?.filter(t => t.live && t.adSpend     != null).reduce((s, t) => s + (t.adSpend     ?? 0), 0) || null;
   const liveLoop        = subData.find(s => s.market === "UK") ?? null;
   const liveJuo         = subData.find(s => s.market === "NL") ?? null;
-  const liveMRR         = subData.length > 0 ? subData.reduce((s, m) => s + (m.mrr ?? 0), 0) : null;
+  // FX rates from Shopify markets (currency → EUR rate). Subscription rows
+  // come from Loop (GBP/USD/EUR) and Juo (EUR) without their own FX, so we
+  // borrow rates from the matching Shopify market when available.
+  const fxRateByMarket: Record<string, number> = {};
+  for (const m of (liveMarkets ?? [])) {
+    if (m?.code && typeof m.fxRate === "number") fxRateByMarket[m.code] = m.fxRate;
+  }
+  const fallbackFx: Record<string, number> = { EUR: 1, GBP: 1.17, USD: 0.92 };
+  const subToEUR = (m: any): number => {
+    const native = m?.mrr ?? 0;
+    if (!native) return 0;
+    const code = m?.market;
+    const cur = m?.currency ?? "EUR";
+    if (cur === "EUR") return native;
+    const rate = fxRateByMarket[code] ?? fallbackFx[cur] ?? 1;
+    return native * rate;
+  };
+  // Decorate subData with eurMrr for downstream calculations
+  const subDataEUR = subData.map((m: any) => ({ ...m, mrrEUR: subToEUR(m) }));
+  const liveMRR         = subDataEUR.length > 0
+    ? +subDataEUR.reduce((s, m) => s + (m.mrrEUR ?? 0), 0).toFixed(2)
+    : null;
   const revenueBreakdownMarkets = effectiveMarkets?.filter(m => m.live) ?? [];
 
   // ─── Today's Profit (est.) — uses cached daily Shopify revenue + TW ad spend ───
