@@ -103,6 +103,10 @@ function drMonthsAgo(n) {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n);
   return drStartOfMonth(d);
 }
+function drDaysAgo(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+}
 function drFormatLabel(from, to) {
   const som = drStartOfMonth(), tod = drToday();
   if (from === som && to === tod) return "This month";
