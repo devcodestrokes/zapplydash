@@ -606,7 +606,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
@@ -784,6 +784,19 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     return { today, yesterday, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
   }, [shopifyDaily, tripleWhaleDaily]);
 
+  const dashboardDiagnostics = useMemo(() => {
+    const apiRows = sourceStatus?.sources ?? [];
+    const refused = apiRows.filter((s: any) => s.status === "error" || s.status === "disconnected");
+    const delayed = apiRows.filter((s: any) => s.status === "degraded");
+    const mathWidgets = [
+      "Revenue", "Orders", "AOV", "Contribution margin", "OpEx", "EBITDA",
+      "NCPA", "90D LTV", "365D LTV", "Ad spend", "Blended ROAS", "MRR",
+      "Active subscribers", "Churn rate", "Subscription share", "Repeat funnel",
+      "Today's profit", "MRR chart", "Market split", "Cohort table",
+    ];
+    return { apiRows, refused, delayed, mathWidgets };
+  }, [sourceStatus]);
+
   return (<>
     <div className="flex items-end justify-between">
       <div>
@@ -801,6 +814,56 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
 
     {/* Today's Profit (est.) */}
     <TodaysProfitCard metrics={profitMetrics} chartsReady={chartsReady} />
+
+    {dashboardDiagnostics.apiRows.length > 0 && (
+      <Card className="mt-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[13px] font-semibold">Dashboard data completeness</div>
+            <div className="mt-0.5 text-[12px] text-neutral-500">
+              {dashboardDiagnostics.apiRows.length} API feeds checked · {dashboardDiagnostics.refused.length} refused/missing expected data · {dashboardDiagnostics.delayed.length} stale/delayed · {dashboardDiagnostics.mathWidgets.length} widgets can render from cached API data and calculations
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            {dashboardDiagnostics.refused.slice(0, 3).map((s: any) => (
+              <span key={`${s.provider}-${s.key}`} className="rounded-full bg-rose-50 px-2 py-1 font-medium text-rose-700">{s.label}: {s.error ?? s.status}</span>
+            ))}
+            {dashboardDiagnostics.delayed.slice(0, 3).map((s: any) => (
+              <span key={`${s.provider}-${s.key}`} className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-700">{s.label}: stale</span>
+            ))}
+            {dashboardDiagnostics.refused.length === 0 && dashboardDiagnostics.delayed.length === 0 && (
+              <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">All expected cached APIs are returning usable data</span>
+            )}
+          </div>
+        </div>
+        <div className="mt-3 overflow-hidden rounded-lg border border-neutral-100">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="bg-neutral-50 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                <th className="px-3 py-2 text-left">API feed</th>
+                <th className="px-3 py-2 text-left">Expected data</th>
+                <th className="px-3 py-2 text-right">Rows</th>
+                <th className="px-3 py-2 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboardDiagnostics.apiRows.map((s: any) => (
+                <tr key={`${s.provider}-${s.key}`} className="border-t border-neutral-100">
+                  <td className="px-3 py-2 font-medium text-neutral-700">{s.label}</td>
+                  <td className="px-3 py-2 text-neutral-500">{s.error ?? s.expected}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">{s.rowCount ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${s.status === "healthy" ? "bg-emerald-50 text-emerald-700" : s.status === "degraded" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    )}
 
     {/* Revenue hero */}
     <section className="mt-3">
@@ -1207,7 +1270,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             {(() => {
               const f: any = shopifyRepeatFunnel;
               const thirdRow = f?.funnel?.[2];
-              const rate: number | null = thirdRow?.rate ?? null;
+              const rate: number | null = (f?.cohortSize ?? 0) > 0 ? (thirdRow?.rate ?? null) : null;
               // Compute delta vs prior mature cohort (first non-maturing cohort that is not the latest mature one)
               const mature = (f?.monthlyCohorts ?? []).filter((c: any) => !c.maturing && c.third !== null);
               const latest = mature[0];
@@ -1266,14 +1329,26 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     {/* Repeat Purchase Funnel — real Shopify cohort data */}
     {shopifyRepeatFunnel && (() => {
       const f = shopifyRepeatFunnel;
-      const hasCohort = f.cohortSize > 0;
+      const fallbackCohort = (f.monthlyCohorts ?? []).find((c: any) => (c.size ?? 0) > 0) ?? null;
+      const cohortSize = (f.cohortSize ?? 0) > 0 ? f.cohortSize : (fallbackCohort?.size ?? 0);
+      const hasCohort = cohortSize > 0;
       const orderColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const orderDotColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const labels = ["1st order", "2nd order", "3rd order", "4th order", "5th order", "6th order", "7th+ orders"];
       const subs = ["First purchase", "Repeat to 2nd", "Repeat to 3rd", "Repeat to 4th", "Repeat to 5th", "Repeat to 6th", "Repeat to 7th+"];
+      const fallbackFunnel = fallbackCohort ? [
+        { order: 1, customers: cohortSize, rate: 100, maturing: false },
+        { order: 2, customers: fallbackCohort.second !== null ? Math.round(cohortSize * fallbackCohort.second / 100) : null, rate: fallbackCohort.second, maturing: fallbackCohort.second === null },
+        { order: 3, customers: fallbackCohort.third !== null ? Math.round(cohortSize * fallbackCohort.third / 100) : null, rate: fallbackCohort.third, maturing: fallbackCohort.third === null },
+        { order: 4, customers: fallbackCohort.fourth !== null ? Math.round(cohortSize * fallbackCohort.fourth / 100) : null, rate: fallbackCohort.fourth, maturing: fallbackCohort.fourth === null },
+        { order: 5, customers: null, rate: null, maturing: true },
+        { order: 6, customers: null, rate: null, maturing: true },
+        { order: 7, customers: null, rate: null, maturing: true },
+      ] : [];
+      const displayFunnel = (f.cohortSize ?? 0) > 0 ? f.funnel : fallbackFunnel;
       // (deeper analysis is always rendered for accuracy)
-      const top4 = f.funnel.slice(0, 4);
-      const rest = f.funnel.slice(4);
+      const top4 = displayFunnel.slice(0, 4);
+      const rest = displayFunnel.slice(4);
       return (
         <Card className="mt-3 p-5">
           <div className="flex items-start justify-between mb-1">
@@ -1281,12 +1356,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
               <div className="mt-0.5 text-[12px] text-neutral-500">
                 {hasCohort
-                  ? `${f.cohortMonth ?? "Selected cohort"} first-time buyers · ${f.cohortWindowDays ?? 0}+ days observed`
+                  ? `${f.cohortMonth ?? fallbackCohort?.month ?? "Selected cohort"} first-time buyers · ${(f.cohortWindowDays ?? 0) || "latest"} days observed`
                   : "Monthly Shopify cohorts loaded · no mature repeat cohort yet"}
               </div>
             </div>
             <div className="text-right text-[11px] text-neutral-400">
-              Cohort size: <span className="font-semibold text-neutral-700">{(f.cohortSize ?? 0).toLocaleString()} first-time buyers</span>
+              Cohort size: <span className="font-semibold text-neutral-700">{cohortSize.toLocaleString()} first-time buyers</span>
             </div>
           </div>
 
@@ -1300,12 +1375,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                   </div>
                 </div>
                 <div className="mt-2 flex items-baseline gap-2">
-                  <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate.toFixed(1)}%</div>
-                  <div className="text-[12px] text-neutral-500">{subs[i]}</div>
+                  <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
+                  <div className="text-[12px] text-neutral-500">{row.maturing ? "Still maturing" : subs[i]}</div>
                 </div>
-                <div className="mt-2 text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                <div className="mt-2 text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Needs more observation time"}</div>
                 <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
-                  <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate)}%` }} />
+                  <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate ?? 0)}%` }} />
                 </div>
               </div>
             ))}
@@ -1328,10 +1403,10 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                       <span className={`h-2 w-2 rounded-full ${orderDotColors[i + 4]}`} />
                       {labels[i + 4]}
                     </div>
-                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate.toFixed(1)}%</div>
-                    <div className="text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
+                    <div className="text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Still maturing"}</div>
                     <div className="mt-2 h-1 w-full rounded-full bg-neutral-100 overflow-hidden">
-                      <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, row.rate * 4)}%` }} />
+                      <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, (row.rate ?? 0) * 4)}%` }} />
                     </div>
                   </div>
                 ))}
@@ -3290,7 +3365,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} shopifyRepeatFunnel={safeRepeatFunnel} />}
+          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} shopifyRepeatFunnel={safeRepeatFunnel} sourceStatus={liveData?.sourceStatus ?? null} />}
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
