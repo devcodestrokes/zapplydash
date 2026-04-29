@@ -209,7 +209,7 @@ export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
         const agg = await fetchShopifyAllOrders(store, token, since, 180, until);
         const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } = agg;
         const aov = orderCount > 0 ? revenue / orderCount : 0;
-        if (truncated) console.warn(`Shopify ${code}: revenue capped at 40 pages (10,000 orders)`);
+        if (truncated) console.warn(`Shopify ${code}: revenue capped at 180 pages (45,000 orders)`);
         // Convert to EUR for cross-store aggregation. Keep native values too.
         const fxRate = await getEurRate(currency, since.slice(0, 10), (until ?? new Date().toISOString()).slice(0, 10));
         const revenueEUR = +(revenue * fxRate).toFixed(2);
@@ -329,7 +329,8 @@ export async function fetchShopifyMonthly() {
         if (!merged[month]) merged[month] = { revenue: 0, orders: 0, refunds: 0, byMarket: {} };
         const endDay = new Date(`1 ${month.replace("'", "20")}`);
         endDay.setMonth(endDay.getMonth() + 1, 0);
-        const fxRate = await getEurRate((SHOPIFY_STORES.find((s) => s.code === storeRow.code) as any)?.code === "UK" ? "GBP" : (SHOPIFY_STORES.find((s) => s.code === storeRow.code) as any)?.code === "US" ? "USD" : "EUR", sinceDay, endDay.toISOString().split("T")[0]);
+        const sourceCurrency = MARKET_CURRENCY[storeRow.code] ?? "EUR";
+        const fxRate = await getEurRate(sourceCurrency, sinceDay, endDay.toISOString().split("T")[0]);
         const revenue = +(row.revenue * fxRate).toFixed(2);
         const refunds = +(row.refunds * fxRate).toFixed(2);
         merged[month].revenue += revenue;
@@ -740,6 +741,7 @@ export async function fetchShopifyDaily() {
   return {
     daily: merged,
     byMarket: Object.fromEntries(perStore.map((s) => [s.code, s.daily])),
+    calcVersion: 2,
     fetchedAt: new Date().toISOString(),
   };
 }
