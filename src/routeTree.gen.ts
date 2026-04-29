@@ -23,6 +23,7 @@ import { Route as PillarsForecastRouteImport } from './routes/pillars.forecast'
 import { Route as PillarsDailyPnlRouteImport } from './routes/pillars.daily-pnl'
 import { Route as PillarsBalanceSheetRouteImport } from './routes/pillars.balance-sheet'
 import { Route as OperationsSyncStatusRouteImport } from './routes/operations.sync-status'
+import { Route as OperationsReconciliationRouteImport } from './routes/operations.reconciliation'
 import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
@@ -107,6 +108,12 @@ const OperationsSyncStatusRoute = OperationsSyncStatusRouteImport.update({
   path: '/operations/sync-status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OperationsReconciliationRoute =
+  OperationsReconciliationRouteImport.update({
+    id: '/operations/reconciliation',
+    path: '/operations/reconciliation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthLogoutRoute = AuthLogoutRouteImport.update({
   id: '/auth/logout',
   path: '/auth/logout',
@@ -186,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/reconciliation': typeof OperationsReconciliationRoute
   '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
@@ -215,6 +223,7 @@ export interface FileRoutesByTo {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/reconciliation': typeof OperationsReconciliationRoute
   '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
@@ -245,6 +254,7 @@ export interface FileRoutesById {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/reconciliation': typeof OperationsReconciliationRoute
   '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/reconciliation'
     | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/reconciliation'
     | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
@@ -334,6 +346,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/reconciliation'
     | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
@@ -364,6 +377,7 @@ export interface RootRouteChildren {
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
+  OperationsReconciliationRoute: typeof OperationsReconciliationRoute
   OperationsSyncStatusRoute: typeof OperationsSyncStatusRoute
   PillarsBalanceSheetRoute: typeof PillarsBalanceSheetRoute
   PillarsDailyPnlRoute: typeof PillarsDailyPnlRoute
@@ -476,6 +490,13 @@ declare module '@tanstack/react-router' {
       path: '/operations/sync-status'
       fullPath: '/operations/sync-status'
       preLoaderRoute: typeof OperationsSyncStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/reconciliation': {
+      id: '/operations/reconciliation'
+      path: '/operations/reconciliation'
+      fullPath: '/operations/reconciliation'
+      preLoaderRoute: typeof OperationsReconciliationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/logout': {
@@ -611,6 +632,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
+  OperationsReconciliationRoute: OperationsReconciliationRoute,
   OperationsSyncStatusRoute: OperationsSyncStatusRoute,
   PillarsBalanceSheetRoute: PillarsBalanceSheetRoute,
   PillarsDailyPnlRoute: PillarsDailyPnlRoute,
