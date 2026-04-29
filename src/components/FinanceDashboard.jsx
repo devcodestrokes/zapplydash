@@ -574,7 +574,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     <section className="mt-3">
       <Card className="p-6 transition hover:border-neutral-300">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
               <BrandIcon brand="shopify" size={14} />
               <span>Revenue</span>
@@ -583,9 +583,52 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             <div className="mt-3 flex items-baseline gap-4">
               {rangeRevenue !== null ? (
                 <>
-                  <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none">
-                    €{Math.round(rangeRevenue).toLocaleString()}
-                  </span>
+                  <div className="group relative inline-block">
+                    <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none cursor-help border-b border-dashed border-neutral-300">
+                      €{Math.round(rangeRevenue).toLocaleString()}
+                    </span>
+                    {/* Hover breakdown */}
+                    {effectiveMarkets && effectiveMarkets.filter(m => m.live).length > 0 && (
+                      <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl group-hover:block">
+                        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Revenue breakdown</div>
+                        <div className="space-y-1.5">
+                          {effectiveMarkets.filter(m => m.live).map(m => {
+                            const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
+                            const native = m.revenueNative ?? m.revenue ?? 0;
+                            const eur = m.revenue ?? 0;
+                            const fx = m.fxRate ?? 1;
+                            const sameCurrency = m.currency === "EUR" || fx === 1;
+                            return (
+                              <div key={m.code} className="flex items-center justify-between text-[12px]">
+                                <span className="flex items-center gap-1.5">
+                                  <span>{m.flag}</span>
+                                  <span className="font-medium text-neutral-700">{m.code}</span>
+                                </span>
+                                <span className="text-right tabular-nums">
+                                  <span className="text-neutral-500">{sym}{Math.round(native).toLocaleString()}</span>
+                                  {!sameCurrency && (
+                                    <>
+                                      <span className="mx-1 text-neutral-300">→</span>
+                                      <span className="font-semibold text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                                      <div className="text-[10px] text-neutral-400">@ {fx.toFixed(4)} EUR/{m.currency}</div>
+                                    </>
+                                  )}
+                                  {sameCurrency && m.currency !== "EUR" && (
+                                    <span className="ml-1 font-semibold text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-2 text-[12px]">
+                          <span className="font-semibold text-neutral-700">Total</span>
+                          <span className="font-semibold tabular-nums">€{Math.round(rangeRevenue).toLocaleString()}</span>
+                        </div>
+                        <div className="mt-2 text-[10px] text-neutral-400">FX rates from frankfurter.app · refreshed per range</div>
+                      </div>
+                    )}
+                  </div>
                   {isCurrentMonth
                     ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Live</span>
                     : <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">Historical</span>
@@ -596,6 +639,9 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               )}
             </div>
             <div className="mt-1 text-[12px] text-neutral-400">{rangeRevenue !== null ? revenueSourceLabel : "Shopify not connected"}</div>
+            {effectiveMarkets && effectiveMarkets.filter(m => m.live && m.currency !== "EUR").length > 0 && (
+              <div className="mt-1 text-[11px] text-neutral-400">Hover total for per-store breakdown · all values converted to EUR</div>
+            )}
           </div>
           <div className="hidden items-center gap-6 md:flex">
             <div className="text-right">

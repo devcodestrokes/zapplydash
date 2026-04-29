@@ -201,7 +201,17 @@ export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
         const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } = agg;
         const aov = orderCount > 0 ? revenue / orderCount : 0;
         if (truncated) console.warn(`Shopify ${code}: revenue capped at 40 pages (10,000 orders)`);
-        return { code, flag, name, revenue, refunds, discounts, orders: orderCount, aov, currency, newCustomers: uniqueCustomers, truncated, status: status ?? null, live: true };
+        // Convert to EUR for cross-store aggregation. Keep native values too.
+        const fxRate = await getEurRate(currency, since.slice(0, 10), (until ?? new Date().toISOString()).slice(0, 10));
+        const revenueEUR = +(revenue * fxRate).toFixed(2);
+        const refundsEUR = +(refunds * fxRate).toFixed(2);
+        return {
+          code, flag, name,
+          revenue: revenueEUR, refunds: refundsEUR, discounts,
+          revenueNative: revenue, refundsNative: refunds,
+          orders: orderCount, aov, currency, fxRate,
+          newCustomers: uniqueCustomers, truncated, status: status ?? null, live: true,
+        };
       } catch (err: any) {
         console.error(`Shopify ${code} fetch failed:`, err.message);
         return { code, flag, name, status: status ?? null, live: false, error: err.message };
@@ -265,7 +275,10 @@ export async function fetchShopifyToday() {
         }
 
         const hourly = hourlyRev.map((rev, h) => ({ hour: h, revenue: +rev.toFixed(2), orders: hourlyOrd[h] }));
-        return { code, flag, name, revenue: +revenue.toFixed(2), refunds: +refunds.toFixed(2), orders, aov: orders > 0 ? +(revenue / orders).toFixed(2) : 0, currency, hourly, live: true };
+        const fxRate = await getEurRate(currency, today(), today());
+        const revenueEUR = +(revenue * fxRate).toFixed(2);
+        const refundsEUR = +(refunds * fxRate).toFixed(2);
+        return { code, flag, name, revenue: revenueEUR, refunds: refundsEUR, revenueNative: +revenue.toFixed(2), refundsNative: +refunds.toFixed(2), orders, aov: orders > 0 ? +(revenueEUR / orders).toFixed(2) : 0, currency, fxRate, hourly, live: true };
       } catch (err: any) {
         console.error(`Shopify today ${code}:`, err.message);
         return { code, flag, name, live: false };
