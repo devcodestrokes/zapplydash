@@ -578,6 +578,28 @@ function GrowthPlan2026() {
             ))}
           </div>
         </div>
+        <div className="mt-4 h-[320px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={rows.map((r) => {
+              if (metric === "revenue") return { m: r.m, NL: r.nl, GB: r.gb, US: r.us };
+              if (metric === "marketing") {
+                const f = r.total > 0 ? r.marketing / r.total : 0;
+                return { m: r.m, NL: Math.round(r.nl * f), GB: Math.round(r.gb * f), US: Math.round(r.us * f) };
+              }
+              const f = r.total > 0 ? r.netProfit / r.total : 0;
+              return { m: r.m, NL: Math.round(r.nl * f), GB: Math.round(r.gb * f), US: Math.round(r.us * f) };
+            })} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="m" tick={{ fontSize: 11, fill: "#737373" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#737373" }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${Math.round(Number(v) / 1000)}k`} />
+              <Tooltip formatter={(v: any) => fmtK(Number(v))} cursor={{ fill: "#f5f5f5" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="NL" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="GB" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </GrowthCard>
 
       <GrowthCard className="mt-3 p-5">
