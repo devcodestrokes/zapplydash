@@ -2332,6 +2332,7 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
+    calcVersion: 2,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
