@@ -406,9 +406,9 @@ function GrowthPlan2026() {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
 
   const plan = {
-    NL: { target: 26_000, marketing: 5_200,  margin: 0.40, share: 0.26, ytdPct: 29.8, status: "On pace" as const },
-    GB: { target: 49_000, marketing: 22_050, margin: 0.34, share: 0.49, ytdPct: 21.8, status: "Behind"  as const },
-    US: { target: 25_000, marketing: 8_750,  margin: 0.14, share: 0.25, ytdPct: 0.5,  status: "Behind"  as const },
+    NL: { target: 2_600_000, marketing: 520_000,   margin: 0.40, share: 0.26, ytdPct: 29.8, status: "On pace" as const },
+    GB: { target: 4_900_000, marketing: 2_205_000, margin: 0.34, share: 0.49, ytdPct: 21.8, status: "Behind"  as const },
+    US: { target: 2_500_000, marketing: 875_000,   margin: 0.14, share: 0.25, ytdPct: 0.5,  status: "Behind"  as const },
   };
   const totalTarget = plan.NL.target + plan.GB.target + plan.US.target;
   const totalMarketing = plan.NL.marketing + plan.GB.marketing + plan.US.marketing;
