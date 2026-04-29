@@ -268,11 +268,13 @@ export async function fetchShopifyToday() {
           for (const { node: o } of edges) {
             const r  = parseFloat(o.totalPriceSet.shopMoney.amount);
             const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
-            revenue += r; refunds += rf; orders++;
+            // Net of refunds — matches Shopify Analytics "Total sales".
+            const net = r - rf;
+            revenue += net; refunds += rf; orders++;
             currency = o.totalPriceSet.shopMoney.currencyCode;
             // Amsterdam = UTC+2 (CEST, valid Apr-Oct)
             const hour = (new Date(o.createdAt).getUTCHours() + 2) % 24;
-            hourlyRev[hour] += r;
+            hourlyRev[hour] += net;
             hourlyOrd[hour]++;
           }
         }
