@@ -606,7 +606,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
@@ -3118,7 +3118,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} />}
+          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} shopifyRepeatFunnel={liveData?.shopifyRepeatFunnel ?? null} />}
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
