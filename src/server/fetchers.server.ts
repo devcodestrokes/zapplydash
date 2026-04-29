@@ -2118,3 +2118,180 @@ export async function fetchJortt() {
     deniedScopes: JORTT_ALL_SCOPES.filter((s) => !tokens[s]),
   };
 }
+
+// ─── Shopify Repeat Purchase Funnel ──────────────────────────────────────────
+// Pulls the last ~365 days of orders for every Shopify store, builds per-customer
+// order timelines, then computes cohort-based repeat rates (1st → 2nd → 3rd → 4th
+// + 5th/6th/7th orders) and monthly cohort tables.
+//
+// Cohort definition: customers whose FIRST order falls in the cohort month.
+// Repeat rate = % of cohort that placed an Nth order within the observation window.
+// Slow first sync (multi-minute on big stores) — cached for 720 minutes.
+export async function fetchShopifyRepeatFunnel() {
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
+  if (!clientId) return null;
+
+  const lookbackDays = 365;
+  const sinceDate = daysAgoIso(lookbackDays);
+  const since = `${sinceDate}T00:00:00Z`;
+
+  // customerId → sorted list of order createdAt timestamps (across all stores).
+  // Keying by raw Shopify GID is safe — IDs do not collide between stores.
+  const customerOrders = new Map<string, string[]>();
+
+  for (const { code, storeKey } of SHOPIFY_STORES) {
+    const store = process.env[storeKey];
+    if (!store) continue;
+    const token = await getShopifyToken(store);
+    if (!token) continue;
+
+    let cursor: string | null = null;
+    let hasNextPage = true;
+    let page = 0;
+    const maxPages = 80; // ~20k orders per store
+
+    try {
+      while (hasNextPage && page < maxPages) {
+        const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+          method: "POST",
+          headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+          body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
+        });
+        if (!res.ok) break;
+        const json = await res.json();
+        if (json.errors) {
+          console.error(`Shopify repeat ${code} GQL:`, json.errors[0]?.message);
+          break;
+        }
+        const pageData = json.data?.orders ?? {};
+        const edges: any[] = pageData.edges ?? [];
+        hasNextPage = pageData.pageInfo?.hasNextPage ?? false;
+        cursor = pageData.pageInfo?.endCursor ?? null;
+        page++;
+
+        for (const { node: o } of edges) {
+          const cid = o.customer?.id;
+          if (!cid) continue;
+          const arr = customerOrders.get(cid) ?? [];
+          arr.push(o.createdAt);
+          customerOrders.set(cid, arr);
+        }
+      }
+    } catch (err: any) {
+      console.error(`Shopify repeat ${code}:`, err?.message);
+    }
+  }
+
+  if (customerOrders.size === 0) return null;
+
+  // Sort each customer's order timeline ascending
+  for (const arr of customerOrders.values()) arr.sort();
+
+  const now = Date.now();
+  const DAY = 86_400_000;
+
+  // ── 90-day cohort funnel ────────────────────────────────────────────
+  // First order in [120d, 90d] ago — gives a 30-day cohort that has had
+  // at least 90 days to repeat.
+  const cohortStart = now - 120 * DAY;
+  const cohortEnd = now - 90 * DAY;
+  let cohortSize = 0;
+  const orderCounts = [0, 0, 0, 0, 0, 0, 0]; // 1st..7th+
+  for (const orders of customerOrders.values()) {
+    const firstTs = new Date(orders[0]).getTime();
+    if (firstTs < cohortStart || firstTs > cohortEnd) continue;
+    cohortSize++;
+    const n = Math.min(orders.length, 7);
+    // Customer reached order N → increments buckets 1..N
+    for (let i = 0; i < n; i++) orderCounts[i]++;
+    // 7+ bucket also captures anyone with 7 or more
+    if (orders.length >= 7) orderCounts[6]++;
+  }
+  // de-dupe the 7+ double-count from the loop above
+  if (cohortSize > 0) {
+    let bucket7 = 0;
+    for (const orders of customerOrders.values()) {
+      const firstTs = new Date(orders[0]).getTime();
+      if (firstTs < cohortStart || firstTs > cohortEnd) continue;
+      if (orders.length >= 7) bucket7++;
+    }
+    orderCounts[6] = bucket7;
+  }
+
+  const funnel = orderCounts.map((c, i) => ({
+    order: i + 1,
+    customers: c,
+    rate: cohortSize > 0 ? +((c / cohortSize) * 100).toFixed(1) : 0,
+  }));
+
+  // ── Monthly cohort table — last 4 calendar months ───────────────────
+  const monthLabel = (d: Date) =>
+    d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+  const monthlyCohorts: Array<{
+    month: string;
+    size: number;
+    second: number | null;
+    third: number | null;
+    fourth: number | null;
+    avgOrders: number | null;
+    maturing: boolean;
+  }> = [];
+
+  const cohortBuckets = new Map<string, string[][]>(); // monthKey → array of customer order arrays
+  for (const orders of customerOrders.values()) {
+    const first = new Date(orders[0]);
+    const key = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, "0")}`;
+    if (!cohortBuckets.has(key)) cohortBuckets.set(key, []);
+    cohortBuckets.get(key)!.push(orders);
+  }
+
+  // last 4 calendar months including current
+  const now2 = new Date();
+  for (let i = 3; i >= 0; i--) {
+    const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const cohort = cohortBuckets.get(key) ?? [];
+    const size = cohort.length;
+    const monthAge = i; // months ago (0 = current)
+    // Need at least 90 days to mature for 3rd/4th order data
+    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).getTime();
+    const daysSinceCohortEnd = (now - monthEnd) / DAY;
+    const maturing = daysSinceCohortEnd < 90;
+
+    if (size === 0) {
+      monthlyCohorts.push({
+        month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
+        size: 0, second: null, third: null, fourth: null, avgOrders: null, maturing,
+      });
+      continue;
+    }
+
+    let s2 = 0, s3 = 0, s4 = 0, totalOrders = 0;
+    for (const orders of cohort) {
+      if (orders.length >= 2) s2++;
+      if (orders.length >= 3) s3++;
+      if (orders.length >= 4) s4++;
+      totalOrders += orders.length;
+    }
+    monthlyCohorts.push({
+      month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
+      size,
+      second: maturing ? null : +((s2 / size) * 100).toFixed(1),
+      third:  maturing ? null : +((s3 / size) * 100).toFixed(1),
+      fourth: maturing ? null : +((s4 / size) * 100).toFixed(1),
+      avgOrders: +(totalOrders / size).toFixed(2),
+      maturing,
+    });
+  }
+
+  return {
+    cohortSize,
+    cohortWindowDays: 30,
+    cohortStartedDaysAgo: 120,
+    cohortEndedDaysAgo: 90,
+    funnel,
+    monthlyCohorts,
+    totalCustomersAnalyzed: customerOrders.size,
+    fetchedAt: new Date().toISOString(),
+  };
+}
