@@ -102,12 +102,22 @@ const CONNECTORS: Connector[] = [
     api: "REST",
     iconBg: "bg-violet-50",
     iconColor: "text-violet-600",
-    providerKeys: ["loop", "juo"],
+    providerKeys: ["loop"],
     unit: (data) => {
       const loop = Number(data?.loop?.activeSubscribers ?? data?.loop?.subscribers ?? 0);
+      return loop > 0 ? `${loop.toLocaleString("en-GB")} subscribers` : "—";
+    },
+  },
+  {
+    id: "juo",
+    name: "Juo",
+    api: "REST",
+    iconBg: "bg-fuchsia-50",
+    iconColor: "text-fuchsia-600",
+    providerKeys: ["juo"],
+    unit: (data) => {
       const juo = Number(data?.juo?.activeSubscribers ?? data?.juo?.subscribers ?? 0);
-      const total = loop + juo;
-      return total > 0 ? `${total.toLocaleString("en-GB")} subscribers` : "—";
+      return juo > 0 ? `${juo.toLocaleString("en-GB")} subscribers` : "—";
     },
   },
   {
@@ -126,7 +136,7 @@ const CONNECTORS: Connector[] = [
     api: "REST",
     iconBg: "bg-teal-50",
     iconColor: "text-teal-600",
-    providerKeys: ["jortt", "xero"],
+    providerKeys: ["jortt"],
     unit: (data) => {
       const inv = Number(data?.jortt?.invoiceCount ?? 0);
       const exp = Number(data?.jortt?.expenseCount ?? 0);
@@ -135,6 +145,22 @@ const CONNECTORS: Connector[] = [
       return total > 0 ? `${total.toLocaleString("en-GB")} transactions` : "—";
     },
     badge: "Bridge connector · Xero replacing within ~1 month",
+  },
+  {
+    id: "xero",
+    name: "Xero",
+    api: "REST v2",
+    iconBg: "bg-sky-50",
+    iconColor: "text-sky-600",
+    providerKeys: ["xero"],
+    unit: (data) => {
+      const inv = Number(data?.xero?.invoiceCount ?? 0);
+      const exp = Number(data?.xero?.expenseCount ?? 0);
+      const tx = Number(data?.xero?.bankTransactionsCount ?? 0);
+      const total = inv + exp + tx;
+      return total > 0 ? `${total.toLocaleString("en-GB")} transactions` : "—";
+    },
+    badge: "Incoming · Will replace Jortt within ~1 month",
   },
 ];
 
