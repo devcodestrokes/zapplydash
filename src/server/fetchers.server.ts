@@ -2271,7 +2271,7 @@ export async function fetchJortt() {
 
   // 6. Bank accounts + transactions — financing:read (v3)
   let bankAccounts: any[] = [];
-  let bankTransactions: any[] = [];
+  const bankTransactions: any[] = [];
   if (tokens["financing:read"]) {
     const t = tokens["financing:read"]!;
     bankAccounts = await jorttPaginate(t, "/v3/bank_accounts", 5);
