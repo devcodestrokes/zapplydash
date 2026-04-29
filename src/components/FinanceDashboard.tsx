@@ -878,55 +878,108 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       </Card>
     </section>
 
-    {/* Profit row — real TW figures (current month) or Jortt (historical) */}
-    {rangeRevenue !== null && (
-    <section className="mt-3 grid grid-cols-3 gap-3">
-      {(() => {
-        const rev = rangeRevenue ?? 0;
-        // For historical ranges, fall back to Jortt data
-        const grossP = isCurrentMonth ? twTotalGrossProfit : (rangeJorttRevenue && rangeJorttExpenses ? rangeJorttRevenue - rangeJorttExpenses : twTotalGrossProfit);
-        const costs  = isCurrentMonth ? liveCOGS : (rangeJorttExpenses ?? liveCOGS);
-        const netP   = isCurrentMonth ? twTotalNetProfit : (grossP != null ? grossP : twTotalNetProfit);
-        const src    = isCurrentMonth ? "Triple Whale" : (rangeJorttRevenue ? "Jortt · historical" : "Triple Whale (MTD)");
-        return [
-          {
-            icon: Sparkles,
-            label: "Gross profit",
-            value: grossP != null ? `€${Math.round(grossP).toLocaleString()}` : "—",
-            pct: grossP != null && rev > 0 ? `${((grossP / rev) * 100).toFixed(1)}% margin` : null,
-            sub: grossP != null ? src : "Connect Triple Whale",
-            live: grossP != null,
-          },
-          {
-            icon: Wallet,
-            label: isCurrentMonth ? "COGS" : "Expenses",
-            value: costs != null ? `€${Math.round(costs).toLocaleString()}` : "—",
-            pct: costs != null && rev > 0 ? `${((costs / rev) * 100).toFixed(1)}% of revenue` : null,
-            sub: costs != null ? src : "Connect Triple Whale",
-            live: costs != null,
-          },
-          {
-            icon: TrendingUp,
-            label: "Net profit",
-            value: netP != null ? `€${Math.round(netP).toLocaleString()}` : "—",
-            pct: netP != null && rev > 0 ? `${((netP / rev) * 100).toFixed(1)}% margin` : null,
-            sub: netP != null ? src : "Connect Triple Whale",
-            live: netP != null,
-          },
-        ];
-      })().map((s) => (
-        <Card key={s.label} className={`p-5 transition hover:border-neutral-300 ${!s.live ? "opacity-50" : ""}`}>
-          <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
-            <s.icon size={14} />
-            <span>{s.label}</span>
-          </div>
-          <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">{s.value}</div>
-          {s.pct && <div className="mt-0.5 text-[11px] font-medium text-neutral-500">{s.pct}</div>}
-          <div className="mt-1 text-[12px] text-neutral-400">{s.sub}</div>
-        </Card>
-      ))}
-    </section>
-    )}
+    {/* Contribution margin · OpEx · EBITDA — real data row */}
+    {rangeRevenue !== null && (() => {
+      const rev = rangeRevenue ?? 0;
+
+      // Contribution margin: needs TW gross profit AND ad spend for the period.
+      // Only accurate when TW data actually covers the selected range
+      // (current month OR a freshly-synced custom range).
+      const twCoversRange = !!rangeData || isCurrentMonth;
+      const cm = (twCoversRange && twTotalGrossProfit != null && twTotalAdSpend != null)
+        ? twTotalGrossProfit - twTotalAdSpend
+        : null;
+      const cmPct = cm != null && rev > 0 ? (cm / rev) * 100 : null;
+
+      // OpEx: Jortt expenses summed across months overlapping the range.
+      const opex = rangeJorttExpenses ?? null;
+
+      // EBITDA ≈ Contribution margin − OpEx
+      const ebitda = (cm != null && opex != null) ? cm - opex : null;
+      const ebitdaPct = ebitda != null && rev > 0 ? (ebitda / rev) * 100 : null;
+
+      // Previous-period deltas — computable when prior month data exists
+      // for both Jortt expenses and Shopify revenue.
+      const prevDeltas = (() => {
+        if (!isCurrentMonth) return { cm: null, opex: null, ebitda: null };
+        const now = new Date();
+        const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevKey = prevDate.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+        const prevShopify = (shopifyMonthly ?? []).find((m: any) => m.month === prevKey);
+        const prevRev = prevShopify ? (prevShopify.revenue ?? 0) - (prevShopify.refunds ?? 0) : null;
+        const prevOpex = jorttData?.expensesByMonth?.[prevKey] ?? null;
+        // Approximate previous CM as same margin% × prevRev when we don't
+        // have historical TW per-period data — only show delta if Jortt
+        // gives us prior-month gross profit signal too.
+        const prevJorttRev = jorttData?.revenueByMonth?.[prevKey] ?? null;
+        const prevCM = (prevJorttRev != null && prevOpex != null) ? prevJorttRev - prevOpex : null;
+        const prevEbitda = (prevCM != null && prevOpex != null) ? prevCM - prevOpex : null;
+        const pctChange = (cur: number | null, prev: number | null) =>
+          (cur != null && prev != null && prev !== 0)
+            ? ((cur - prev) / Math.abs(prev)) * 100
+            : null;
+        return {
+          cm: pctChange(cm, prevCM),
+          opex: pctChange(opex, prevOpex),
+          ebitda: pctChange(ebitda, prevEbitda),
+        };
+      })();
+
+      const tiles = [
+        {
+          icon: Sparkles,
+          label: "Contribution margin",
+          value: cm != null ? `€${Math.round(cm).toLocaleString()}` : "—",
+          sub: cmPct != null ? `${cmPct.toFixed(1)}% of revenue` : (twCoversRange ? "Connect Triple Whale" : "Sync range to compute"),
+          delta: prevDeltas.cm,
+          deltaInverse: false,
+        },
+        {
+          icon: Wallet,
+          label: "OpEx",
+          value: opex != null ? `€${Math.round(opex).toLocaleString()}` : "—",
+          sub: opex != null ? "Team, software, agencies, other" : "Connect Jortt",
+          delta: prevDeltas.opex,
+          deltaInverse: true, // higher OpEx = bad
+        },
+        {
+          icon: TrendingUp,
+          label: "EBITDA",
+          value: ebitda != null ? `€${Math.round(ebitda).toLocaleString()}` : "—",
+          sub: ebitdaPct != null ? `Margin ${ebitdaPct.toFixed(1)}%` : "Needs CM + OpEx",
+          delta: prevDeltas.ebitda,
+          deltaInverse: false,
+        },
+      ];
+
+      return (
+        <section className="mt-3 grid grid-cols-3 gap-3">
+          {tiles.map((s) => {
+            const positive = (s.delta ?? 0) >= 0;
+            const good = s.deltaInverse ? !positive : positive;
+            const Arrow = positive ? ArrowUpRight : ArrowDownRight;
+            return (
+              <Card key={s.label} className="p-5 transition hover:border-neutral-300">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
+                    <s.icon size={14} />
+                    <span>{s.label}</span>
+                  </div>
+                  {s.delta != null && (
+                    <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${good ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+                      <Arrow size={11} />
+                      {Math.abs(s.delta).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">{s.value}</div>
+                <div className="mt-1 text-[12px] text-neutral-400">{s.sub}</div>
+              </Card>
+            );
+          })}
+        </section>
+      );
+    })()}
 
     {/* Syncing overlay */}
     {rangeSyncing && (
