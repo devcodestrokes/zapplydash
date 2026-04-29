@@ -866,6 +866,117 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <strong>Subscription data not available</strong> — set <code className="text-[11px]">JUO_NL_API_KEY</code> or <code className="text-[11px]">LOOP_UK_API_KEY</code> in .env.local.
       </div>
     )}
+
+    {/* MRR & active subscribers + New vs Churned (live data only) */}
+    {liveMRR !== null && subData.length > 0 && (
+      <Card className="mt-3 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[13px] font-semibold">MRR & active subscribers</div>
+          <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />MRR</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" />Subscribers</span>
+          </div>
+        </div>
+        <div className="h-56">
+          {chartsReady && (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrr ?? 0), subs: m.activeSubs ?? 0 }))}>
+                <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <Bar yAxisId="left" dataKey="mrr" fill="#111827" radius={[4,4,0,0]} name="MRR (€)" />
+                <Line yAxisId="right" type="monotone" dataKey="subs" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} name="Subscribers" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="mt-6 border-t border-neutral-100 pt-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[13px] font-semibold">New vs churned subscribers</div>
+            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />New</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Churned</span>
+            </div>
+          </div>
+          {(() => {
+            const totalNew = subData.reduce((s,m)=>s+(m.newThisMonth ?? 0),0);
+            const totalChurned = subData.reduce((s,m)=>s+(m.churnedThisMonth ?? 0),0);
+            const net = totalNew - totalChurned;
+            return (
+              <>
+                <div className="text-[11px] text-neutral-400 mb-3">
+                  Net gain this month: <span className={`font-semibold ${net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{net >= 0 ? "+" : ""}{net} subscribers</span>
+                </div>
+                <div className="h-48">
+                  {chartsReady && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, new: m.newThisMonth ?? 0, churned: -(m.churnedThisMonth ?? 0) }))}>
+                        <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v) => Math.abs(v)} />
+                        <Bar dataKey="new" fill="#10b981" radius={[4,4,0,0]} name="New" />
+                        <Bar dataKey="churned" fill="#f43f5e" radius={[0,0,4,4]} name="Churned" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </Card>
+    )}
+
+    {/* Revenue vs Profit (monthly, real Shopify + TW/Jortt) */}
+    {(() => {
+      const months = (shopifyMonthly ?? [])
+        .filter(m => monthInRange(m.month, dateRange.from, dateRange.to))
+        .sort((a,b) => a.month.localeCompare(b.month));
+      if (months.length === 0) return null;
+      const jorttExp = jorttData?.expensesByMonth ?? {};
+      const totalRev = months.reduce((s,m)=>s+((m.revenue ?? 0) - (m.refunds ?? 0)), 0);
+      const chartData = months.map(m => {
+        const rev = (m.revenue ?? 0) - (m.refunds ?? 0);
+        const exp = jorttExp[m.month] ?? 0;
+        const profit = exp ? rev - exp : null;
+        return { month: m.month.slice(2), revenue: Math.round(rev), profit: profit != null ? Math.round(profit) : null };
+      });
+      return (
+        <Card className="mt-3 p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-[13px] font-semibold">Revenue vs. Profit</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums">€{Math.round(totalRev).toLocaleString()}</div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+            </div>
+          </div>
+          <div className="h-56 mt-3">
+            {chartsReady && (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v)=>v != null ? `€${v.toLocaleString()}` : "—"} />
+                  <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
+                  <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          {!jorttData && (
+            <div className="mt-2 text-[11px] text-neutral-400">Profit line requires Jortt expenses data — connect Jortt to display.</div>
+          )}
+        </Card>
+      );
+    })()}
   </>);
 };
 
