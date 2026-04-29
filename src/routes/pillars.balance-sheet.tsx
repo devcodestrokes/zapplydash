@@ -386,6 +386,100 @@ function BalanceSheetPage() {
     };
   }, [xero, jortt, syncedAt]);
 
+  // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
+  type WeekRow = {
+    label: string;
+    range: string;
+    cash: number | null;
+    cashAfterDebt: number | null;
+    cashPlusAssetsAfterDebt: number | null;
+    wowAbs: number | null;
+    wowPct: number | null;
+  };
+  const weeklyTrend = useMemo<WeekRow[]>(() => {
+    if (cashTotal == null) return [];
+
+    // Build a per-month EBITDA map from Xero (keys like "29 Apr 26")
+    const npm: Record<string, number> = (xero?.netProfitByMonth ?? {}) as Record<string, number>;
+    const monthEntries = Object.entries(npm)
+      .map(([k, v]) => ({ date: new Date(k), value: Number(v) || 0 }))
+      .filter((e) => !isNaN(e.date.getTime()))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const today = syncedAt ? new Date(syncedAt) : new Date();
+    // Find Monday of the current week
+    const dow = today.getDay(); // 0 Sun..6 Sat
+    const offsetToMon = (dow + 6) % 7;
+    const currentMon = new Date(today);
+    currentMon.setHours(0, 0, 0, 0);
+    currentMon.setDate(currentMon.getDate() - offsetToMon);
+
+    // Build 8 week start dates (Mondays), oldest first
+    const weeks: { start: Date; end: Date; weekNo: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const start = new Date(currentMon);
+      start.setDate(start.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      // ISO week number
+      const tmp = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+      const dayNum = (tmp.getUTCDay() + 6) % 7;
+      tmp.setUTCDate(tmp.getUTCDate() - dayNum + 3);
+      const firstThursday = tmp.valueOf();
+      tmp.setUTCMonth(0, 1);
+      if (tmp.getUTCDay() !== 4) tmp.setUTCMonth(0, 1 + ((4 - tmp.getUTCDay()) + 7) % 7);
+      const weekNo = 1 + Math.ceil((firstThursday - tmp.valueOf()) / 604800000);
+      weeks.push({ start, end, weekNo });
+    }
+
+    // Estimate cash position at each week-end:
+    // Anchor "current" to today's cashTotal; walk backward subtracting weekly EBITDA
+    // (weekly EBITDA = monthly EBITDA delta / ~4.33).
+    const monthlyDeltas: number[] = [];
+    for (let i = 1; i < monthEntries.length; i++) {
+      monthlyDeltas.push(monthEntries[i].value - monthEntries[i - 1].value);
+    }
+    const avgMonthlyDelta =
+      monthlyDeltas.length > 0
+        ? monthlyDeltas.slice(-3).reduce((s, v) => s + v, 0) / Math.min(3, monthlyDeltas.length)
+        : 0;
+    const weeklyDelta = avgMonthlyDelta / 4.33;
+
+    const cashByWeek: number[] = new Array(weeks.length).fill(0);
+    cashByWeek[weeks.length - 1] = cashTotal;
+    for (let i = weeks.length - 2; i >= 0; i--) {
+      cashByWeek[i] = cashByWeek[i + 1] - weeklyDelta;
+    }
+
+    const debt = outstandingTotal ?? 0;
+    const assetsExtra =
+      totalAssets != null && cashTotal != null ? totalAssets - cashTotal : inventoryTotal ?? 0;
+
+    const monthShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const fmtRange = (s: Date, e: Date) => {
+      const sM = monthShort[s.getMonth()];
+      const eM = monthShort[e.getMonth()];
+      return sM === eM ? `${sM} ${s.getDate()}–${e.getDate()}` : `${sM} ${s.getDate()}–${eM} ${e.getDate()}`;
+    };
+
+    return weeks.map((w, i) => {
+      const cash = cashByWeek[i];
+      const prev = i > 0 ? cashByWeek[i - 1] : null;
+      const wowAbs = prev != null ? cash - prev : null;
+      const wowPct = prev != null && prev !== 0 ? (wowAbs! / Math.abs(prev)) * 100 : null;
+      return {
+        label: `W${w.weekNo}`,
+        range: fmtRange(w.start, w.end),
+        cash,
+        cashAfterDebt: cash - debt,
+        cashPlusAssetsAfterDebt: cash + assetsExtra - debt,
+        wowAbs,
+        wowPct,
+      };
+    });
+  }, [xero, syncedAt, cashTotal, outstandingTotal, totalAssets, inventoryTotal]);
+
+
   if (loading) {
     return (
       <DashboardShell user={user} title="Balance Sheet">
