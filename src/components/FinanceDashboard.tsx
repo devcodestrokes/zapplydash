@@ -1303,14 +1303,26 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     {/* Repeat Purchase Funnel — real Shopify cohort data */}
     {shopifyRepeatFunnel && (() => {
       const f = shopifyRepeatFunnel;
-      const hasCohort = f.cohortSize > 0;
+      const fallbackCohort = (f.monthlyCohorts ?? []).find((c: any) => (c.size ?? 0) > 0) ?? null;
+      const cohortSize = (f.cohortSize ?? 0) > 0 ? f.cohortSize : (fallbackCohort?.size ?? 0);
+      const hasCohort = cohortSize > 0;
       const orderColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const orderDotColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const labels = ["1st order", "2nd order", "3rd order", "4th order", "5th order", "6th order", "7th+ orders"];
       const subs = ["First purchase", "Repeat to 2nd", "Repeat to 3rd", "Repeat to 4th", "Repeat to 5th", "Repeat to 6th", "Repeat to 7th+"];
+      const fallbackFunnel = fallbackCohort ? [
+        { order: 1, customers: cohortSize, rate: 100, maturing: false },
+        { order: 2, customers: fallbackCohort.second !== null ? Math.round(cohortSize * fallbackCohort.second / 100) : null, rate: fallbackCohort.second, maturing: fallbackCohort.second === null },
+        { order: 3, customers: fallbackCohort.third !== null ? Math.round(cohortSize * fallbackCohort.third / 100) : null, rate: fallbackCohort.third, maturing: fallbackCohort.third === null },
+        { order: 4, customers: fallbackCohort.fourth !== null ? Math.round(cohortSize * fallbackCohort.fourth / 100) : null, rate: fallbackCohort.fourth, maturing: fallbackCohort.fourth === null },
+        { order: 5, customers: null, rate: null, maturing: true },
+        { order: 6, customers: null, rate: null, maturing: true },
+        { order: 7, customers: null, rate: null, maturing: true },
+      ] : [];
+      const displayFunnel = (f.cohortSize ?? 0) > 0 ? f.funnel : fallbackFunnel;
       // (deeper analysis is always rendered for accuracy)
-      const top4 = f.funnel.slice(0, 4);
-      const rest = f.funnel.slice(4);
+      const top4 = displayFunnel.slice(0, 4);
+      const rest = displayFunnel.slice(4);
       return (
         <Card className="mt-3 p-5">
           <div className="flex items-start justify-between mb-1">
