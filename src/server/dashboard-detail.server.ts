@@ -363,10 +363,8 @@ export async function fetchJuoDetail(fromDate: string, toDate: string) {
   const fromMs = new Date(`${fromDate}T00:00:00Z`).getTime();
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
-  // Sort desc so we cap on the most recent 1,500 subs (Juo defaults to asc).
-  let nextUrl: string | null = `${BASE}/admin/v1/subscriptions?limit=100&sort=createdAt%3Adesc`;
-  // Cap to keep response fast. 15 × 100 = 1,500 most-recent subs.
-  const MAX_PAGES = 15;
+  let nextUrl: string | null = `${BASE}/admin/v1/subscriptions?limit=100&status=active`;
+  const MAX_PAGES = 300;
   let page = 0;
   let apiReached = false;
 
