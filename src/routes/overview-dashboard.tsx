@@ -65,6 +65,18 @@ function OverviewPage() {
     return () => { alive = false; };
   }, []);
 
+  // Auto-load the default 7D range on first mount (cached data is "this month").
+  useEffect(() => {
+    let alive = true;
+    setRangeSyncing(true);
+    fetch(`/api/sync?from=${daysAgoStr(7)}&to=${todayStr()}`, { method: "POST" })
+      .then((r) => r.json())
+      .then((json) => { if (alive) setRangeData(json.rangeData ?? null); })
+      .catch(() => { if (alive) setRangeData(null); })
+      .finally(() => { if (alive) setRangeSyncing(false); });
+    return () => { alive = false; };
+  }, []);
+
   const handleDateChange = useCallback(async (from: string, to: string) => {
     setDateRange({ from, to });
     const isCurrentMonth = from === startOfMonthStr() && to === todayStr();
