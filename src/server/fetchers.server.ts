@@ -538,6 +538,208 @@ export async function fetchTripleWhale(
   return hasAnyLive ? results : null;
 }
 
+// ─── Daily Profit Fetchers (Shopify daily revenue + TW daily ad spend) ────────
+//
+// Powers the "Today's Profit" card on the Overview dashboard.
+// Cached for 12h (sync.server.ts) — the rolling 30-day chart only needs to be
+// refreshed once a day.
+
+function amsterdamDateKey(iso: string): string {
+  // Returns "YYYY-MM-DD" in Europe/Amsterdam timezone for an ISO string.
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const y = parts.find((p) => p.type === "year")?.value ?? "1970";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  const day = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${y}-${m}-${day}`;
+}
+
+function daysAgoIso(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().split("T")[0];
+}
+
+/**
+ * Fetch the last 365 days of Shopify orders for every store, bucketed by
+ * Amsterdam-tz day and converted to EUR. Returns:
+ *   { daily: { "YYYY-MM-DD": { revenue: EUR, orders: int } }, byMarket: {...} }
+ */
+export async function fetchShopifyDaily() {
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
+  if (!clientId) return null;
+
+  const sinceDate = daysAgoIso(365);
+  const since = `${sinceDate}T00:00:00Z`;
+
+  const perStore = await Promise.all(
+    SHOPIFY_STORES.map(async ({ code, storeKey }: any) => {
+      const store = process.env[storeKey];
+      if (!store) return { code, daily: {} as Record<string, { revenue: number; orders: number }> };
+
+      const token = await getShopifyToken(store);
+      if (!token) return { code, daily: {} };
+
+      try {
+        // Reuse fetchShopifyAllOrders but extract per-day buckets ourselves —
+        // the existing helper aggregates monthly. Run a fresh paginated query
+        // here so we can bucket by day with Amsterdam-tz keys.
+        const dailySums: Record<string, { revenue: number; orders: number; currency: string }> = {};
+        let cursor: string | null = null;
+        let hasNextPage = true;
+        let page = 0;
+        const maxPages = 80; // up to 20k orders / store / year
+
+        while (hasNextPage && page < maxPages) {
+          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+            method: "POST",
+            headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
+          });
+          if (!res.ok) break;
+          const json = await res.json();
+          if (json.errors) {
+            console.error(`Shopify daily ${code} GQL:`, json.errors[0]?.message);
+            break;
+          }
+          const pageData = json.data?.orders ?? {};
+          const edges: any[] = pageData.edges ?? [];
+          hasNextPage = pageData.pageInfo?.hasNextPage ?? false;
+          cursor = pageData.pageInfo?.endCursor ?? null;
+          page++;
+
+          for (const { node: o } of edges) {
+            const r = parseFloat(o.totalPriceSet.shopMoney.amount);
+            const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
+            const net = r - rf;
+            const currency = o.totalPriceSet.shopMoney.currencyCode || "EUR";
+            const dayKey = amsterdamDateKey(o.createdAt);
+            if (!dailySums[dayKey]) dailySums[dayKey] = { revenue: 0, orders: 0, currency };
+            dailySums[dayKey].revenue += net;
+            dailySums[dayKey].orders += 1;
+          }
+        }
+
+        // Convert each day to EUR using a single FX rate for the whole period
+        // (good enough for a rolling chart; daily FX would be 365 extra calls).
+        const sample = Object.values(dailySums)[0];
+        const currency = sample?.currency || "EUR";
+        const fxRate = await getEurRate(currency, sinceDate, today());
+        const daily: Record<string, { revenue: number; orders: number }> = {};
+        for (const [k, v] of Object.entries(dailySums)) {
+          daily[k] = { revenue: +(v.revenue * fxRate).toFixed(2), orders: v.orders };
+        }
+        return { code, daily };
+      } catch (err: any) {
+        console.error(`Shopify daily ${code}:`, err?.message);
+        return { code, daily: {} };
+      }
+    })
+  );
+
+  // Merge per-market into a single daily series
+  const merged: Record<string, { revenue: number; orders: number }> = {};
+  for (const { daily } of perStore) {
+    for (const [k, v] of Object.entries(daily as Record<string, { revenue: number; orders: number }>)) {
+      if (!merged[k]) merged[k] = { revenue: 0, orders: 0 };
+      merged[k].revenue += v.revenue;
+      merged[k].orders += v.orders;
+    }
+  }
+
+  const hasAny = Object.keys(merged).length > 0;
+  if (!hasAny) return null;
+
+  return {
+    daily: merged,
+    byMarket: Object.fromEntries(perStore.map((s) => [s.code, s.daily])),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Fetch Triple Whale per-day ad spend & gross profit for the last 30 days
+ * across all stores. One TW summary call per (day × store) — heavy but cached
+ * for 12h. Returns { daily: { "YYYY-MM-DD": { adSpend, grossProfit } } }
+ */
+export async function fetchTripleWhaleDaily() {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  if (!apiKey) return null;
+
+  const planned = TW_SHOPS
+    .map(({ market, envKeys }: any) => {
+      const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+      return shop ? { market, shop } : null;
+    })
+    .filter(Boolean) as Array<{ market: string; shop: string }>;
+
+  if (planned.length === 0) return null;
+
+  // Build the list of (day, store) pairs we need to fetch — last 30 days incl. today.
+  const days: string[] = [];
+  for (let i = 29; i >= 0; i--) days.push(daysAgoIso(i));
+
+  type DayBucket = { adSpend: number; grossProfit: number; revenue: number };
+  const merged: Record<string, DayBucket> = {};
+  for (const d of days) merged[d] = { adSpend: 0, grossProfit: 0, revenue: 0 };
+
+  // Concurrency limit — 8 concurrent TW calls.
+  const CONCURRENCY = 8;
+  const tasks: Array<() => Promise<void>> = [];
+  for (const { market, shop } of planned) {
+    const sourceCurrency = MARKET_CURRENCY[market] ?? "EUR";
+    for (const day of days) {
+      tasks.push(async () => {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 15_000);
+          const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
+            method: "POST",
+            headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ shopDomain: shop, period: { start: day, end: day }, todayHour: tripleWhaleTodayHour() }),
+            signal: ctrl.signal,
+          }).finally(() => clearTimeout(timer));
+          if (!res.ok) return;
+          const data = await res.json();
+          const m = data.metrics ?? [];
+          const fxRate = await getEurRate(sourceCurrency, day, day);
+          const ad = twMetric(m, "blendedAds");
+          const gp = twMetric(m, "grossProfit");
+          const rv = twMetric(m, "netSales") ?? twMetric(m, "sales");
+          if (ad != null) merged[day].adSpend += ad * fxRate;
+          if (gp != null) merged[day].grossProfit += gp * fxRate;
+          if (rv != null) merged[day].revenue += rv * fxRate;
+        } catch (err: any) {
+          // Silent — single-day failures shouldn't kill the whole sync
+          console.warn(`TW daily ${market} ${day}:`, err?.message);
+        }
+      });
+    }
+  }
+
+  // Run in batches of CONCURRENCY
+  for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+    await Promise.all(tasks.slice(i, i + CONCURRENCY).map((t) => t()));
+  }
+
+  // Round
+  const daily: Record<string, DayBucket> = {};
+  for (const [k, v] of Object.entries(merged)) {
+    daily[k] = {
+      adSpend: +v.adSpend.toFixed(2),
+      grossProfit: +v.grossProfit.toFixed(2),
+      revenue: +v.revenue.toFixed(2),
+    };
+  }
+
+  return { daily, fetchedAt: new Date().toISOString() };
+}
+
 // ─── Juo Subscriptions (NL store) ────────────────────────────────────────────
 //
 // Base URL: https://api.juo.io/admin/v1
