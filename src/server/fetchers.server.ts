@@ -132,7 +132,7 @@ async function getShopifyToken(store: string): Promise<string | null> {
 
 // Paginated GQL — one page, with optional cursor for subsequent pages
 const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null, until?: string | null) => `{
-  orders(first:250, ${cursor ? `after:"${cursor}",` : ""}query:"created_at:>=${since}${until ? ` created_at:<=${until}` : ""} financial_status:paid") {
+  orders(first:250, sortKey:CREATED_AT, reverse:false, ${cursor ? `after:"${cursor}",` : ""}query:"created_at:>=${since}${until ? ` created_at:<=${until}` : ""} financial_status:paid") {
     pageInfo { hasNextPage endCursor }
     edges { node {
       totalPriceSet    { shopMoney { amount currencyCode } }
