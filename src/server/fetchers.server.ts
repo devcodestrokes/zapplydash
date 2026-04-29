@@ -355,18 +355,23 @@ async function getEurRate(currency: string, start: string, end: string): Promise
   const task = (async () => {
     try {
       const path = start === end ? start : `${start}..${end}`;
-      const res = await fetch(`https://api.frankfurter.app/${path}?from=${currency}&to=EUR`, {
-        cache: "no-store",
-      });
+      // frankfurter.app now redirects to frankfurter.dev/v1/ — use the new URL directly
+      const url = `https://api.frankfurter.dev/v1/${path}?base=${currency}&symbols=EUR`;
+      const res = await fetch(url, { cache: "no-store", redirect: "follow" });
       if (res.ok) {
         const data = await res.json();
         const rates = data.rates ?? {};
-        const values = (typeof rates.EUR === "number" || typeof rates.EUR === "string"
-          ? [rates.EUR]
-          : Object.values(rates).map((r: any) => r?.EUR))
-          .map((r: any) => toNumber(r))
-          .filter((n): n is number => typeof n === "number");
-        if (values.length > 0) return values.reduce((a, b) => a + b, 0) / values.length;
+        // Single-day response: { rates: { EUR: 0.92 } }
+        // Range response: { rates: { "2026-04-01": { EUR: 0.92 }, ... } }
+        const direct = toNumber(rates.EUR);
+        if (direct !== null && direct > 0) return direct;
+        const series = Object.values(rates)
+          .map((r: any) => toNumber(r?.EUR))
+          .filter((n): n is number => typeof n === "number" && n > 0);
+        if (series.length > 0) return series.reduce((a, b) => a + b, 0) / series.length;
+        console.warn(`FX ${currency}->EUR: no rates in response`, JSON.stringify(data).slice(0, 200));
+      } else {
+        console.warn(`FX ${currency}->EUR: HTTP ${res.status} from ${url}`);
       }
     } catch (err: any) {
       console.warn(`FX ${currency}->EUR failed:`, err?.message);
