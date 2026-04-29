@@ -201,7 +201,7 @@ function ForecastPage() {
         </div>
 
         {tab === "growth" ? (
-          <GrowthPlan2026 />
+          <GrowthPlan2026 data={data} />
         ) : (
         <>
         {/* Method banner */}
@@ -383,63 +383,198 @@ function ForecastPage() {
 
 // =============== Growth Plan 2026 ===============
 
-type Market = { code: "NL" | "GB" | "US"; name: string; color: string; bar: string };
+type MarketCode = "NL" | "UK" | "US" | "EU";
+type Market = { code: MarketCode; name: string; color: string; bar: string };
 const MARKETS: Market[] = [
   { code: "NL", name: "Netherlands",    color: "bg-neutral-900", bar: "bg-neutral-900" },
-  { code: "GB", name: "United Kingdom", color: "bg-indigo-500",  bar: "bg-indigo-500" },
+  { code: "UK", name: "United Kingdom", color: "bg-indigo-500",  bar: "bg-indigo-500" },
   { code: "US", name: "United States",  color: "bg-amber-500",   bar: "bg-amber-500" },
+  { code: "EU", name: "Germany / EU",   color: "bg-emerald-500", bar: "bg-emerald-500" },
 ];
 
 function GrowthCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>;
 }
 
-function fmtM(n: number) {
+function fmtM(n: number | null | undefined) {
+  if (n == null || !isFinite(n)) return "—";
   return `€${(n / 1_000_000).toFixed(1)}M`;
 }
-function fmtK(n: number) {
-  if (n === 0) return "—";
+function fmtK(n: number | null | undefined) {
+  if (n == null || !isFinite(n) || Math.round(n) === 0) return "—";
   return `€${Math.round(n / 1000)}k`;
 }
 
-function GrowthPlan2026() {
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const SEASONALITY = [0.84, 0.90, 0.96, 1.00, 1.03, 1.06, 0.98, 1.02, 1.08, 1.12, 1.22, 1.16];
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function parseMonthLabel(label: string) {
+  const m = String(label ?? "").match(/^([A-Za-z]{3})\s+'(\d{2})$/);
+  if (!m) return null;
+  const monthIdx = MONTHS.findIndex((x) => x.toLowerCase() === m[1].toLowerCase());
+  if (monthIdx < 0) return null;
+  return { monthIdx, year: 2000 + Number(m[2]) };
+}
+
+function GrowthPlan2026({ data }: { data: any }) {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
 
-  const plan = {
-    NL: { target: 2_600_000, marketing: 520_000,   margin: 0.40, share: 0.26, ytdPct: 29.8, status: "On pace" as const },
-    GB: { target: 4_900_000, marketing: 2_205_000, margin: 0.34, share: 0.49, ytdPct: 21.8, status: "Behind"  as const },
-    US: { target: 2_500_000, marketing: 875_000,   margin: 0.14, share: 0.25, ytdPct: 0.5,  status: "Behind"  as const },
-  };
-  const totalTarget = plan.NL.target + plan.GB.target + plan.US.target;
-  const totalMarketing = plan.NL.marketing + plan.GB.marketing + plan.US.marketing;
-  const totalNetProfit = plan.NL.target * plan.NL.margin + plan.GB.target * plan.GB.margin + plan.US.target * plan.US.margin;
-  const blendedMargin = totalNetProfit / totalTarget;
-  const blendedMER = totalTarget / totalMarketing;
-  const ytdOverall = plan.NL.ytdPct * plan.NL.share + plan.GB.ytdPct * plan.GB.share + plan.US.ytdPct * plan.US.share;
+  const model = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+    const elapsedDay = now.getDate();
+    const daysInMonth = new Date(year, currentMonthIdx + 1, 0).getDate();
+    const expectedPace = ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) / (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) * 100;
 
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const seasonality = [0.06, 0.05, 0.06, 0.06, 0.07, 0.07, 0.08, 0.10, 0.11, 0.12, 0.16, 0.06];
-  const currentMonthIdx = new Date().getMonth();
-  const rows = months.map((m, i) => {
-    const factor = seasonality[i];
-    const usAdj = i < 6 ? 0 : factor;
-    const nl = Math.round(plan.NL.target * factor);
-    const gb = Math.round(plan.GB.target * factor);
-    const us = Math.round(plan.US.target * usAdj);
-    const total = nl + gb + us;
-    const marketing = Math.round(total * (totalMarketing / totalTarget));
-    const netProfit = i === currentMonthIdx ? -10_000 : Math.round(total * blendedMargin);
-    const margin = total > 0 ? (netProfit / total) * 100 : 0;
-    return { m, i, nl, gb, us, total, marketing, netProfit, margin, isMTD: i === currentMonthIdx, isPast: i < currentMonthIdx };
-  });
+    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets) ? data.shopifyMarkets.filter((m: any) => m?.live) : [];
+    const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
+    const twRows: any[] = Array.isArray(data?.tripleWhale) ? data.tripleWhale.filter((m: any) => m?.live) : [];
+    const dailyByMarket = data?.shopifyDaily?.byMarket && typeof data.shopifyDaily.byMarket === "object" ? data.shopifyDaily.byMarket : {};
 
-  const assumptions = {
-    NL: [{ k: "Repeat customer AOV", v: "€59" }, { k: "New customer AOV", v: "€78" }, { k: "aMER target", v: "1.70×" }, { k: "nCAC", v: "€46" }, { k: "Gross margin", v: "75%" }],
-    GB: [{ k: "Repeat customer AOV", v: "€70" }, { k: "New customer AOV", v: "€71" }, { k: "aMER target", v: "2.00×" }, { k: "nCAC", v: "€36" }, { k: "Gross margin", v: "75%" }],
-    US: [{ k: "Repeat customer AOV", v: "€70" }, { k: "New customer AOV", v: "€80" }, { k: "aMER target", v: "1.43×" }, { k: "nCAC", v: "€50" }, { k: "Gross margin", v: "75%" }, { k: "Launch", v: "Q2 2026" }],
-  };
+    const actualByMonth = MONTHS.map((m, i) => ({ m, i, NL: 0, UK: 0, US: 0, EU: 0 } as Record<string, any>));
+    const availableDailyDates: string[] = [];
 
-  
+    for (const mk of MARKETS) {
+      const entries = Object.entries(dailyByMarket?.[mk.code] ?? {}) as Array<[string, any]>;
+      for (const [date, row] of entries) {
+        if (!date.startsWith(`${year}-`)) continue;
+        const d = new Date(`${date}T12:00:00`);
+        if (Number.isNaN(d.getTime())) continue;
+        const revenue = Number(row?.revenue ?? 0);
+        if (!isFinite(revenue) || revenue <= 0) continue;
+        actualByMonth[d.getMonth()][mk.code] += revenue;
+        availableDailyDates.push(date);
+      }
+    }
+
+    for (const row of shopifyMonthly) {
+      const parsed = parseMonthLabel(row?.month);
+      if (!parsed || parsed.year !== year) continue;
+      const byMarket = row?.byMarket && typeof row.byMarket === "object" ? row.byMarket : null;
+      if (!byMarket) continue;
+      for (const mk of MARKETS) {
+        const revenue = Number(byMarket?.[mk.code]?.revenue ?? 0);
+        if (revenue > actualByMonth[parsed.monthIdx][mk.code]) {
+          actualByMonth[parsed.monthIdx][mk.code] = revenue;
+        }
+      }
+    }
+
+    const currentMtd: Record<MarketCode, number> = { NL: 0, UK: 0, US: 0, EU: 0 };
+    for (const mk of MARKETS) {
+      const live = shopifyMarkets.find((m: any) => m?.code === mk.code);
+      currentMtd[mk.code] = Number(live?.revenue ?? 0);
+      if (currentMtd[mk.code] > actualByMonth[currentMonthIdx][mk.code]) {
+        actualByMonth[currentMonthIdx][mk.code] = currentMtd[mk.code];
+      }
+    }
+
+    const dailyForMarket = (code: MarketCode) =>
+      (Object.entries(dailyByMarket?.[code] ?? {}) as Array<[string, any]>)
+        .map(([date, row]) => ({ date, revenue: Number(row?.revenue ?? 0) }))
+        .filter((r) => r.date.startsWith(`${year}-`) && isFinite(r.revenue) && r.revenue > 0)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    const plan: Record<MarketCode, any> = { NL: {}, UK: {}, US: {}, EU: {} };
+    for (const mk of MARKETS) {
+      const dailyRows = dailyForMarket(mk.code);
+      const recent30 = dailyRows.slice(-30).reduce((s, r) => s + r.revenue, 0);
+      const previous30 = dailyRows.slice(-60, -30).reduce((s, r) => s + r.revenue, 0);
+      const trend = previous30 > 0 ? clamp((recent30 - previous30) / previous30, -0.20, 0.25) : 0;
+      const currentMonthActual = actualByMonth[currentMonthIdx][mk.code] || currentMtd[mk.code] || 0;
+      const fullMonthRunRate = currentMonthActual > 0
+        ? (currentMonthActual / Math.max(1, elapsedDay)) * daysInMonth
+        : recent30 > 0
+          ? recent30
+          : 0;
+
+      const monthly = MONTHS.map((_, i) => {
+        if (i <= currentMonthIdx) return Math.round(actualByMonth[i][mk.code] || 0);
+        const seasonalBase = SEASONALITY[currentMonthIdx] || 1;
+        return Math.max(0, Math.round(fullMonthRunRate * (SEASONALITY[i] / seasonalBase) * Math.pow(1 + trend, i - currentMonthIdx)));
+      });
+      const target = monthly.reduce((s, v) => s + v, 0);
+      const actualYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, v) => s + v, 0);
+      const tw = twRows.find((r: any) => r?.market === mk.code);
+      const twRevenue = Number(tw?.netRevenue ?? tw?.revenue ?? 0);
+      const adSpend = Number(tw?.adSpend ?? 0);
+      const twNetProfit = Number(tw?.netProfit ?? 0);
+      const marketingRatio = twRevenue > 0 && adSpend >= 0 ? clamp(adSpend / twRevenue, 0, 0.75) : 0.25;
+      const margin = twRevenue > 0 && isFinite(twNetProfit) ? clamp(twNetProfit / twRevenue, -0.25, 0.55) : 0.18;
+      const marketing = Math.round(target * marketingRatio);
+      const ytdPct = target > 0 ? (actualYtd / target) * 100 : 0;
+      plan[mk.code] = {
+        target,
+        actualYtd,
+        marketing,
+        margin,
+        share: 0,
+        ytdPct,
+        trend,
+        fullMonthRunRate,
+        marketingRatio,
+        monthly,
+        status: ytdPct >= expectedPace * 0.95 ? "On pace" : "Behind",
+      };
+    }
+
+    const totalTarget = MARKETS.reduce((s, mk) => s + plan[mk.code].target, 0);
+    for (const mk of MARKETS) plan[mk.code].share = totalTarget > 0 ? plan[mk.code].target / totalTarget : 0;
+
+    const rows = MONTHS.map((m, i) => {
+      const row: any = { m, i, isMTD: i === currentMonthIdx, isPast: i < currentMonthIdx };
+      for (const mk of MARKETS) row[mk.code] = plan[mk.code].monthly[i] ?? 0;
+      row.total = MARKETS.reduce((s, mk) => s + row[mk.code], 0);
+      row.marketing = MARKETS.reduce((s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].marketingRatio), 0);
+      row.netProfit = MARKETS.reduce((s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].margin), 0);
+      row.margin = row.total > 0 ? (row.netProfit / row.total) * 100 : 0;
+      return row;
+    });
+
+    const totalMarketing = MARKETS.reduce((s, mk) => s + plan[mk.code].marketing, 0);
+    const totalNetProfit = MARKETS.reduce((s, mk) => s + plan[mk.code].target * plan[mk.code].margin, 0);
+    const actualYtd = MARKETS.reduce((s, mk) => s + plan[mk.code].actualYtd, 0);
+    const dataStart = availableDailyDates.length ? availableDailyDates.sort()[0] : null;
+    const dataEnd = availableDailyDates.length ? availableDailyDates.sort().at(-1) : null;
+
+    return {
+      year,
+      currentMonthIdx,
+      expectedPace,
+      plan,
+      rows,
+      totalTarget,
+      totalMarketing,
+      totalNetProfit,
+      blendedMargin: totalTarget > 0 ? totalNetProfit / totalTarget : 0,
+      blendedMER: totalMarketing > 0 ? totalTarget / totalMarketing : 0,
+      ytdOverall: totalTarget > 0 ? (actualYtd / totalTarget) * 100 : 0,
+      actualYtd,
+      dataStart,
+      dataEnd,
+      hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
+      hasAllStoreDaily: data?.shopifyDaily?.calcVersion === 2,
+    };
+  }, [data]);
+
+  const { year, currentMonthIdx, expectedPace, plan, rows, totalTarget, totalMarketing, totalNetProfit, blendedMargin, blendedMER, ytdOverall, actualYtd } = model;
+
+  const assumptions = MARKETS.reduce((acc, mk) => {
+    const p = plan[mk.code];
+    acc[mk.code] = [
+      { k: "Actual revenue YTD", v: fmtK(p.actualYtd) },
+      { k: "Current month run-rate", v: fmtK(p.fullMonthRunRate) },
+      { k: "Trailing growth", v: `${(p.trend * 100).toFixed(1)}%` },
+      { k: "Marketing / revenue", v: `${(p.marketingRatio * 100).toFixed(1)}%` },
+      { k: "Net profit margin", v: `${(p.margin * 100).toFixed(1)}%` },
+    ];
+    return acc;
+  }, {} as Record<MarketCode, Array<{ k: string; v: string }>>);
 
   return (
     <>
@@ -449,8 +584,15 @@ function GrowthPlan2026() {
             <Sparkles className="h-4 w-4 text-neutral-600" />
           </div>
           <div className="text-[13px]">
-            <div className="font-semibold text-neutral-900">Growth Plan 2026 · NL + UK + US combined · source: Finance planning sheet</div>
-            <div className="text-neutral-500 mt-0.5">Monthly targets built from per-market assumptions (marketing spend, MER, new customer AOV, repeat revenue growth). Edit in the assumptions sheet.</div>
+            <div className="font-semibold text-neutral-900">Growth Plan {year} · all Shopify stores combined · live API model</div>
+            <div className="text-neutral-500 mt-0.5">
+              Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios come from Triple Whale. Future months are calculated from current run-rate, seasonality, and trailing growth.
+            </div>
+            {(!model.hasAllStoreMonthly || !model.hasAllStoreDaily) && (
+              <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                All-store cache refresh is running in the background. Until it finishes, older daily/monthly rows may show partial historical coverage{model.dataStart ? ` (${model.dataStart}–${model.dataEnd})` : ""}.
+              </div>
+            )}
           </div>
         </div>
       </GrowthCard>
@@ -459,22 +601,22 @@ function GrowthPlan2026() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[14px] font-semibold">Year-to-date progress</div>
-            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Apr MTD · tracking against full-year plan</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">Actual Shopify revenue vs projected full-year revenue</div>
           </div>
           <div className="text-right">
-            <div className="text-[12px] text-neutral-500 tabular-nums">{fmtM(totalTarget * (ytdOverall / 100))} / {fmtM(totalTarget)}</div>
+            <div className="text-[12px] text-neutral-500 tabular-nums">{fmtM(actualYtd)} / {fmtM(totalTarget)}</div>
             <div className="text-[22px] font-semibold tabular-nums">{ytdOverall.toFixed(1)}%</div>
           </div>
         </div>
         <div className="mt-3">
           <div className="relative h-2 rounded-full bg-neutral-100 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" style={{ width: `${ytdOverall}%` }} />
-            <div className="absolute inset-y-0" style={{ left: "30.5%", width: 2, background: "#a3a3a3" }} />
+            <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" style={{ width: `${clamp(ytdOverall, 0, 100)}%` }} />
+            <div className="absolute inset-y-0" style={{ left: `${clamp(expectedPace, 0, 100)}%`, width: 2, background: "#a3a3a3" }} />
           </div>
           <div className="mt-1.5 flex justify-between text-[11px] text-neutral-400">
             <span>Start of year</span>
-            <span>| Expected pace (30.5%)</span>
-            <span>Year-end target</span>
+            <span>| Expected pace ({expectedPace.toFixed(1)}%)</span>
+            <span>Projected year-end</span>
           </div>
         </div>
 
@@ -491,11 +633,11 @@ function GrowthPlan2026() {
                   <span className={`text-[11px] font-medium ${p.status === "On pace" ? "text-emerald-600" : "text-amber-600"}`}>{p.status}</span>
                 </div>
                 <div className="flex items-center justify-between mt-1 text-[11px] text-neutral-500 tabular-nums">
-                  <span>{fmtM(p.target * (p.ytdPct / 100))} / {fmtM(p.target)}</span>
+                  <span>{fmtM(p.actualYtd)} / {fmtM(p.target)}</span>
                   <span className="font-semibold text-neutral-700">{p.ytdPct.toFixed(1)}%</span>
                 </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                  <div className={`h-full ${mk.bar} rounded-full`} style={{ width: `${p.ytdPct}%` }} />
+                  <div className={`h-full ${mk.bar} rounded-full`} style={{ width: `${clamp(p.ytdPct, 0, 100)}%` }} />
                 </div>
               </div>
             );
@@ -507,16 +649,16 @@ function GrowthPlan2026() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">2026 Revenue Target</span>
-              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">● Annual plan</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Revenue</span>
+              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">● API based</span>
             </div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalTarget)}</div>
-            <div className="text-[11px] text-neutral-500">Combined NL + GB + US · Jan–Dec 2026</div>
+            <div className="text-[11px] text-neutral-500">Combined NL + UK + US + EU · Jan–Dec {year}</div>
             <div className="mt-3 h-px bg-neutral-100" />
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
                   <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target)}</div>
                   <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].share * 100)}%</div>
                 </div>
@@ -524,31 +666,31 @@ function GrowthPlan2026() {
             </div>
           </div>
           <div className="md:border-l md:border-neutral-100 md:pl-6">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Net Profit Target</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Net Profit</div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalNetProfit)}</div>
-            <div className="text-[11px] text-neutral-500">{(blendedMargin * 100).toFixed(1)}% net margin</div>
+            <div className="text-[11px] text-neutral-500">{(blendedMargin * 100).toFixed(1)}% blended margin</div>
             <div className="mt-3 h-px bg-neutral-100" />
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
                   <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target * plan[mk.code].margin)}</div>
-                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].margin * 100)}% margin</div>
+                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].margin * 100)}%</div>
                 </div>
               ))}
             </div>
           </div>
           <div className="md:border-l md:border-neutral-100 md:pl-6">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Marketing Spend</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Marketing Spend</div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalMarketing)}</div>
             <div className="text-[11px] text-neutral-500">Blended MER {blendedMER.toFixed(2)}×</div>
             <div className="mt-3 h-px bg-neutral-100" />
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
                   <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].marketing)}</div>
-                  <div className="text-[10px] text-neutral-400">{Math.round((plan[mk.code].marketing / plan[mk.code].target) * 100)}%</div>
+                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].marketingRatio * 100)}%</div>
                 </div>
               ))}
             </div>
@@ -560,7 +702,7 @@ function GrowthPlan2026() {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="text-[14px] font-semibold">Monthly breakdown per market</div>
-            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Dec 2026 · stacked by market</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Dec {year} · actuals through current month, projected after</div>
           </div>
           <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-1 text-[12px] font-medium">
             {([
@@ -581,13 +723,11 @@ function GrowthPlan2026() {
         <div className="mt-4 h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows.map((r) => {
-              if (metric === "revenue") return { m: r.m, NL: r.nl, GB: r.gb, US: r.us };
+              if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US, EU: r.EU };
               if (metric === "marketing") {
-                const f = r.total > 0 ? r.marketing / r.total : 0;
-                return { m: r.m, NL: Math.round(r.nl * f), GB: Math.round(r.gb * f), US: Math.round(r.us * f) };
+                return Object.fromEntries([["m", r.m], ...MARKETS.map((mk) => [mk.code, Math.round((r[mk.code] ?? 0) * plan[mk.code].marketingRatio)])]);
               }
-              const f = r.total > 0 ? r.netProfit / r.total : 0;
-              return { m: r.m, NL: Math.round(r.nl * f), GB: Math.round(r.gb * f), US: Math.round(r.us * f) };
+              return Object.fromEntries([["m", r.m], ...MARKETS.map((mk) => [mk.code, Math.round((r[mk.code] ?? 0) * plan[mk.code].margin)])]);
             })} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="m" tick={{ fontSize: 11, fill: "#737373" }} axisLine={false} tickLine={false} />
@@ -595,8 +735,9 @@ function GrowthPlan2026() {
               <Tooltip formatter={(v: any) => fmtK(Number(v))} cursor={{ fill: "#f5f5f5" }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="NL" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="GB" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="UK" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="EU" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -610,9 +751,7 @@ function GrowthPlan2026() {
             <thead>
               <tr className="border-b border-neutral-200 text-left text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
                 <th className="py-2 pr-3">Month</th>
-                <th className="py-2 px-3 text-right">NL Rev</th>
-                <th className="py-2 px-3 text-right">UK Rev</th>
-                <th className="py-2 px-3 text-right">US Rev</th>
+                {MARKETS.map((mk) => <th key={mk.code} className="py-2 px-3 text-right">{mk.code} Rev</th>)}
                 <th className="py-2 px-3 text-right border-l border-neutral-100">Total</th>
                 <th className="py-2 px-3 text-right">Marketing</th>
                 <th className="py-2 px-3 text-right">Net profit</th>
@@ -621,7 +760,7 @@ function GrowthPlan2026() {
             </thead>
             <tbody>
               {rows.map((r) => {
-                const dim = !r.isPast && !r.isMTD;
+                const dim = r.i > currentMonthIdx;
                 const rowBg = r.isMTD ? "bg-amber-50/40" : "";
                 const txt = dim ? "text-neutral-400" : "text-neutral-700";
                 const profitTxt = r.netProfit < 0 ? "text-rose-600" : dim ? "text-emerald-400" : "text-emerald-600";
@@ -640,9 +779,7 @@ function GrowthPlan2026() {
                         {r.isMTD && <span className="rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">MTD</span>}
                       </span>
                     </td>
-                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.nl)}</td>
-                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.gb)}</td>
-                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.us)}</td>
+                    {MARKETS.map((mk) => <td key={mk.code} className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r[mk.code])}</td>)}
                     <td className={`py-2.5 px-3 text-right tabular-nums font-semibold border-l border-neutral-100 ${dim ? "text-neutral-500" : "text-neutral-900"}`}>{fmtK(r.total)}</td>
                     <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.marketing)}</td>
                     <td className={`py-2.5 px-3 text-right tabular-nums font-medium ${profitTxt}`}>{r.netProfit < 0 ? `-€${Math.abs(Math.round(r.netProfit / 1000))}k` : fmtK(r.netProfit)}</td>
@@ -651,10 +788,8 @@ function GrowthPlan2026() {
                 );
               })}
               <tr className="border-t-2 border-neutral-200 font-semibold">
-                <td className="py-3 pr-3">Total 2026</td>
-                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.NL.target)}</td>
-                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.GB.target)}</td>
-                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.US.target)}</td>
+                <td className="py-3 pr-3">Total {year}</td>
+                {MARKETS.map((mk) => <td key={mk.code} className="py-3 px-3 text-right tabular-nums">{fmtM(plan[mk.code].target)}</td>)}
                 <td className="py-3 px-3 text-right tabular-nums border-l border-neutral-100">{fmtM(totalTarget)}</td>
                 <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalMarketing)}</td>
                 <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalNetProfit)}</td>
@@ -668,7 +803,7 @@ function GrowthPlan2026() {
       <GrowthCard className="mt-3 p-5">
         <div className="flex items-center gap-2">
           <Info className="h-4 w-4 text-neutral-400" />
-          <div className="text-[14px] font-semibold">Key assumptions per market</div>
+          <div className="text-[14px] font-semibold">Calculation inputs per market</div>
         </div>
         <div className="mt-4 space-y-3">
           {MARKETS.map((mk) => (
