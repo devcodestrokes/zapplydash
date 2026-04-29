@@ -810,58 +810,82 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     </section>
 
     {/* Subscriptions — Juo (NL) + Loop (UK/US/EU) */}
-    {liveMRR !== null ? (
-      <Card className="mt-3 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="text-[13px] font-semibold">Subscriptions</div>
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Live</span>
-          <div className="ml-auto text-[11px] text-neutral-400">
-            Combined MRR: <span className="font-semibold text-neutral-700">€{Math.round(liveMRR).toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Per-market rows */}
-        <div className="space-y-4">
-          {subData.map(m => {
-            const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
-            const platformLabel = m.platform === "juo" ? "Juo" : "Loop";
-            return (
-              <div key={m.market} className="rounded-lg border border-neutral-100 bg-neutral-50 p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-[13px]">{m.flag}</span>
-                  <span className="text-[12px] font-semibold text-neutral-700">{m.market}</span>
-                  <span className="text-[10px] text-neutral-400">{platformLabel}</span>
-                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">Live</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">MRR</div>
-                    <div className="mt-1 text-[20px] font-semibold tabular-nums">{sym}{Math.round(m.mrr ?? 0).toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">Active</div>
-                    <div className="mt-1 text-[20px] font-semibold tabular-nums">{(m.activeSubs ?? 0).toLocaleString()}</div>
-                    <div className="mt-0.5 text-[10px] text-neutral-400">{m.totalFetched ? `of ${m.totalFetched.toLocaleString()} fetched` : ""}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">ARPU</div>
-                    <div className="mt-1 text-[20px] font-semibold tabular-nums">{m.arpu != null ? `${sym}${m.arpu.toFixed(2)}` : "—"}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">New MTD</div>
-                    <div className="mt-1 text-[20px] font-semibold tabular-nums">{m.newThisMonth ?? "—"}</div>
-                    <div className="mt-0.5 text-[10px] text-neutral-400">
-                      {m.churnedThisMonth != null ? `${m.churnedThisMonth} churned` : ""}
-                      {m.churnRate != null ? ` · ${m.churnRate}% rate` : ""}
-                    </div>
-                  </div>
-                </div>
+    {liveMRR !== null ? (() => {
+      const totalActive = subData.reduce((s, m) => s + (m.activeSubs ?? 0), 0);
+      const totalNew = subData.reduce((s, m) => s + (m.newThisMonth ?? 0), 0);
+      const totalChurned = subData.reduce((s, m) => s + (m.churnedThisMonth ?? 0), 0);
+      const blendedARPU = totalActive > 0 ? liveMRR / totalActive : null;
+      const blendedChurn = totalActive > 0 ? (totalChurned / totalActive) * 100 : null;
+      const totalRev = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? 0;
+      const subShare = totalRev > 0 ? (liveMRR / totalRev) * 100 : null;
+      const sourcesLabel = subData.map(m => m.platform === "juo" ? `Juo (${m.market})` : `Loop (${m.market})`).join(" + ");
+      return (
+        <Card className="mt-3 p-5">
+          <div className="flex items-start justify-between mb-5">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600" />
               </div>
-            );
-          })}
-        </div>
-      </Card>
-    ) : (
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="text-[14px] font-semibold">Subscriptions</div>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Recurring</span>
+                </div>
+                <div className="mt-0.5 text-[12px] text-neutral-500">MRR, active subscribers, churn · source: {sourcesLabel}</div>
+              </div>
+            </div>
+            {subShare !== null && (
+              <div className="text-right">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Subscription share</div>
+                <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{subShare.toFixed(1)}%</div>
+                <div className="text-[11px] text-neutral-400">Of total revenue</div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 border-t border-neutral-100 pt-5">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">MRR</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">
+                €{liveMRR >= 1000 ? `${(liveMRR/1000).toFixed(1)}k` : Math.round(liveMRR).toLocaleString()}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-400">€{Math.round(liveMRR).toLocaleString()} recurring</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Active subscribers</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{totalActive.toLocaleString()}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">{blendedARPU !== null ? `ARPU €${blendedARPU.toFixed(2)}/mo` : "—"}</div>
+            </div>
+            <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Churn rate</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{blendedChurn !== null ? `${blendedChurn.toFixed(1)}%` : "—"}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">{totalChurned > 0 ? `${totalChurned} lost this month` : "No churn this month"}</div>
+            </div>
+            <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">New subscribers</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{totalNew.toLocaleString()}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">Net {totalNew - totalChurned >= 0 ? "+" : ""}{totalNew - totalChurned} this month</div>
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-neutral-100 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+            <span className="text-neutral-400 font-medium">Split:</span>
+            {subData.map(m => {
+              const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
+              const sharePct = liveMRR > 0 ? Math.round(((m.mrr ?? 0) / liveMRR) * 100) : 0;
+              const mrrLabel = (m.mrr ?? 0) >= 1000 ? `${sym}${((m.mrr ?? 0)/1000).toFixed(0)}k` : `${sym}${Math.round(m.mrr ?? 0)}`;
+              return (
+                <span key={m.market} className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">{m.flag} {m.market}</span>
+                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR</span>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">{sharePct}%</span>
+                </span>
+              );
+            })}
+          </div>
+        </Card>
+      );
+    })() : (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
         <strong>Subscription data not available</strong> — set <code className="text-[11px]">JUO_NL_API_KEY</code> or <code className="text-[11px]">LOOP_UK_API_KEY</code> in .env.local.
       </div>
