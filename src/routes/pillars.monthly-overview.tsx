@@ -56,6 +56,7 @@ function MonthlyOverviewPage() {
   const deniedScopes = Array.isArray(jorttObj?.deniedScopes) ? jorttObj.deniedScopes : [];
   const shopifyMonthly = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
   const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
+  const shopifyRepeatFunnel = data?.shopifyRepeatFunnel?.calcVersion === 4 ? data.shopifyRepeatFunnel : null;
   const shopifyLive = shopifyMonthly.length > 0;
 
   return (
