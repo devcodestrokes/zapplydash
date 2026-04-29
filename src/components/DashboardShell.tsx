@@ -156,6 +156,62 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {operationsItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to, item.exact);
+                const badge = item.to === "/operations/reconciliation" && reconCount > 0 ? reconCount : null;
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <Link to={item.to as any}>
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1">{item.label}</span>
+                        {!collapsed && badge != null && (
+                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
+                            {badge}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Data sources</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {dataSourceMeta.map((src) => {
+                const Icon = src.icon;
+                const s = sourceStatus(src.providerKeys);
+                return (
+                  <SidebarMenuItem key={src.label}>
+                    <SidebarMenuButton asChild tooltip={`${src.label} · ${s}`}>
+                      <Link to={"/operations/sync-status" as any}>
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1 truncate">
+                          {src.label}
+                          {src.suffix && !collapsed && (
+                            <span className="ml-1 text-[11px] text-muted-foreground">{src.suffix}</span>
+                          )}
+                        </span>
+                        <span className={`ml-auto h-2 w-2 rounded-full ${dotClass(s)}`} aria-label={s} />
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="border-t">
