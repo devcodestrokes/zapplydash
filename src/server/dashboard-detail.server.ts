@@ -267,24 +267,25 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
   const fromMs = new Date(`${fromDate}T00:00:00Z`).getTime();
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
-  // Cap pages to keep request fast. 15 × 50 = 750 most-recent subs.
-  const MAX_PAGES = 15;
+  const MAX_PAGES = 500;
+  const PAGE_SIZE = 200;
   let apiReached = false;
 
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
-      // Removed 600ms sleep — Loop allows ~2 req/s, our concurrency is 1.
-      let res: Response = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
+      const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
+      let res: Response = await fetch(url, { headers, cache: "no-store" });
       if (res.status === 429) {
         await new Promise((r) => setTimeout(r, 2000));
-        res = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
+        res = await fetch(url, { headers, cache: "no-store" });
       }
       if (!res.ok) break;
       apiReached = true;
       const json = await res.json();
       const batch: any[] = json.data ?? [];
       allSubs.push(...batch);
-      if (!json.pageInfo?.hasNextPage || batch.length === 0) break;
+      const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
+      if (!hasNext || batch.length === 0) break;
     }
   } catch (err: any) {
     return { live: false, error: err?.message, market: marketCode, subscriptions: [], totals: {} };
