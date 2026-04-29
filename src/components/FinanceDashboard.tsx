@@ -513,7 +513,7 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
