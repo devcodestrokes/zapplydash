@@ -36,8 +36,7 @@ import {
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number };
 
 const navItems: NavItem[] = [
-  { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
-  { to: "/overview-dashboard", label: "Overview Dashboard", icon: LayoutDashboard },
+  { to: "/overview-dashboard", label: "Overview", icon: LayoutDashboard },
 ];
 
 const pillarItems: NavItem[] = [
