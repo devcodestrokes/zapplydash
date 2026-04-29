@@ -606,7 +606,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
@@ -685,6 +685,8 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     : null;
   const liveNCPA        = liveTWNL?.ncpa ?? null;
   const liveLtvCpa      = liveTWNL?.ltvCpa ?? null;
+  const liveLtv90       = tripleWhaleCustomerEconomics?.ltv90 ?? null;
+  const liveLtv365      = tripleWhaleCustomerEconomics?.ltv365 ?? null;
   // Real P&L from TW NL (these are real figures, not estimates)
   const liveGrossProfit = liveTWNL?.grossProfit ?? null;
   const liveCOGS        = liveTWNL?.cogs ?? null;
