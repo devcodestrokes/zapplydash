@@ -215,7 +215,7 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-const OverviewView = ({ range, setRange, data = [], totals, liveMarkets = null, twData = [], loopData = null }) => {
+export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets = null, twData = [], loopData = null }: any) => {
   const xAxisInterval = data.length > 0 ? Math.floor(data.length / 5) : 0;
   const [chartsReady, setChartsReady] = useState(false);
 
