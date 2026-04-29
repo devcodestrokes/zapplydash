@@ -1,4 +1,4 @@
-import { writeCache, ageMinutes, type CacheMap } from "./cache.server";
+import { writeCache, ageMinutes, readCache, type CacheMap } from "./cache.server";
 import {
   fetchShopifyMarkets,
   fetchShopifyMonthly,
@@ -49,28 +49,49 @@ async function runJob(job: Job): Promise<void> {
   const p = (async () => {
     try {
       const data = await job.fn();
-      // Always write SOMETHING so the cache row exists. If the fetcher
-      // returned null/undefined, store a marker payload so we can tell
-      // "fetched but empty" apart from "never fetched".
-      const payload =
-        data === null || data === undefined
-          ? { __empty: true, fetchedAt: new Date().toISOString() }
-          : data;
-      await writeCache(job.provider, job.key, payload);
       if (data === null || data === undefined) {
-        console.warn(`[sync] ${job.name} returned no data (empty/null)`);
+        // Fetcher returned no data. DO NOT overwrite an existing healthy
+        // cache row with an empty marker — that would mask good data behind
+        // a transient upstream hiccup. Only write the marker if there is
+        // no previous successful payload to preserve.
+        const existingRow = await readCache(job.provider, job.key);
+        const hasGoodPrevious =
+          existingRow?.payload &&
+          typeof existingRow.payload === "object" &&
+          !(existingRow.payload as any).__empty &&
+          !(existingRow.payload as any).__error;
+        if (hasGoodPrevious) {
+          console.warn(
+            `[sync] ${job.name} returned no data — keeping previous cached payload (fetched ${existingRow!.fetchedAt})`
+          );
+        } else {
+          await writeCache(job.provider, job.key, {
+            __empty: true,
+            fetchedAt: new Date().toISOString(),
+          });
+          console.warn(`[sync] ${job.name} returned no data (empty/null)`);
+        }
       } else {
+        await writeCache(job.provider, job.key, data);
         console.log(`[sync] ${job.name} ok`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[sync] ${job.name} failed:`, msg);
-      // Persist an error marker so the dashboard knows this source failed.
-      await writeCache(job.provider, job.key, {
-        __error: true,
-        message: msg,
-        fetchedAt: new Date().toISOString(),
-      });
+      // Same protection for hard errors — preserve previously good data.
+      const existingRow = await readCache(job.provider, job.key);
+      const hasGoodPrevious =
+        existingRow?.payload &&
+        typeof existingRow.payload === "object" &&
+        !(existingRow.payload as any).__empty &&
+        !(existingRow.payload as any).__error;
+      if (!hasGoodPrevious) {
+        await writeCache(job.provider, job.key, {
+          __error: true,
+          message: msg,
+          fetchedAt: new Date().toISOString(),
+        });
+      }
     } finally {
       inFlight.delete(id);
     }
