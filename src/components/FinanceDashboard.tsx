@@ -239,6 +239,42 @@ const CalendarPicker = ({ from, to, onSelect }) => {
   );
 };
 
+const QuickRangePills = ({ from, to, onApply, disabled = false }) => {
+  const today = drToday();
+  const daysAgoStr = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (n - 1));
+    return d.toISOString().split("T")[0];
+  };
+  const PRESETS = [
+    { label: "7D",  days: 7 },
+    { label: "30D", days: 30 },
+    { label: "90D", days: 90 },
+  ];
+  const isActive = (days) => from === daysAgoStr(days) && to === today;
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-neutral-200 bg-white p-0.5">
+      {PRESETS.map(p => {
+        const active = isActive(p.days);
+        return (
+          <button
+            key={p.label}
+            disabled={disabled}
+            onClick={() => onApply(daysAgoStr(p.days), today)}
+            className={`rounded-md px-2.5 py-1 text-[12px] font-semibold transition ${
+              active
+                ? "bg-neutral-900 text-white"
+                : "text-neutral-500 hover:bg-neutral-100"
+            } disabled:opacity-50`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const DateRangePicker = ({ from, to, onApply, loading = false }) => {
   const [open, setOpen]           = useState(false);
   const [pendingFrom, setPendingFrom] = useState(from);
@@ -569,7 +605,10 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
           Live revenue from Shopify, ad performance from Triple Whale, reconciled nightly against Jortt.
         </p>
       </div>
-      <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
+      <div className="flex items-center gap-2">
+        <QuickRangePills from={dateRange.from} to={dateRange.to} onApply={onDateChange} disabled={rangeSyncing} />
+        <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
+      </div>
     </div>
 
     {/* Revenue hero */}
