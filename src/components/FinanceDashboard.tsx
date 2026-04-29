@@ -3115,7 +3115,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
   // Safe values to pass into subcomponents (markers stripped to null/[])
   const safeShopifyMonthly = asArr(liveData?.shopifyMonthly);
-  const safeRepeatFunnel   = liveData?.shopifyRepeatFunnel?.calcVersion === 3 ? liveData.shopifyRepeatFunnel : null;
+  const safeRepeatFunnel   = liveData?.shopifyRepeatFunnel?.calcVersion === 4 ? liveData.shopifyRepeatFunnel : null;
 
   async function handleLogout() {
     await fetch("/auth/logout", { method: "POST" });
