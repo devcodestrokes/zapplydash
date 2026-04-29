@@ -569,7 +569,10 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
           Live revenue from Shopify, ad performance from Triple Whale, reconciled nightly against Jortt.
         </p>
       </div>
-      <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
+      <div className="flex items-center gap-2">
+        <QuickRangePills from={dateRange.from} to={dateRange.to} onApply={onDateChange} disabled={rangeSyncing} />
+        <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
+      </div>
     </div>
 
     {/* Revenue hero */}
