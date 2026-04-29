@@ -604,6 +604,70 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const liveJuo         = subData.find(s => s.market === "NL") ?? null;
   const liveMRR         = subData.length > 0 ? subData.reduce((s, m) => s + (m.mrr ?? 0), 0) : null;
   const revenueBreakdownMarkets = effectiveMarkets?.filter(m => m.live) ?? [];
+
+  // ─── Today's Profit (est.) — uses cached daily Shopify revenue + TW ad spend ───
+  const profitMetrics = useMemo(() => {
+    const rev: Record<string, number> = (shopifyDaily?.daily ?? {}) as any;
+    const tw: Record<string, { adSpend: number; grossProfit: number }> =
+      (tripleWhaleDaily?.daily ?? {}) as any;
+    const dayProfit = (k: string): number | null => {
+      const r = rev[k]?.revenue;
+      const ad = tw[k]?.adSpend;
+      if (r == null && ad == null) return null;
+      // Profit estimate = Shopify net revenue − TW blended ad spend
+      return (r ?? 0) - (ad ?? 0);
+    };
+    const sumRange = (from: Date, to: Date): number | null => {
+      let total = 0;
+      let any = false;
+      const d = new Date(from);
+      while (d <= to) {
+        const k = d.toISOString().split("T")[0];
+        const p = dayProfit(k);
+        if (p != null) { total += p; any = true; }
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+      return any ? total : null;
+    };
+    const now = new Date();
+    const todayKey = now.toISOString().split("T")[0];
+    const today = dayProfit(todayKey);
+    const yesterday = (() => {
+      const y = new Date(now); y.setUTCDate(y.getUTCDate() - 1);
+      return dayProfit(y.toISOString().split("T")[0]);
+    })();
+
+    // This week (Monday → today, UTC)
+    const weekStart = new Date(now);
+    const dow = (weekStart.getUTCDay() + 6) % 7; // Mon=0
+    weekStart.setUTCDate(weekStart.getUTCDate() - dow);
+    const week = sumRange(weekStart, now);
+
+    // MTD
+    const mtdStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const mtd = sumRange(mtdStart, now);
+
+    // YTD
+    const ytdStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+    const ytd = sumRange(ytdStart, now);
+
+    // 30-day series (oldest first) for sparkline
+    const series: { date: string; profit: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now); d.setUTCDate(d.getUTCDate() - i);
+      const k = d.toISOString().split("T")[0];
+      const p = dayProfit(k);
+      series.push({ date: k, profit: p ?? 0 });
+    }
+    const avg30 = series.length ? series.reduce((s, x) => s + x.profit, 0) / series.length : null;
+    const todayVsYesterdayPct = (today != null && yesterday != null && yesterday !== 0)
+      ? ((today - yesterday) / Math.abs(yesterday)) * 100
+      : null;
+
+    const hasAnyDaily = Object.keys(rev).length > 0 || Object.keys(tw).length > 0;
+    return { today, yesterday, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
+  }, [shopifyDaily, tripleWhaleDaily]);
+
   return (<>
     <div className="flex items-end justify-between">
       <div>
@@ -618,6 +682,9 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
       </div>
     </div>
+
+    {/* Today's Profit (est.) */}
+    <TodaysProfitCard metrics={profitMetrics} chartsReady={chartsReady} />
 
     {/* Revenue hero */}
     <section className="mt-3">
