@@ -275,7 +275,10 @@ export async function fetchShopifyToday() {
         }
 
         const hourly = hourlyRev.map((rev, h) => ({ hour: h, revenue: +rev.toFixed(2), orders: hourlyOrd[h] }));
-        return { code, flag, name, revenue: +revenue.toFixed(2), refunds: +refunds.toFixed(2), orders, aov: orders > 0 ? +(revenue / orders).toFixed(2) : 0, currency, hourly, live: true };
+        const fxRate = await getEurRate(currency, today(), today());
+        const revenueEUR = +(revenue * fxRate).toFixed(2);
+        const refundsEUR = +(refunds * fxRate).toFixed(2);
+        return { code, flag, name, revenue: revenueEUR, refunds: refundsEUR, revenueNative: +revenue.toFixed(2), refundsNative: +refunds.toFixed(2), orders, aov: orders > 0 ? +(revenueEUR / orders).toFixed(2) : 0, currency, fxRate, hourly, live: true };
       } catch (err: any) {
         console.error(`Shopify today ${code}:`, err.message);
         return { code, flag, name, live: false };
