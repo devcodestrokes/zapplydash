@@ -469,7 +469,7 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false }) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
 
@@ -1463,7 +1463,7 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
@@ -1870,7 +1870,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] } = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
@@ -2576,7 +2576,7 @@ const ForecastView = ({ jorttData = null, xeroData = null, shopifyMonthly = null
    MAIN APP
    ========================================================================= */
 
-export default function FinanceDashboard({ user = null, liveData = null, connections = {}, syncedAt = null, dataIsStale = false, hasAnyData = false }) {
+export default function FinanceDashboard({ user = null, liveData = null, connections = {}, syncedAt = null, dataIsStale = false, hasAnyData = false }: any) {
   const router = useRouter();
   const [dateRange, setDateRange]   = useState({ from: drStartOfMonth(), to: drToday() });
   const [rangeData, setRangeData]   = useState(null);
