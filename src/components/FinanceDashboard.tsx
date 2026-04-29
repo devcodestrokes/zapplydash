@@ -1213,9 +1213,10 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       </div>
     )}
 
-    {/* Repeat Purchase Funnel — real Shopify cohort data (90-day cohort) */}
-    {shopifyRepeatFunnel && shopifyRepeatFunnel.cohortSize > 0 && (() => {
+    {/* Repeat Purchase Funnel — real Shopify cohort data */}
+    {shopifyRepeatFunnel && (() => {
       const f = shopifyRepeatFunnel;
+      const hasCohort = f.cohortSize > 0;
       const orderColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const orderDotColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const labels = ["1st order", "2nd order", "3rd order", "4th order", "5th order", "6th order", "7th+ orders"];
@@ -1229,15 +1230,17 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             <div>
               <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
               <div className="mt-0.5 text-[12px] text-neutral-500">
-                Cohort of first-time buyers from {f.cohortEndedDaysAgo} days ago · tracks how many came back
+                {hasCohort
+                  ? `${f.cohortMonth ?? "Selected cohort"} first-time buyers · ${f.cohortWindowDays ?? 0}+ days observed`
+                  : "Monthly Shopify cohorts loaded · no mature repeat cohort yet"}
               </div>
             </div>
             <div className="text-right text-[11px] text-neutral-400">
-              Cohort size: <span className="font-semibold text-neutral-700">{f.cohortSize.toLocaleString()} first-time buyers</span>
+              Cohort size: <span className="font-semibold text-neutral-700">{(f.cohortSize ?? 0).toLocaleString()} first-time buyers</span>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {hasCohort ? <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             {top4.map((row: any, i: number) => (
               <div key={row.order} className="rounded-lg border border-neutral-200 p-4">
                 <div className="flex items-center justify-between">
@@ -1256,15 +1259,19 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                 </div>
               </div>
             ))}
-          </div>
+          </div> : (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-[12px] text-amber-800">
+              Shopify customer history is loaded, but the latest mature cohort has no first-time buyers yet. The monthly table below shows the available cohort data.
+            </div>
+          )}
 
-          {rest.length > 0 && (
+          {(hasCohort || (f.monthlyCohorts && f.monthlyCohorts.length > 0)) && (
             <div className="mt-4 rounded-lg border border-neutral-200">
               <div className="flex items-center justify-between p-3 border-b border-neutral-100">
                 <div className="text-[12px] font-semibold text-neutral-700">Deeper cohort analysis</div>
                 <div className="text-[11px] text-neutral-400">5th+ orders, cohort-by-cohort, LTV projection</div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
+              {hasCohort && <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
                 {rest.map((row: any, i: number) => (
                   <div key={row.order} className="rounded-lg border border-neutral-100 p-3">
                     <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
@@ -1278,7 +1285,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                     </div>
                   </div>
                 ))}
-              </div>
+              </div>}
 
               {/* Monthly cohort table */}
               {f.monthlyCohorts && f.monthlyCohorts.length > 0 && (
