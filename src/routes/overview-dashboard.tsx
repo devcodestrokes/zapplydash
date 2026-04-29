@@ -24,6 +24,11 @@ function startOfMonthStr(d = new Date()) {
 function todayStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+function daysAgoStr(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return todayStr(d);
+}
 
 function SkeletonBox({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-neutral-200/70 ${className}`} />;
@@ -48,7 +53,7 @@ function OverviewPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const [dateRange, setDateRange] = useState({ from: startOfMonthStr(), to: todayStr() });
+  const [dateRange, setDateRange] = useState({ from: daysAgoStr(7), to: todayStr() });
   const [rangeData, setRangeData] = useState<any>(null);
   const [rangeSyncing, setRangeSyncing] = useState(false);
 
@@ -57,6 +62,18 @@ function OverviewPage() {
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
+
+  // Auto-load the default 7D range on first mount (cached data is "this month").
+  useEffect(() => {
+    let alive = true;
+    setRangeSyncing(true);
+    fetch(`/api/sync?from=${daysAgoStr(7)}&to=${todayStr()}`, { method: "POST" })
+      .then((r) => r.json())
+      .then((json) => { if (alive) setRangeData(json.rangeData ?? null); })
+      .catch(() => { if (alive) setRangeData(null); })
+      .finally(() => { if (alive) setRangeSyncing(false); });
     return () => { alive = false; };
   }, []);
 
