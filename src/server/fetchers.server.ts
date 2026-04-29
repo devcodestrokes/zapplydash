@@ -201,7 +201,17 @@ export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
         const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } = agg;
         const aov = orderCount > 0 ? revenue / orderCount : 0;
         if (truncated) console.warn(`Shopify ${code}: revenue capped at 40 pages (10,000 orders)`);
-        return { code, flag, name, revenue, refunds, discounts, orders: orderCount, aov, currency, newCustomers: uniqueCustomers, truncated, status: status ?? null, live: true };
+        // Convert to EUR for cross-store aggregation. Keep native values too.
+        const fxRate = await getEurRate(currency, since.slice(0, 10), (until ?? new Date().toISOString()).slice(0, 10));
+        const revenueEUR = +(revenue * fxRate).toFixed(2);
+        const refundsEUR = +(refunds * fxRate).toFixed(2);
+        return {
+          code, flag, name,
+          revenue: revenueEUR, refunds: refundsEUR, discounts,
+          revenueNative: revenue, refundsNative: refunds,
+          orders: orderCount, aov, currency, fxRate,
+          newCustomers: uniqueCustomers, truncated, status: status ?? null, live: true,
+        };
       } catch (err: any) {
         console.error(`Shopify ${code} fetch failed:`, err.message);
         return { code, flag, name, status: status ?? null, live: false, error: err.message };
