@@ -3105,8 +3105,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const xeroLive          = !!(xeroObj?.live);
   const twData            = asArr(liveData?.tripleWhale).filter(m => m?.live);
   const twLive            = twData.length > 0;
-  const juoArr            = asArr(liveData?.juo);
-  const loopArr           = asArr(liveData?.loop);
+  const juoArr            = asArr(liveData?.juo).filter(m => m?.calcVersion === 2);
+  const loopArr           = asArr(liveData?.loop).filter(m => m?.calcVersion === 2);
   const juoLive           = juoArr.some(m => m?.live);
   const loopLive          = loopArr.some(m => m?.live);
   const subLive           = juoLive || loopLive;
@@ -3115,6 +3115,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
   // Safe values to pass into subcomponents (markers stripped to null/[])
   const safeShopifyMonthly = asArr(liveData?.shopifyMonthly);
+  const safeRepeatFunnel   = liveData?.shopifyRepeatFunnel?.calcVersion === 2 ? liveData.shopifyRepeatFunnel : null;
 
   async function handleLogout() {
     await fetch("/auth/logout", { method: "POST" });
@@ -3289,7 +3290,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} shopifyRepeatFunnel={liveData?.shopifyRepeatFunnel ?? null} />}
+          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} tripleWhaleCustomerEconomics={liveData?.tripleWhaleCustomerEconomics ?? null} shopifyRepeatFunnel={safeRepeatFunnel} />}
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
