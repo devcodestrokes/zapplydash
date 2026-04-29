@@ -1,5 +1,6 @@
 // @ts-nocheck
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useRouter } from "@tanstack/react-router";
 import SyncView from "./SyncView";
 import {
   AreaChart,
@@ -55,13 +56,6 @@ import {
   Truck,
   Zap,
   Sparkles,
-  Receipt,
-  Users2,
-  Banknote,
-  FileText,
-  Briefcase,
-  Building2,
-  Landmark,
 } from "lucide-react";
 
 /* =========================================================================
@@ -86,6 +80,266 @@ const formatValue = (value, format) => {
 
 const fmtCurrency = (n) => `€${Math.abs(n).toLocaleString()}`;
 const fmtSigned = (n) => (n >= 0 ? `+€${n.toLocaleString()}` : `-€${Math.abs(n).toLocaleString()}`);
+
+/* =========================================================================
+   DATE RANGE HELPERS
+   ========================================================================= */
+
+function drStartOfMonth(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function drToday() {
+  return new Date().toISOString().split("T")[0];
+}
+function drLastMonthStart() {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
+  return drStartOfMonth(d);
+}
+function drLastMonthEnd() {
+  const d = new Date(); d.setDate(0); // last day of previous month
+  return d.toISOString().split("T")[0];
+}
+function drMonthsAgo(n) {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n);
+  return drStartOfMonth(d);
+}
+function drFormatLabel(from, to) {
+  const som = drStartOfMonth(), tod = drToday();
+  if (from === som && to === tod) return "This month";
+  if (from === drLastMonthStart() && to === drLastMonthEnd()) return "Last month";
+  const fmt = (s) => {
+    const d = new Date(s + "T12:00:00");
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
+  };
+  return `${fmt(from)} – ${fmt(to)}`;
+}
+function monthInRange(monthKey, from, to) {
+  if (!monthKey) return false;
+  const d = new Date("1 " + monthKey.replace("'", "20"));
+  if (isNaN(d.getTime())) return false;
+  const ms = new Date(d.getFullYear(), d.getMonth(), 1);
+  const me = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return ms <= new Date(to + "T23:59:59") && me >= new Date(from + "T00:00:00");
+}
+
+/* =========================================================================
+   DATE RANGE PICKER — inline calendar
+   ========================================================================= */
+
+const CalendarPicker = ({ from, to, onSelect }) => {
+  const todayStr = drToday();
+  const initD    = from ? new Date(from + "T12:00:00") : new Date();
+  const [vy, setVy] = useState(initD.getFullYear());
+  const [vm, setVm] = useState(initD.getMonth());
+  const [anchor,  setAnchor]  = useState(null);
+  const [hovered, setHovered] = useState(null);
+
+  // Reset picking state when external from/to changes (preset applied)
+  useEffect(() => { setAnchor(null); setHovered(null); }, [from, to]);
+
+  // Calendar math helpers
+  const ds   = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const dim  = (y, m)    => new Date(y, m + 1, 0).getDate();
+  const fdow = (y, m)    => { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; };
+
+  const prevMonth = () => { const d = new Date(vy, vm - 1, 1); setVy(d.getFullYear()); setVm(d.getMonth()); };
+  const nextMonth = () => {
+    const d = new Date(vy, vm + 1, 1);
+    if (ds(d.getFullYear(), d.getMonth(), 1) <= todayStr) { setVy(d.getFullYear()); setVm(d.getMonth()); }
+  };
+  const canNext = new Date(vy, vm + 1, 1) <= new Date();
+
+  const handleDay = (dateStr) => {
+    if (!anchor) {
+      setAnchor(dateStr);
+    } else {
+      const [s, e] = dateStr < anchor ? [dateStr, anchor] : [anchor, dateStr];
+      onSelect(s, e);
+      setAnchor(null); setHovered(null);
+    }
+  };
+
+  // Display range: while picking, preview anchor→hover; otherwise show committed from/to
+  const dFrom = anchor ? (hovered && hovered < anchor ? hovered : anchor) : from;
+  const dTo   = anchor ? (hovered && hovered > anchor ? hovered : anchor) : to;
+
+  const numDays = dim(vy, vm);
+  const offset  = fdow(vy, vm);
+  const monthLabel = new Date(vy, vm, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const cells = [...Array(offset).fill(null), ...Array.from({ length: numDays }, (_, i) => ds(vy, vm, i + 1))];
+
+  return (
+    <div className="select-none">
+      {/* Month navigation */}
+      <div className="mb-2 flex items-center justify-between px-0.5">
+        <button onClick={prevMonth} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-100">
+          <ChevronDown size={13} className="rotate-90" />
+        </button>
+        <span className="text-[12px] font-semibold text-neutral-800">{monthLabel}</span>
+        <button onClick={nextMonth} disabled={!canNext} className="flex h-6 w-6 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-100 disabled:opacity-25 disabled:cursor-default">
+          <ChevronDown size={13} className="-rotate-90" />
+        </button>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="mb-0.5 grid grid-cols-7">
+        {DAYS.map(d => <div key={d} className="py-0.5 text-center text-[10px] font-medium text-neutral-400">{d}</div>)}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7">
+        {cells.map((dateStr, i) => {
+          if (!dateStr) return <div key={`_${i}`} className="h-8" />;
+
+          const future   = dateStr > todayStr;
+          const isToday  = dateStr === todayStr;
+          const isStart  = dateStr === dFrom;
+          const isEnd    = dateStr === dTo;
+          const inRange  = dFrom && dTo && dFrom !== dTo && dateStr > dFrom && dateStr < dTo;
+          const isEdge   = isStart || isEnd;
+          const bothEdge = isStart && isEnd;
+          const dayNum   = +dateStr.slice(8);
+
+          return (
+            <div
+              key={dateStr}
+              className={[
+                "relative flex h-8 items-center justify-center",
+                inRange                        ? "bg-neutral-100"    : "",
+                isStart && dTo && !bothEdge    ? "rounded-l-full"   : "",
+                isEnd   && dFrom && !bothEdge  ? "rounded-r-full"   : "",
+              ].join(" ")}
+            >
+              <button
+                onClick={() => !future && handleDay(dateStr)}
+                onMouseEnter={() => anchor && !future && setHovered(dateStr)}
+                onMouseLeave={() => anchor && setHovered(null)}
+                disabled={future}
+                className={[
+                  "flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-medium transition",
+                  future   ? "cursor-default text-neutral-200"                             : "",
+                  isEdge   ? "bg-neutral-900 text-white"                                   : "",
+                  isToday && !isEdge ? "ring-1 ring-inset ring-neutral-400 text-neutral-700" : "",
+                  !isEdge && !future ? "text-neutral-700 hover:bg-neutral-200"             : "",
+                ].join(" ")}
+              >
+                {dayNum}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hint line */}
+      <p className="mt-2 text-center text-[10px] text-neutral-400">
+        {anchor ? "Now click to select end date" : "Click a date to start selection"}
+      </p>
+    </div>
+  );
+};
+
+const DateRangePicker = ({ from, to, onApply, loading = false }) => {
+  const [open, setOpen]           = useState(false);
+  const [pendingFrom, setPendingFrom] = useState(from);
+  const [pendingTo,   setPendingTo]   = useState(to);
+  const ref = useRef(null);
+
+  // Keep pending in sync if parent resets committed range externally
+  useEffect(() => { setPendingFrom(from); setPendingTo(to); }, [from, to]);
+
+  useEffect(() => {
+    function outside(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, []);
+
+  const PRESETS = [
+    { label: "This month",    from: drStartOfMonth(),  to: drToday() },
+    { label: "Last month",    from: drLastMonthStart(), to: drLastMonthEnd() },
+    { label: "Last 3 months", from: drMonthsAgo(3),     to: drToday() },
+    { label: "Last 6 months", from: drMonthsAgo(6),     to: drToday() },
+  ];
+
+  const handleApply = () => {
+    if (!pendingFrom || !pendingTo) return;
+    onApply(pendingFrom, pendingTo);
+    setOpen(false);
+  };
+
+  const pendingChanged = pendingFrom !== from || pendingTo !== to;
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-60"
+        disabled={loading}
+      >
+        {loading
+          ? <RefreshCw size={13} className="text-neutral-400 animate-spin" />
+          : <Calendar size={13} className="text-neutral-400" />
+        }
+        {drFormatLabel(from, to)}
+        <ChevronDown size={12} className={`text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-[268px] rounded-xl border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-200/60">
+          {/* Presets */}
+          <div className="mb-1 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Quick select</div>
+          <div className="mb-3 grid grid-cols-2 gap-1">
+            {PRESETS.map(p => (
+              <button
+                key={p.label}
+                onClick={() => { setPendingFrom(p.from); setPendingTo(p.to); }}
+                className={`rounded-md px-2 py-1.5 text-left text-[11px] font-medium transition ${
+                  p.from === pendingFrom && p.to === pendingTo
+                    ? "bg-neutral-900 text-white"
+                    : "text-neutral-600 hover:bg-neutral-100"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Calendar */}
+          <div className="border-t border-neutral-100 pt-3">
+            <div className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Custom range</div>
+            <CalendarPicker
+              from={pendingFrom}
+              to={pendingTo}
+              onSelect={(f, t) => { setPendingFrom(f); setPendingTo(t); }}
+            />
+          </div>
+
+          {/* Pending range preview */}
+          {pendingFrom && pendingTo && (
+            <div className="mt-2 flex items-center justify-between rounded-md bg-neutral-50 px-2.5 py-1.5">
+              <span className="text-[11px] text-neutral-500">{drFormatLabel(pendingFrom, pendingTo)}</span>
+            </div>
+          )}
+
+          {/* Apply button */}
+          <button
+            onClick={handleApply}
+            disabled={!pendingFrom || !pendingTo}
+            className={`mt-2 w-full rounded-lg px-3 py-2 text-[12px] font-semibold transition ${
+              pendingChanged
+                ? "bg-neutral-900 text-white hover:bg-neutral-700"
+                : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+            }`}
+          >
+            {pendingChanged ? "Apply & sync" : "Apply"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /* =========================================================================
    SMALL UI COMPONENTS
@@ -215,26 +469,95 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets = null, twData = [], loopData = null }: any) => {
-  const xAxisInterval = data.length > 0 ? Math.floor(data.length / 5) : 0;
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false }) => {
   const [chartsReady, setChartsReady] = useState(false);
+  useEffect(() => { setChartsReady(true); }, []);
 
-  useEffect(() => {
-    setChartsReady(true);
-  }, []);
+  // When a custom-range sync has returned data, use it in place of the live props
+  const effectiveMarkets = Array.isArray(rangeData?.shopifyMarkets) ? rangeData.shopifyMarkets : liveMarkets;
+  const effectiveTWData  = Array.isArray(rangeData?.tripleWhale)
+    ? rangeData.tripleWhale.filter(m => m?.live)
+    : twData;
 
-  // Aggregate live metrics across all markets
-  const liveRevenueMTD  = liveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? null;
-  const liveOrdersMTD   = liveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.orders ?? 0), 0) ?? null;
-  const liveAOV         = liveRevenueMTD && liveOrdersMTD ? liveRevenueMTD / liveOrdersMTD : null;
-  const liveTWNL        = twData?.find(t => t.market === "NL" && t.live);
-  const liveAdSpend     = twData?.filter(t => t.live).reduce((s, t) => s + (t.adSpend ?? 0), 0) || null;
-  const liveROAS        = liveTWNL?.roas ?? (liveAdSpend && liveRevenueMTD ? liveRevenueMTD / liveAdSpend : null);
-  const liveMER         = liveTWNL?.mer ?? null;
+  // Is the selected range the current month?
+  const isCurrentMonth = useMemo(() => {
+    if (rangeData) return false; // always treat synced custom-range data as historical
+    const som = drStartOfMonth(), tod = drToday();
+    return dateRange.from === som && dateRange.to === tod;
+  }, [dateRange, rangeData]);
+
+  // Shopify monthly rows that fall within the selected date range
+  const rangeShopifyMonths = useMemo(() =>
+    (shopifyMonthly ?? []).filter(m => monthInRange(m.month, dateRange.from, dateRange.to)),
+    [shopifyMonthly, dateRange]);
+
+  // Jortt months in range
+  const rangeJorttRevenue = useMemo(() => {
+    if (!jorttData?.revenueByMonth) return null;
+    const total = Object.entries(jorttData.revenueByMonth)
+      .filter(([mk]) => monthInRange(mk, dateRange.from, dateRange.to))
+      .reduce((s, [, v]) => s + v, 0);
+    return total > 0 ? total : null;
+  }, [jorttData, dateRange]);
+
+  const rangeJorttExpenses = useMemo(() => {
+    if (!jorttData?.expensesByMonth) return null;
+    const total = Object.entries(jorttData.expensesByMonth)
+      .filter(([mk]) => monthInRange(mk, dateRange.from, dateRange.to))
+      .reduce((s, [, v]) => s + v, 0);
+    return total > 0 ? total : null;
+  }, [jorttData, dateRange]);
+
+  // Revenue: rangeData (fresh sync) > current-month live > monthly cache > Jortt
+  const liveRevenueMTD  = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? null;
+  const liveOrdersMTD   = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.orders ?? 0), 0) ?? null;
+  const rangeRevenue = rangeData
+    ? liveRevenueMTD   // effectiveMarkets is rangeData.shopifyMarkets — fresh Shopify data
+    : isCurrentMonth
+      ? liveRevenueMTD
+      : rangeShopifyMonths.length > 0
+        ? rangeShopifyMonths.reduce((s, m) => s + ((m.revenue ?? 0) - (m.refunds ?? 0)), 0)
+        : (rangeJorttRevenue ?? null);
+  const rangeOrders = rangeData
+    ? liveOrdersMTD
+    : isCurrentMonth
+      ? liveOrdersMTD
+      : rangeShopifyMonths.length > 0 ? rangeShopifyMonths.reduce((s, m) => s + (m.orders ?? 0), 0) : null;
+  const rangeAOV = rangeRevenue && rangeOrders ? rangeRevenue / rangeOrders : null;
+
+  // Revenue source label
+  const revenueSourceLabel = rangeData
+    ? `${drFormatLabel(dateRange.from, dateRange.to)} · all stores · synced`
+    : isCurrentMonth
+      ? "MTD · all stores · Shopify live"
+      : rangeShopifyMonths.length > 0
+        ? `${rangeShopifyMonths.length} month${rangeShopifyMonths.length > 1 ? "s" : ""} · Shopify NL · historical`
+        : rangeJorttRevenue ? "Jortt invoices · historical" : "No Shopify data for this range";
+
+  const liveAOV = isCurrentMonth ? (liveRevenueMTD && liveOrdersMTD ? liveRevenueMTD / liveOrdersMTD : null) : rangeAOV;
+  const liveTWNL        = effectiveTWData?.find(t => t.market === "NL" && t.live);
+  // Ad spend: NL only (EUR). Other markets use GBP/USD — summing currencies gives wrong totals.
+  const liveAdSpendNL   = liveTWNL?.adSpend ?? null;
+  const liveAdSpend     = liveAdSpendNL;   // shown as NL (EUR) ad spend
+  // ROAS: use TW NL's blended ROAS directly (it accounts for all channels for that store)
+  const liveROAS        = liveTWNL?.roas ?? null;
+  // MER: compute from TW NL's own revenue and ad spend to stay in one currency
+  const liveMER         = (liveTWNL?.revenue && liveTWNL?.adSpend && liveTWNL.adSpend > 0)
+    ? +(liveTWNL.revenue / liveTWNL.adSpend).toFixed(2)
+    : null;
   const liveNCPA        = liveTWNL?.ncpa ?? null;
   const liveLtvCpa      = liveTWNL?.ltvCpa ?? null;
-  const liveLoop        = (Array.isArray(loopData) ? loopData : []).find((l: any) => l?.live) ?? null;
-  const liveMRR         = liveLoop?.mrr ?? null;
+  // Real P&L from TW NL (these are real figures, not estimates)
+  const liveGrossProfit = liveTWNL?.grossProfit ?? null;
+  const liveCOGS        = liveTWNL?.cogs ?? null;
+  const liveNetProfit   = liveTWNL?.netProfit ?? null;
+  // Sum gross profit across all live TW markets that have it
+  const twTotalGrossProfit = effectiveTWData?.filter(t => t.live && t.grossProfit != null).reduce((s, t) => s + (t.grossProfit ?? 0), 0) || null;
+  const twTotalNetProfit   = effectiveTWData?.filter(t => t.live && t.netProfit   != null).reduce((s, t) => s + (t.netProfit   ?? 0), 0) || null;
+  const twTotalAdSpend     = effectiveTWData?.filter(t => t.live && t.adSpend     != null).reduce((s, t) => s + (t.adSpend     ?? 0), 0) || null;
+  const liveLoop        = subData.find(s => s.market === "UK") ?? null;
+  const liveJuo         = subData.find(s => s.market === "NL") ?? null;
+  const liveMRR         = subData.length > 0 ? subData.reduce((s, m) => s + (m.mrr ?? 0), 0) : null;
   return (<>
     <div className="flex items-end justify-between">
       <div>
@@ -244,104 +567,171 @@ export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets =
           Live revenue from Shopify, ad performance from Triple Whale, reconciled nightly against Jortt.
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-0.5 rounded-lg border border-neutral-200 bg-white p-0.5">
-          <Chip active={range === "7d"} onClick={() => setRange("7d")}>7D</Chip>
-          <Chip active={range === "30d"} onClick={() => setRange("30d")}>30D</Chip>
-          <Chip active={range === "90d"} onClick={() => setRange("90d")}>90D</Chip>
-        </div>
-        <button className="flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-50">
-          <Calendar size={13} />
-          Custom
-        </button>
-      </div>
+      <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
     </div>
 
     {/* Revenue hero */}
     <section className="mt-3">
       <Card className="p-6 transition hover:border-neutral-300">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
               <BrandIcon brand="shopify" size={14} />
               <span>Revenue</span>
               <span className="text-[11px] text-neutral-400">· selected period</span>
             </div>
             <div className="mt-3 flex items-baseline gap-4">
-              {liveRevenueMTD !== null ? (
+              {rangeRevenue !== null ? (
                 <>
-                  <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none">
-                    €{liveRevenueMTD.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Live</span>
+                  <div className="group relative inline-block">
+                    <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none cursor-help border-b border-dashed border-neutral-300">
+                      €{Math.round(rangeRevenue).toLocaleString()}
+                    </span>
+                    {/* Hover breakdown */}
+                    {effectiveMarkets && effectiveMarkets.filter(m => m.live).length > 0 && (
+                      <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl group-hover:block">
+                        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Revenue breakdown</div>
+                        <div className="space-y-1.5">
+                          {effectiveMarkets.filter(m => m.live).map(m => {
+                            const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
+                            const native = m.revenueNative ?? m.revenue ?? 0;
+                            const eur = m.revenue ?? 0;
+                            const fx = m.fxRate ?? 1;
+                            const sameCurrency = m.currency === "EUR" || fx === 1;
+                            return (
+                              <div key={m.code} className="flex items-center justify-between text-[12px]">
+                                <span className="flex items-center gap-1.5">
+                                  <span>{m.flag}</span>
+                                  <span className="font-medium text-neutral-700">{m.code}</span>
+                                </span>
+                                <span className="text-right tabular-nums">
+                                  <span className="text-neutral-500">{sym}{Math.round(native).toLocaleString()}</span>
+                                  {!sameCurrency && (
+                                    <>
+                                      <span className="mx-1 text-neutral-300">→</span>
+                                      <span className="font-semibold text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                                      <div className="text-[10px] text-neutral-400">@ {fx.toFixed(4)} EUR/{m.currency}</div>
+                                    </>
+                                  )}
+                                  {sameCurrency && m.currency !== "EUR" && (
+                                    <span className="ml-1 font-semibold text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-2 text-[12px]">
+                          <span className="font-semibold text-neutral-700">Total</span>
+                          <span className="font-semibold tabular-nums">€{Math.round(rangeRevenue).toLocaleString()}</span>
+                        </div>
+                        <div className="mt-2 text-[10px] text-neutral-400">FX rates from frankfurter.app · refreshed per range</div>
+                      </div>
+                    )}
+                  </div>
+                  {isCurrentMonth
+                    ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500"/>Live</span>
+                    : <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">Historical</span>
+                  }
                 </>
               ) : (
                 <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none text-neutral-300">—</span>
               )}
             </div>
-            <div className="mt-1 text-[12px] text-neutral-400">{liveRevenueMTD ? "MTD · all stores · Shopify live" : "Shopify not connected"}</div>
+            <div className="mt-1 text-[12px] text-neutral-400">{rangeRevenue !== null ? revenueSourceLabel : "Shopify not connected"}</div>
+            {effectiveMarkets && effectiveMarkets.filter(m => m.live && m.currency !== "EUR").length > 0 && (
+              <div className="mt-1 text-[11px] text-neutral-400">Hover total for per-store breakdown · all values converted to EUR</div>
+            )}
           </div>
           <div className="hidden items-center gap-6 md:flex">
             <div className="text-right">
               <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Orders</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums">{liveOrdersMTD !== null ? liveOrdersMTD.toLocaleString() : "—"}</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums">{rangeOrders !== null ? rangeOrders.toLocaleString() : "—"}</div>
             </div>
             <div className="text-right">
               <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">AOV</div>
-              <div className="mt-0.5 text-[16px] font-semibold tabular-nums">{liveAOV !== null ? `€${liveAOV.toFixed(2)}` : "—"}</div>
+              <div className="mt-0.5 text-[16px] font-semibold tabular-nums">{rangeAOV !== null ? `€${rangeAOV.toFixed(2)}` : liveAOV !== null ? `€${liveAOV.toFixed(2)}` : "—"}</div>
             </div>
           </div>
         </div>
       </Card>
     </section>
 
-    {/* Profit row — contribution margin, opex, EBITDA — only show if live data available */}
-    {liveRevenueMTD !== null && (
+    {/* Profit row — real TW figures (current month) or Jortt (historical) */}
+    {rangeRevenue !== null && (
     <section className="mt-3 grid grid-cols-3 gap-3">
-      {[
-        {
-          icon: Sparkles,
-          label: "Contribution margin",
-          value: `€${Math.round(liveRevenueMTD * 0.42).toLocaleString()}`,
-          delta: null,
-          positive: true,
-          sub: `~42% of revenue · est. pending Jortt/Xero OpEx`,
-        },
-        {
-          icon: Wallet,
-          label: "OpEx",
-          value: `€${Math.round(liveRevenueMTD * 0.18).toLocaleString()}`,
-          delta: null,
-          positive: false,
-          sub: `~18% of revenue · est. — enable Jortt purchase scope`,
-        },
-        {
-          icon: TrendingUp,
-          label: "EBITDA",
-          value: `€${Math.round(liveRevenueMTD * 0.25).toLocaleString()}`,
-          delta: null,
-          positive: true,
-          sub: `~25% margin · est. pending real OpEx data`,
-        },
-      ].map((s) => (
-        <Card key={s.label} className="p-5 transition hover:border-neutral-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
-              <s.icon size={14} />
-              <span>{s.label}</span>
-            </div>
-            {s.delta && (
-              <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${s.positive ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                {s.positive ? <ArrowUpRight size={11} strokeWidth={2.5} /> : <ArrowDownRight size={11} strokeWidth={2.5} />}
-                {s.delta}
-              </span>
-            )}
+      {(() => {
+        const rev = rangeRevenue ?? 0;
+        // For historical ranges, fall back to Jortt data
+        const grossP = isCurrentMonth ? twTotalGrossProfit : (rangeJorttRevenue && rangeJorttExpenses ? rangeJorttRevenue - rangeJorttExpenses : twTotalGrossProfit);
+        const costs  = isCurrentMonth ? liveCOGS : (rangeJorttExpenses ?? liveCOGS);
+        const netP   = isCurrentMonth ? twTotalNetProfit : (grossP != null ? grossP : twTotalNetProfit);
+        const src    = isCurrentMonth ? "Triple Whale" : (rangeJorttRevenue ? "Jortt · historical" : "Triple Whale (MTD)");
+        return [
+          {
+            icon: Sparkles,
+            label: "Gross profit",
+            value: grossP != null ? `€${Math.round(grossP).toLocaleString()}` : "—",
+            pct: grossP != null && rev > 0 ? `${((grossP / rev) * 100).toFixed(1)}% margin` : null,
+            sub: grossP != null ? src : "Connect Triple Whale",
+            live: grossP != null,
+          },
+          {
+            icon: Wallet,
+            label: isCurrentMonth ? "COGS" : "Expenses",
+            value: costs != null ? `€${Math.round(costs).toLocaleString()}` : "—",
+            pct: costs != null && rev > 0 ? `${((costs / rev) * 100).toFixed(1)}% of revenue` : null,
+            sub: costs != null ? src : "Connect Triple Whale",
+            live: costs != null,
+          },
+          {
+            icon: TrendingUp,
+            label: "Net profit",
+            value: netP != null ? `€${Math.round(netP).toLocaleString()}` : "—",
+            pct: netP != null && rev > 0 ? `${((netP / rev) * 100).toFixed(1)}% margin` : null,
+            sub: netP != null ? src : "Connect Triple Whale",
+            live: netP != null,
+          },
+        ];
+      })().map((s) => (
+        <Card key={s.label} className={`p-5 transition hover:border-neutral-300 ${!s.live ? "opacity-50" : ""}`}>
+          <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
+            <s.icon size={14} />
+            <span>{s.label}</span>
           </div>
           <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">{s.value}</div>
+          {s.pct && <div className="mt-0.5 text-[11px] font-medium text-neutral-500">{s.pct}</div>}
           <div className="mt-1 text-[12px] text-neutral-400">{s.sub}</div>
         </Card>
       ))}
     </section>
+    )}
+
+    {/* Syncing overlay */}
+    {rangeSyncing && (
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-700">
+        <RefreshCw size={13} className="shrink-0 animate-spin" />
+        Fetching data for selected period from Shopify &amp; Triple Whale…
+      </div>
+    )}
+
+    {/* Historical range notice for TW metrics */}
+    {!isCurrentMonth && !rangeData && !rangeSyncing && (
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-700">
+        <Info size={13} className="shrink-0" />
+        Triple Whale metrics show <strong>current month to date</strong>. Select a range and click <strong>Apply &amp; sync</strong> to load accurate data for any period.
+        {rangeJorttRevenue && (
+          <span className="ml-1">Jortt shows <strong>€{Math.round(rangeJorttRevenue).toLocaleString()}</strong> revenue for this range{rangeJorttExpenses ? ` · €${Math.round(rangeJorttExpenses).toLocaleString()} expenses` : ""}.</span>
+        )}
+      </div>
+    )}
+
+    {/* Synced-range confirmation banner */}
+    {rangeData && !rangeSyncing && (
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-[12px] text-emerald-700">
+        <CircleCheck size={13} className="shrink-0" />
+        Showing Shopify &amp; Triple Whale data for <strong>{drFormatLabel(dateRange.from, dateRange.to)}</strong>. All metrics reflect this exact period.
+      </div>
     )}
 
     {/* Customer economics row */}
@@ -350,7 +740,7 @@ export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets =
         <BrandIcon brand="triplewhale" size={12} />
         <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Customer economics</span>
         <div className="h-px flex-1 bg-neutral-200" />
-        <span className="text-[10px] text-neutral-400">Triple Whale · per acquired customer</span>
+        <span className="text-[10px] text-neutral-400">Triple Whale · {isCurrentMonth ? "per acquired customer" : "current MTD only"}</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -380,7 +770,7 @@ export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets =
             value: liveMER !== null ? `${liveMER.toFixed(2)}×` : "—",
             delta: null,
             positive: true,
-            sub: liveMER !== null ? "Triple Whale · blended" : "Triple Whale not connected",
+            sub: liveMER !== null ? "Revenue ÷ ad spend · NL" : "Triple Whale not connected",
             icon: Sparkles,
             live: liveMER !== null,
           },
@@ -420,77 +810,243 @@ export const OverviewView = ({ range, setRange, data = [], totals, liveMarkets =
             icon: Target,
             label: "Ad spend",
             value: liveAdSpend !== null ? `€${Math.round(liveAdSpend).toLocaleString()}` : "—",
-            delta: "3.2%",
+            delta: null,
             positive: false,
-            sub: liveAdSpend !== null ? "Triple Whale · all markets live" : "Triple Whale not connected",
+            sub: liveAdSpend !== null ? "Triple Whale · NL store (EUR)" : "Triple Whale not connected",
             live: liveAdSpend !== null,
           },
           {
             icon: Activity,
             label: "Blended ROAS",
             value: liveROAS !== null ? `${liveROAS.toFixed(2)}x` : "—",
-            delta: "0.4x",
+            delta: null,
             positive: true,
-            sub: liveROAS !== null ? "Triple Whale blended" : "Triple Whale not connected",
+            sub: liveROAS !== null ? "Triple Whale · NL store" : "Triple Whale not connected",
             live: liveROAS !== null,
           },
         ].map((s) => (
           <Card key={s.label} className={`p-4 transition ${s.live ? 'hover:border-neutral-300' : 'opacity-60'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500">
-                <s.icon size={13} />
-                <span>{s.label}</span>
-              </div>
-              <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${s.positive ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-                {s.positive ? <ArrowUpRight size={10} strokeWidth={2.5} /> : <ArrowDownRight size={10} strokeWidth={2.5} />}
-                {s.delta}
-              </span>
+            <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500">
+              <s.icon size={13} />
+              <span>{s.label}</span>
             </div>
             <div className="mt-2 text-[22px] font-semibold tracking-tight tabular-nums">{s.value}</div>
             <div className="mt-0.5 text-[11px] text-neutral-400">{s.sub}</div>
           </Card>
         ))}
       </div>
+      {/* Per-market ad spend breakdown — each in its own currency */}
+      {effectiveTWData.filter(t => t.live && t.adSpend != null).length > 0 && (
+        <div className="mt-3 rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Ad spend by market · own currency</div>
+          <div className="flex flex-wrap gap-4">
+            {effectiveTWData.filter(t => t.live && t.adSpend != null).map(t => {
+              const sym = t.market === "UK" ? "£" : t.market === "US" ? "$" : "€";
+              return (
+                <div key={t.market}>
+                  <span className="text-[11px] text-neutral-500">{t.flag} {t.market}</span>
+                  <span className="ml-1.5 text-[13px] font-semibold tabular-nums">{sym}{Math.round(t.adSpend).toLocaleString()}</span>
+                  {t.roas != null && <span className="ml-1 text-[11px] text-neutral-400">· {t.roas.toFixed(2)}x ROAS</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
 
-    {/* Subscriptions — Loop API */}
-    {liveMRR !== null ? (
-      <Card className="mt-3 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <BrandIcon brand="loop" size={16} />
-          <div className="text-[13px] font-semibold">Subscriptions</div>
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Live</span>
-        </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">MRR</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">€{liveMRR.toLocaleString()}</div>
-            <div className="mt-0.5 text-[11px] text-neutral-400">Loop Subscriptions</div>
+    {/* Subscriptions — Juo (NL) + Loop (UK/US/EU) */}
+    {liveMRR !== null ? (() => {
+      const totalActive = subData.reduce((s, m) => s + (m.activeSubs ?? 0), 0);
+      const totalNew = subData.reduce((s, m) => s + (m.newThisMonth ?? 0), 0);
+      const totalChurned = subData.reduce((s, m) => s + (m.churnedThisMonth ?? 0), 0);
+      const blendedARPU = totalActive > 0 ? liveMRR / totalActive : null;
+      const blendedChurn = totalActive > 0 ? (totalChurned / totalActive) * 100 : null;
+      const totalRev = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? 0;
+      const subShare = totalRev > 0 ? (liveMRR / totalRev) * 100 : null;
+      const sourcesLabel = subData.map(m => m.platform === "juo" ? `Juo (${m.market})` : `Loop (${m.market})`).join(" + ");
+      return (
+        <Card className="mt-3 p-5">
+          <div className="flex items-start justify-between mb-5">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100">
+                <Sparkles className="h-3.5 w-3.5 text-violet-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="text-[14px] font-semibold">Subscriptions</div>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Recurring</span>
+                </div>
+                <div className="mt-0.5 text-[12px] text-neutral-500">MRR, active subscribers, churn · source: {sourcesLabel}</div>
+              </div>
+            </div>
+            {subShare !== null && (
+              <div className="text-right">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Subscription share</div>
+                <div className="mt-0.5 text-[20px] font-semibold tabular-nums">{subShare.toFixed(1)}%</div>
+                <div className="text-[11px] text-neutral-400">Of total revenue</div>
+              </div>
+            )}
           </div>
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Active Subs</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{liveLoop?.activeSubs?.toLocaleString() ?? "—"}</div>
-            <div className="mt-0.5 text-[11px] text-neutral-400">of {liveLoop?.totalFetched?.toLocaleString() ?? "—"} fetched</div>
-          </div>
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">ARPU</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{liveLoop?.arpu != null ? `€${liveLoop.arpu.toFixed(2)}` : "—"}</div>
-            <div className="mt-0.5 text-[11px] text-neutral-400">per active subscriber</div>
-          </div>
-          <div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">New MTD</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{liveLoop?.newThisMonth ?? "—"}</div>
-            <div className="mt-0.5 text-[11px] text-neutral-400">
-              {liveLoop?.churnedThisMonth != null ? `${liveLoop.churnedThisMonth} churned · ` : ""}{liveLoop?.churnRate != null ? `${liveLoop.churnRate}% churn rate` : ""}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 border-t border-neutral-100 pt-5">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">MRR</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">
+                €{liveMRR >= 1000 ? `${(liveMRR/1000).toFixed(1)}k` : Math.round(liveMRR).toLocaleString()}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-400">€{Math.round(liveMRR).toLocaleString()} recurring</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Active subscribers</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{totalActive.toLocaleString()}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">{blendedARPU !== null ? `ARPU €${blendedARPU.toFixed(2)}/mo` : "—"}</div>
+            </div>
+            <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Churn rate</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{blendedChurn !== null ? `${blendedChurn.toFixed(1)}%` : "—"}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">{totalChurned > 0 ? `${totalChurned} lost this month` : "No churn this month"}</div>
+            </div>
+            <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">New subscribers</div>
+              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{totalNew.toLocaleString()}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">Net {totalNew - totalChurned >= 0 ? "+" : ""}{totalNew - totalChurned} this month</div>
             </div>
           </div>
-        </div>
-      </Card>
-    ) : (
+
+          <div className="mt-5 border-t border-neutral-100 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+            <span className="text-neutral-400 font-medium">Split:</span>
+            {subData.map(m => {
+              const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
+              const sharePct = liveMRR > 0 ? Math.round(((m.mrr ?? 0) / liveMRR) * 100) : 0;
+              const mrrLabel = (m.mrr ?? 0) >= 1000 ? `${sym}${((m.mrr ?? 0)/1000).toFixed(0)}k` : `${sym}${Math.round(m.mrr ?? 0)}`;
+              return (
+                <span key={m.market} className="inline-flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">{m.flag} {m.market}</span>
+                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR</span>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">{sharePct}%</span>
+                </span>
+              );
+            })}
+          </div>
+        </Card>
+      );
+    })() : (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
-        <strong>Subscription data not available</strong> — set <code className="text-[11px]">LOOP_UK_API_KEY</code> in .env.local to connect Loop Subscriptions.
+        <strong>Subscription data not available</strong> — set <code className="text-[11px]">JUO_NL_API_KEY</code> or <code className="text-[11px]">LOOP_UK_API_KEY</code> in .env.local.
       </div>
     )}
+
+    {/* MRR & active subscribers + New vs Churned (live data only) */}
+    {liveMRR !== null && subData.length > 0 && (
+      <Card className="mt-3 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[13px] font-semibold">MRR & active subscribers</div>
+          <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />MRR</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" />Subscribers</span>
+          </div>
+        </div>
+        <div className="h-56">
+          {chartsReady && (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrr ?? 0), subs: m.activeSubs ?? 0 }))}>
+                <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                <Bar yAxisId="left" dataKey="mrr" fill="#111827" radius={[4,4,0,0]} name="MRR (€)" />
+                <Line yAxisId="right" type="monotone" dataKey="subs" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} name="Subscribers" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="mt-6 border-t border-neutral-100 pt-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[13px] font-semibold">New vs churned subscribers</div>
+            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />New</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />Churned</span>
+            </div>
+          </div>
+          {(() => {
+            const totalNew = subData.reduce((s,m)=>s+(m.newThisMonth ?? 0),0);
+            const totalChurned = subData.reduce((s,m)=>s+(m.churnedThisMonth ?? 0),0);
+            const net = totalNew - totalChurned;
+            return (
+              <>
+                <div className="text-[11px] text-neutral-400 mb-3">
+                  Net gain this month: <span className={`font-semibold ${net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{net >= 0 ? "+" : ""}{net} subscribers</span>
+                </div>
+                <div className="h-48">
+                  {chartsReady && (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, new: m.newThisMonth ?? 0, churned: -(m.churnedThisMonth ?? 0) }))}>
+                        <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v) => Math.abs(v)} />
+                        <Bar dataKey="new" fill="#10b981" radius={[4,4,0,0]} name="New" />
+                        <Bar dataKey="churned" fill="#f43f5e" radius={[0,0,4,4]} name="Churned" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </Card>
+    )}
+
+    {/* Revenue vs Profit (monthly, real Shopify + TW/Jortt) */}
+    {(() => {
+      const months = (shopifyMonthly ?? [])
+        .filter(m => monthInRange(m.month, dateRange.from, dateRange.to))
+        .sort((a,b) => a.month.localeCompare(b.month));
+      if (months.length === 0) return null;
+      const jorttExp = jorttData?.expensesByMonth ?? {};
+      const totalRev = months.reduce((s,m)=>s+((m.revenue ?? 0) - (m.refunds ?? 0)), 0);
+      const chartData = months.map(m => {
+        const rev = (m.revenue ?? 0) - (m.refunds ?? 0);
+        const exp = jorttExp[m.month] ?? 0;
+        const profit = exp ? rev - exp : null;
+        return { month: m.month.slice(2), revenue: Math.round(rev), profit: profit != null ? Math.round(profit) : null };
+      });
+      return (
+        <Card className="mt-3 p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-[13px] font-semibold">Revenue vs. Profit</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums">€{Math.round(totalRev).toLocaleString()}</div>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+            </div>
+          </div>
+          <div className="h-56 mt-3">
+            {chartsReady && (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v)=>v != null ? `€${v.toLocaleString()}` : "—"} />
+                  <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
+                  <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          {!jorttData && (
+            <div className="mt-2 text-[11px] text-neutral-400">Profit line requires Jortt expenses data — connect Jortt to display.</div>
+          )}
+        </Card>
+      );
+    })()}
   </>);
 };
 
@@ -656,7 +1212,7 @@ const MetricsView = ({ twData = [] }) => {
    ========================================================================= */
 
 const ReconciliationView = ({ shopifyMarkets = null, jorttData = null }) => {
-  const shopifyTotal = Array.isArray(shopifyMarkets) ? shopifyMarkets.filter((m: any) => m?.live).reduce((s: number, m: any) => s + (m.revenue ?? 0), 0) : null;
+  const shopifyTotal = Array.isArray(shopifyMarkets) ? shopifyMarkets.filter(m => m?.live).reduce((s, m) => s + (m.revenue ?? 0), 0) : null;
   const jorttRevenue = jorttData?.revenueByMonth
     ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0)
     : null;
@@ -748,36 +1304,42 @@ const ReconciliationView = ({ shopifyMarkets = null, jorttData = null }) => {
    VIEW: PILLAR 1 — DAILY P&L
    ========================================================================= */
 
-const DailyPnLView = ({ hourlyData = [], liveMarkets = null, twData = [], jorttData = null } = {}) => {
-  const activeHours = hourlyData?.filter(Boolean) ?? [];
-  const totalRevenue = activeHours.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
-  const totalOrders = activeHours.reduce((sum, row) => sum + (row.orders ?? 0), 0);
-  const totalRefunds = activeHours.reduce((sum, row) => sum + (row.refunds ?? 0), 0);
-  const totalDiscounts = activeHours.reduce((sum, row) => sum + (row.discounts ?? 0), 0);
-  const adSpend = twData?.filter(t => t.live).reduce((sum, row) => sum + (row.adSpend ?? 0), 0) ?? 0;
-  const grossProfit = twData?.filter(t => t.live).reduce((sum, row) => sum + (row.grossProfit ?? 0), 0) ?? 0;
-  const estCogs = totalRevenue > 0 && grossProfit > 0
-    ? Math.max(totalRevenue - grossProfit, 0)
-    : totalRevenue * 0.32;
-  const estNetProfit = totalRevenue - totalRefunds - totalDiscounts - adSpend - estCogs;
-  const latestActiveHour = [...activeHours].reverse().find(row => (row.revenue ?? 0) > 0 || (row.orders ?? 0) > 0) ?? activeHours[activeHours.length - 1] ?? null;
-  const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  const hasData = activeHours.some(row => (row.revenue ?? 0) > 0 || (row.orders ?? 0) > 0);
+const DailyPnLView = ({ dailyData = null, twData = [] }) => {
+  const todayLabel = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const currentHour = (new Date().getUTCHours() + 2) % 24; // Amsterdam CEST
 
-  if (!hasData) {
+  const liveMarkets = dailyData?.markets?.filter(m => m.live) ?? [];
+  const nlMarket    = liveMarkets.find(m => m.code === "NL");
+  const ukMarket    = liveMarkets.find(m => m.code === "UK");
+
+  // NL hourly chart data — only show hours up to current + 1
+  const nlHourly = nlMarket?.hourly?.slice(0, currentHour + 1) ?? [];
+  const chartData = nlHourly.map(h => ({
+    hour: `${String(h.hour).padStart(2, "0")}:00`,
+    revenue: h.revenue,
+    orders: h.orders,
+  }));
+
+  // Total orders across all markets today
+  const totalOrders   = liveMarkets.reduce((s, m) => s + (m.orders ?? 0), 0);
+  const totalRevenueTip = liveMarkets.map(m => `${m.flag} ${m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€"}${Math.round(m.revenue ?? 0).toLocaleString()}`).join("  ·  ");
+
+  // TW MTD ROAS for context
+  const nlTW = twData.find(t => t.market === "NL" && t.live);
+  const ukTW = twData.find(t => t.market === "UK" && t.live);
+
+  if (!dailyData) {
     return (
       <>
         <div>
           <div className="text-[12px] font-medium text-neutral-400">Pillar 1</div>
           <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&L Tracker</h1>
-          <p className="mt-1 text-[13px] text-neutral-500">Today&apos;s Shopify revenue and estimated contribution margin.</p>
+          <p className="mt-1 text-[13px] text-neutral-500">Today's revenue by hour across all markets.</p>
         </div>
         <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
           <Clock size={32} className="text-neutral-300" />
-          <div className="mt-4 text-[15px] font-semibold text-neutral-700">No orders yet today</div>
-          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-            Shopify is connected, but there are no paid orders for today yet.
-          </div>
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">Loading today's data...</div>
+          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">Fetching orders from Shopify. This may take a moment.</div>
         </div>
       </>
     );
@@ -785,126 +1347,137 @@ const DailyPnLView = ({ hourlyData = [], liveMarkets = null, twData = [], jorttD
 
   return (
     <>
-      <div className="flex items-end justify-between gap-4">
+      {/* Header */}
+      <div className="flex items-start justify-between">
         <div>
           <div className="text-[12px] font-medium text-neutral-400">Pillar 1</div>
-          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&amp;L Tracker</h1>
-          <p className="mt-1 text-[13px] text-neutral-500">Today&apos;s Shopify revenue and estimated contribution margin.</p>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Daily P&L Tracker</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">{todayLabel}</p>
         </div>
-        <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-right">
-          <div className="text-[10px] uppercase tracking-wider text-neutral-400">Latest active hour</div>
-          <div className="mt-1 text-[16px] font-semibold tabular-nums text-neutral-900">{latestActiveHour?.hour ?? "—"} UTC</div>
+        <div className="text-right text-[11px] text-neutral-400">
+          <div className="font-medium">Live · {totalOrders.toLocaleString()} orders today</div>
+          <div className="mt-0.5 text-neutral-300">{totalRevenueTip}</div>
         </div>
       </div>
 
-      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          { label: "Revenue", value: `€${Math.round(totalRevenue).toLocaleString()}`, sub: `${totalOrders.toLocaleString()} orders` , icon: DollarSign },
-          { label: "AOV", value: totalOrders > 0 ? `€${aov.toFixed(2)}` : "—", sub: "Average order value", icon: Package },
-          { label: "Ad spend", value: `€${Math.round(adSpend).toLocaleString()}`, sub: twData.length > 0 ? "Triple Whale blended" : "Estimated as 0", icon: Target },
-          { label: "Est. net profit", value: `${estNetProfit >= 0 ? "+" : "-"}€${Math.round(Math.abs(estNetProfit)).toLocaleString()}`, sub: "Revenue − refunds − discounts − ads − COGS", icon: TrendingUp },
-        ].map((item) => (
-          <Card key={item.label} className="p-5">
-            <div className="flex items-center justify-between text-[12px] font-medium text-neutral-500">
-              <span>{item.label}</span>
-              <item.icon size={14} />
-            </div>
-            <div className="mt-3 text-[28px] font-semibold tracking-tight tabular-nums">{item.value}</div>
-            <div className="mt-1 text-[11px] text-neutral-400">{item.sub}</div>
-          </Card>
-        ))}
+      {/* Market cards */}
+      <section className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {liveMarkets.map(m => {
+          const tw = twData.find(t => t.market === m.code && t.live);
+          const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
+          return (
+            <Card key={m.code} className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-neutral-500">{m.flag} {m.name ?? m.code}</span>
+                {tw?.roas != null && (
+                  <span className="text-[10px] font-medium text-neutral-400">{tw.roas.toFixed(2)}× ROAS</span>
+                )}
+              </div>
+              <div className="mt-2 text-[26px] font-semibold tabular-nums tracking-tight">
+                {sym}{Math.round(m.revenue ?? 0).toLocaleString()}
+              </div>
+              <div className="mt-1 flex items-center gap-3 text-[11px] text-neutral-400">
+                <span>{(m.orders ?? 0).toLocaleString()} orders</span>
+                {m.aov > 0 && <span>AOV {sym}{m.aov.toFixed(0)}</span>}
+              </div>
+            </Card>
+          );
+        })}
       </section>
 
-      <Card className="mt-3 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-semibold">Hourly revenue today</div>
-            <div className="text-[12px] text-neutral-400">Aggregated across all connected Shopify stores</div>
-          </div>
-          <div className="text-right text-[11px] text-neutral-400">
-            <div>{liveMarkets?.filter(m => m.live).length ?? 0} live market(s)</div>
-            <div>{jorttData?.invoiceCount ? `${jorttData.invoiceCount} Jortt invoices loaded` : "Jortt optional"}</div>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {activeHours.map((row) => {
-            const maxRevenue = Math.max(...activeHours.map((item) => item.revenue ?? 0), 1);
-            const width = `${Math.max(((row.revenue ?? 0) / maxRevenue) * 100, row.revenue > 0 ? 6 : 0)}%`;
-            return (
-              <div key={row.hour} className="grid grid-cols-[64px_minmax(0,1fr)_88px_72px] items-center gap-3">
-                <div className="text-[12px] font-medium text-neutral-500">{row.hour}</div>
-                <div className="h-8 overflow-hidden rounded-md bg-neutral-100">
-                  <div className="flex h-full items-center rounded-md bg-neutral-900 px-3 text-[11px] font-medium text-white transition-all" style={{ width }}>
-                    {(row.revenue ?? 0) > 0 ? `€${Math.round(row.revenue).toLocaleString()}` : ""}
-                  </div>
-                </div>
-                <div className="text-right text-[12px] tabular-nums text-neutral-700">{row.orders ?? 0} orders</div>
-                <div className="text-right text-[12px] tabular-nums text-neutral-400">€{Math.round(row.refunds ?? 0)}</div>
+      {/* Hourly revenue chart — NL store */}
+      {chartData.length > 0 && (
+        <section className="mt-4">
+          <Card className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold">Hourly revenue · NL</div>
+                <div className="text-[11px] text-neutral-400">Amsterdam time (CEST) · paid orders only</div>
               </div>
-            );
-          })}
-        </div>
-      </Card>
+              <div className="text-right">
+                <div className="text-[20px] font-semibold tabular-nums">
+                  €{Math.round(nlMarket?.revenue ?? 0).toLocaleString()}
+                </div>
+                <div className="text-[11px] text-neutral-400">today so far</div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="hour" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} interval={1} />
+                <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `€${(v/1000).toFixed(0)}k` : `€${v}`} />
+                <Tooltip
+                  formatter={(v, name) => name === "revenue" ? [`€${Number(v).toLocaleString()}`, "Revenue"] : [v, "Orders"]}
+                  contentStyle={{ fontSize: 12, borderRadius: 6, border: "1px solid #e5e7eb" }}
+                />
+                <Bar dataKey="revenue" fill="#0d1d3d" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </section>
+      )}
+
+      {/* UK row for context */}
+      {ukMarket?.revenue > 0 && (
+        <section className="mt-3 grid grid-cols-2 gap-3">
+          <Card className="p-4">
+            <div className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide">UK revenue today</div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">£{Math.round(ukMarket.revenue).toLocaleString()}</div>
+            <div className="mt-0.5 text-[11px] text-neutral-400">{ukMarket.orders} orders · AOV £{ukMarket.aov?.toFixed(0)}</div>
+          </Card>
+          {ukTW?.roas != null && (
+            <Card className="p-4">
+              <div className="text-[12px] font-medium text-neutral-400 uppercase tracking-wide">UK ROAS (MTD)</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums">{ukTW.roas.toFixed(2)}×</div>
+              <div className="mt-0.5 text-[11px] text-neutral-400">Ad spend £{Math.round(ukTW.adSpend ?? 0).toLocaleString()} MTD</div>
+            </Card>
+          )}
+        </section>
+      )}
+
+      {/* NL TW context */}
+      {nlTW && (
+        <section className="mt-3 grid grid-cols-3 gap-3">
+          <Card className="p-4">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">NL Ad Spend (MTD)</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">€{Math.round(nlTW.adSpend ?? 0).toLocaleString()}</div>
+            <div className="mt-0.5 text-[11px] text-neutral-400">Triple Whale</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">NL ROAS (MTD)</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">{nlTW.roas?.toFixed(2)}×</div>
+            <div className="mt-0.5 text-[11px] text-neutral-400">Triple Whale</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">NL Gross Profit (MTD)</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">€{Math.round(nlTW.grossProfit ?? 0).toLocaleString()}</div>
+            <div className="mt-0.5 text-[11px] text-neutral-400">Triple Whale</div>
+          </Card>
+        </section>
+      )}
     </>
   );
-}
+};
 
 /* =========================================================================
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [] } = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
-  // Total ad spend across all markets (used for "revenue-weighted" reallocation)
-  const totalTwRevenue = (twData ?? []).filter((t: any) => t?.live).reduce((s: number, t: any) => s + (t.revenue ?? 0), 0);
-  const totalAdSpend = (twData ?? []).filter((t: any) => t?.live).reduce((s: number, t: any) => s + (t.adSpend ?? 0), 0);
-
-  const baseMarkets = (liveMarkets ?? [])
-    .filter((m: any) => m.live && m.code !== "DE")
-    .map((m: any) => {
-      const tw = twData.find((t: any) => t.market === m.code && t.live);
-      // Shopify revenue is canonical for cards/table (matches Shopify Markets)
+  const activeMarkets = (liveMarkets ?? [])
+    .filter(m => m.live && m.code !== "DE")
+    .map(m => {
+      const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
-      const twRevenue = tw?.revenue ?? null;
-      const grossProfit = tw?.grossProfit ?? null;
-      // Gross margin % must use TW revenue (its own denominator), not Shopify revenue
-      const grossMarginPct = grossProfit != null && twRevenue != null && twRevenue > 0
-        ? +((grossProfit / twRevenue) * 100).toFixed(1) : null;
-      return {
-        ...m,
-        twRevenue,
-        grossProfit,
-        grossMargin: grossMarginPct,
-        twAdSpend: tw?.adSpend ?? null,
-        twNetProfit: tw?.netProfit ?? null,
-        roas: tw?.roas ?? null,
-        ncpa: tw?.ncpa ?? null,
-      };
+      const adSpend = tw?.adSpend ?? null;
+      const grossMarginPct = tw?.grossProfit != null && revenue > 0 ? +(tw.grossProfit / revenue * 100).toFixed(1) : null;
+      const contributionMarginPct = tw?.grossProfit != null && adSpend != null && revenue > 0
+        ? +((tw.grossProfit - adSpend) / revenue * 100).toFixed(1) : null;
+      return { ...m, adSpend, grossMargin: grossMarginPct, contributionMargin: contributionMarginPct, roas: tw?.roas ?? null, cac: tw?.ncpa ?? null };
     });
-
-  // Apply allocation method to derive ad spend, CAC, contribution margin
-  const activeMarkets = baseMarkets.map((m: any) => {
-    let adSpend: number | null;
-    if (allocation === "revenue-weighted") {
-      // Reallocate total ad spend proportionally to each market's TW revenue share
-      adSpend = totalTwRevenue > 0 && m.twRevenue != null
-        ? +((m.twRevenue / totalTwRevenue) * totalAdSpend).toFixed(2)
-        : null;
-    } else if (allocation === "attribution") {
-      // TW's attributed spend per market (same as direct in this dataset)
-      adSpend = m.twAdSpend;
-    } else {
-      // "direct" — platform-direct targeting (TW per-market spend)
-      adSpend = m.twAdSpend;
-    }
-    const cac = adSpend != null && m.newCustomers > 0 ? +(adSpend / m.newCustomers).toFixed(2) : null;
-    const contributionMarginPct = m.grossProfit != null && adSpend != null && m.twRevenue != null && m.twRevenue > 0
-      ? +(((m.grossProfit - adSpend) / m.twRevenue) * 100).toFixed(1) : null;
-    return { ...m, adSpend, cac, contributionMargin: contributionMarginPct };
-  });
-
   if (activeMarkets.length === 0) {
     return (
       <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-8 text-center text-[13px] text-neutral-500">
@@ -913,7 +1486,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
     );
   }
 
-  const sorted = [...activeMarkets].sort((a: any, b: any) => (b[sortBy] ?? 0) - (a[sortBy] ?? 0));
+  const sorted = [...activeMarkets].sort((a, b) => b[sortBy] - a[sortBy]);
   const maxRev = sorted[0]?.revenue ?? 1;
 
   return (
@@ -948,7 +1521,6 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
             : cm >= 30 ? "text-emerald-600"
             : cm >= 20 ? "text-amber-600"
             : "text-rose-600";
-          // Map "UK" → "GB" for display to match ISO country codes
           const displayCode = m.code === "UK" ? "GB" : m.code;
           return (
             <Card key={m.code} className="p-5">
@@ -1001,33 +1573,35 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <span className="inline-flex h-[18px] min-w-[22px] items-center justify-center rounded-[4px] bg-neutral-100 px-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-500">
-                          {m.code}
+                          {m.code === "UK" ? "GB" : m.code}
                         </span>
                         <span className="font-medium text-neutral-900">{m.name}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-3.5 text-right tabular-nums font-medium">€{Math.round(m.revenue).toLocaleString()}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.orders}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">€{m.orders > 0 ? Math.round(m.revenue / m.orders).toLocaleString() : "—"}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${Math.round(m.adSpend).toLocaleString()}` : "—"}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums">
+                    <td className="px-3 py-3 text-right tabular-nums font-medium">€{m.revenue.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.orders}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">€{(m.revenue / m.orders).toFixed(0)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.adSpend != null ? `€${m.adSpend.toLocaleString()}` : "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">
                       {m.cac != null ? (
                         <span className={m.cac > 40 ? "text-rose-600 font-medium" : m.cac > 30 ? "text-amber-600" : "text-neutral-900"}>
                           €{m.cac.toFixed(2)}
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
-                    <td className="px-3 py-3.5 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
-                    <td className="px-3 py-3.5 text-right tabular-nums">
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">
                       {m.contributionMargin != null ? (
                         <span className={m.contributionMargin >= 30 ? "text-emerald-600 font-medium" : m.contributionMargin >= 20 ? "text-neutral-900" : "text-amber-600 font-medium"}>
                           {m.contributionMargin}%
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <div className="h-[3px] w-32 overflow-hidden rounded-full bg-neutral-100">
-                        <div className="h-full rounded-full bg-neutral-900" style={{ width: `${pct}%` }} />
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1 w-20 overflow-hidden rounded-full bg-neutral-100">
+                          <div className="h-full rounded-full bg-neutral-900" style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1062,20 +1636,19 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
 
 /* ============================= OPEX BREAKDOWN (used in MonthlyView) ============================= */
 
-const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false, deniedScopes = [] } = {}) => {
+const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false } = {}) => {
   const [activeCategory, setActiveCategory] = useState("team");
   if (!data || data.length === 0) {
-    const missingExpensesScope = Array.isArray(deniedScopes) && deniedScopes.includes("expenses:read");
     return (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
-        <strong>OpEx breakdown not available</strong> — {missingExpensesScope ? "Jortt is connected, but expenses:read is not granted." : "no Jortt expense rows were returned yet."}
+        <strong>OpEx breakdown not available</strong> — requires Jortt with purchase invoice scope.
       </div>
     );
   }
   const current = data[data.length - 1];
   const prev = data[data.length - 2] ?? data[data.length - 1];
-  const totalCurrent = current.team + current.agencies + current.content + current.software + (current.rent ?? 0) + current.other;
-  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + (prev.rent ?? 0) + prev.other;
+  const totalCurrent = current.team + current.agencies + current.content + current.software + current.other;
+  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + prev.other;
   const totalDelta = ((totalCurrent - totalPrev) / totalPrev * 100);
 
   const categories = [
@@ -1083,13 +1656,12 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
     { key: "agencies", label: "Agencies", color: "#6366f1" },
     { key: "content", label: "Content samenwerkingen", color: "#f59e0b" },
     { key: "software", label: "Software", color: "#10b981" },
-    { key: "rent", label: "Rent & utilities", color: "#0ea5e9" },
     { key: "other", label: "Other costs", color: "#6b7280" },
   ];
 
   const donutData = categories.map(c => ({
     name: c.label,
-    value: current[c.key] ?? 0,
+    value: current[c.key],
     color: c.color,
     key: c.key,
   }));
@@ -1294,148 +1866,11 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
   );
 };
 
-/* ============================= JORTT LIVE DATA SECTION ============================= */
-/* Surfaces all data fetched from Jortt across the granted scopes:
-   cash, AR, P&L, customers, invoices, expenses, payroll, estimates, bank accounts. */
-
-const JorttLiveSection = ({ jortt = null }: any = {}) => {
-  if (!jortt || !jortt.live) {
-    return (
-      <Card className="mt-3 p-5">
-        <div className="flex items-center gap-2">
-          <BrandIcon brand="jortt" size={16} />
-          <div className="text-[13px] font-semibold">Jortt — Live data</div>
-        </div>
-        <div className="mt-2 text-[12px] text-neutral-500">
-          Jortt did not return data yet. Trigger a sync or check granted scopes.
-        </div>
-      </Card>
-    );
-  }
-
-  const fmtEur = (n: number | null | undefined) =>
-    n == null || !Number.isFinite(n) ? "—" : `€${Math.round(n).toLocaleString()}`;
-
-  const tiles = [
-    { label: "Cash balance", value: fmtEur(jortt.cashBalance), sub: `${(jortt.bankAccounts?.length ?? 0)} bank accounts`, Icon: Banknote },
-    { label: "Accounts receivable", value: fmtEur(jortt.accountsReceivable), sub: `${jortt.unpaidInvoiceCount ?? 0} unpaid invoices`, Icon: Receipt },
-    { label: "Revenue (P&L)", value: fmtEur(jortt.plSummary?.revenue), sub: `${jortt.invoiceCount ?? 0} invoices`, Icon: FileText },
-    { label: "Costs (P&L)", value: fmtEur(jortt.plSummary?.costs), sub: `${jortt.expenseCount ?? 0} expenses`, Icon: Wallet },
-    { label: "Gross profit (P&L)", value: fmtEur(jortt.plSummary?.grossProfit), sub: "Revenue − costs", Icon: TrendingUp },
-    { label: "Customers", value: (jortt.customersCount ?? 0).toLocaleString(), sub: "Live from Jortt", Icon: Users2 },
-    { label: "Estimates", value: (jortt.estimatesCount ?? 0).toLocaleString(), sub: "Quotes / proposals", Icon: Briefcase },
-    { label: "Payroll entries", value: (jortt.payrollCount ?? 0).toLocaleString(), sub: "Loonjournaalposten", Icon: Landmark },
-  ];
-
-  const recentInvoices = Array.isArray(jortt.dashboardInvoices?.recent)
-    ? jortt.dashboardInvoices.recent.slice(0, 5)
-    : [];
-  const customers = Array.isArray(jortt.customers) ? jortt.customers.slice(0, 6) : [];
-  const banks = Array.isArray(jortt.bankAccounts) ? jortt.bankAccounts : [];
-
-  return (
-    <>
-      <Card className="mt-3 p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BrandIcon brand="jortt" size={16} />
-            <div>
-              <div className="text-[13px] font-semibold">Jortt — Live data</div>
-              <div className="text-[12px] text-neutral-400">
-                {(jortt.grantedScopes?.length ?? 0)}/{(jortt.grantedScopes?.length ?? 0) + (jortt.deniedScopes?.length ?? 0)} scopes granted
-                {jortt.organization?.name ? ` · ${jortt.organization.name}` : ""}
-              </div>
-            </div>
-          </div>
-          <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">Live</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {tiles.map(({ label, value, sub, Icon }) => (
-            <div key={label} className="rounded-lg border border-neutral-200/70 p-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
-                <Icon size={11} /> {label}
-              </div>
-              <div className="mt-1 text-[18px] font-semibold tabular-nums">{value}</div>
-              <div className="mt-0.5 text-[11px] text-neutral-500">{sub}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {(banks.length > 0 || customers.length > 0 || recentInvoices.length > 0) && (
-        <section className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {banks.length > 0 && (
-            <Card className="p-5">
-              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
-                <Banknote size={14} /> Bank accounts
-              </div>
-              <ul className="space-y-2">
-                {banks.slice(0, 6).map((b: any, i: number) => {
-                  const bal = parseFloat(String(b?.current_balance?.value ?? b?.balance?.value ?? b?.balance ?? "0"));
-                  return (
-                    <li key={b.id ?? i} className="flex items-center justify-between text-[12px]">
-                      <span className="truncate text-neutral-700">{b.name ?? b.iban ?? "Account"}</span>
-                      <span className="tabular-nums font-medium text-neutral-900">{Number.isFinite(bal) ? fmtEur(bal) : "—"}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          )}
-
-          {customers.length > 0 && (
-            <Card className="p-5">
-              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
-                <Users2 size={14} /> Recent customers
-                <span className="ml-auto text-[11px] font-normal text-neutral-400">{jortt.customersCount} total</span>
-              </div>
-              <ul className="space-y-2">
-                {customers.map((c: any, i: number) => (
-                  <li key={c.id ?? i} className="flex items-center justify-between text-[12px]">
-                    <span className="truncate text-neutral-700">{c.company_name ?? c.name ?? c.email ?? "Customer"}</span>
-                    <span className="text-[11px] text-neutral-400">{c.country_code ?? c.country ?? ""}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          {recentInvoices.length > 0 && (
-            <Card className="p-5">
-              <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold">
-                <FileText size={14} /> Recent invoices
-              </div>
-              <ul className="space-y-2">
-                {recentInvoices.map((inv: any, i: number) => {
-                  const amt = parseFloat(String(inv?.invoice_total_incl_vat?.value ?? inv?.invoice_total?.value ?? "0"));
-                  return (
-                    <li key={inv.id ?? i} className="flex items-center justify-between text-[12px]">
-                      <span className="truncate text-neutral-700">{inv.invoice_number ?? inv.id?.slice(0, 8) ?? "Invoice"}</span>
-                      <span className="tabular-nums font-medium text-neutral-900">{Number.isFinite(amt) ? fmtEur(amt) : "—"}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
-          )}
-        </section>
-      )}
-
-      {(jortt.deniedScopes?.length ?? 0) > 0 && (
-        <div className="mt-2 text-[11px] text-neutral-400">
-          Denied / unavailable scopes: {jortt.deniedScopes.join(", ")}
-        </div>
-      )}
-    </>
-  );
-};
-
 /* =========================================================================
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, deniedScopes = [], shopifyMonthly, twData = [], jortt = null }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] } = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
@@ -1547,10 +1982,7 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
       </section>
 
       {/* OpEx breakdown — 5 categories */}
-      <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} deniedScopes={deniedScopes} />
-
-      {/* Full Jortt live data — all granted scopes */}
-      <JorttLiveSection jortt={jortt} />
+      <OpExBreakdownSection opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} />
 
       {/* Month close status */}
       <Card className="mt-3 p-5">
@@ -1580,173 +2012,286 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
    VIEW: PILLAR 4 — BALANCE SHEET
    ========================================================================= */
 
-const BalanceView = ({ jorttData = null } = {}) => {
-  const hasJortt = !!jorttData?.live;
+const BalanceView = ({ jorttData = null, xeroData = null, shopifyMarkets = null, twData = [] }) => {
+  // Xero is the primary source; Jortt is fallback
+  const src       = xeroData?.live ? "xero" : jorttData?.live ? "jortt" : null;
+  const hasData   = !!src;
+  const srcLabel  = src === "xero" ? "Xero" : "Jortt";
 
-  // Derive YTD figures from Jortt data
-  const parseMonth = (s) => {
-    const [m, y] = s.split(" '");
-    return new Date(`${m} 1, 20${y}`);
-  };
+  // ── Key figures — Xero first, Jortt fallback ──────────────────────────────
+  const totalAssets       = xeroData?.totalAssets       ?? null;
+  const currentAssets     = xeroData?.currentAssets     ?? null;
+  const fixedAssets       = xeroData?.fixedAssets       ?? null;
+  const totalLiabilities  = xeroData?.totalLiabilities  ?? null;
+  const currentLiabilities = xeroData?.currentLiabilities ?? null;
+  const equity            = xeroData?.equity            ?? null;
+  const cash              = xeroData?.cashBalance        ?? jorttData?.cashBalance ?? null;
+  const accountsReceivable = xeroData?.accountsReceivable ?? jorttData?.accountsReceivable ?? null;
+  const overdueAmount     = xeroData?.overdueAmount      ?? null;
+  const unpaidCount       = xeroData?.unpaidInvoiceCount ?? jorttData?.unpaidInvoiceCount ?? 0;
 
-  const currentYear = new Date().getFullYear();
-  const currentMonthKey = new Date()
-    .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
-    .replace(" ", " '");
+  // YTD P&L
+  const ytdRevenue   = xeroData?.ytdRevenue   ?? null;
+  const ytdExpenses  = xeroData?.ytdExpenses  ?? null;
+  const ytdNetProfit = xeroData?.ytdNetProfit ?? null;
 
-  const revenueByMonth = jorttData?.revenueByMonth ?? {};
-  const opexByMonth = jorttData?.opexByMonth ?? [];
+  // 12-month revenue totals for fallback (Jortt)
+  const jorttRevTotal = jorttData?.revenueByMonth
+    ? Object.values(jorttData.revenueByMonth).reduce((s, v) => s + v, 0) : 0;
+  const jorttExpTotal = jorttData?.expensesByMonth
+    ? Object.values(jorttData.expensesByMonth).reduce((s, v) => s + v, 0) : 0;
 
-  let ytdRevenue = 0;
-  let mtdRevenue = 0;
-  for (const [mk, val] of Object.entries(revenueByMonth)) {
-    const d = parseMonth(mk);
-    if (d.getFullYear() === currentYear) ytdRevenue += val;
-    if (mk === currentMonthKey) mtdRevenue += val;
+  // Revenue trend chart data — Xero first
+  const revenueMonths = useMemo(() => {
+    const byMonth = xeroData?.revenueByMonth ?? jorttData?.revenueByMonth ?? {};
+    return Object.entries(byMonth)
+      .filter(([k]) => k)
+      .sort(([a], [b]) => parseMonthKey(a) - parseMonthKey(b))
+      .map(([month, revenue]) => ({ month, revenue: Math.round(revenue) }));
+  }, [xeroData, jorttData]);
+
+  const nlTW = twData.find(t => t.market === "NL" && t.live);
+
+  if (!hasData) {
+    return (
+      <>
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">Financial position · assets, liabilities, equity.</p>
+        </div>
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
+          <Scale size={32} className="text-neutral-300" />
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">No accounting data yet</div>
+          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
+            Click <strong>Sync</strong> to fetch data from Xero. Balance sheet will populate with assets, liabilities, equity, and cash positions from your accounting system.
+          </div>
+        </div>
+      </>
+    );
   }
-
-  let ytdOpex = 0;
-  let mtdOpex = 0;
-  for (const row of opexByMonth) {
-    const d = parseMonth(row.month);
-    if (d.getFullYear() === currentYear) ytdOpex += row.total;
-    if (row.month === currentMonthKey) mtdOpex += row.total;
-  }
-
-  const ytdNet = ytdRevenue - ytdOpex;
-  const mtdNet = mtdRevenue - mtdOpex;
-
-  const fmt = (n) => `€${Math.round(n).toLocaleString()}`;
-
-  const expensesScopeMissing = hasJortt && (!jorttData?.expenseCount || jorttData.expenseCount === 0);
 
   return (
     <>
-      <div>
-        <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
-        <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
-        <p className="mt-1 text-[13px] text-neutral-500">
-          Financial position · derived from Jortt invoices &amp; expenses.
-        </p>
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 4</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Balance Sheet</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">Financial position · assets, liabilities, equity · via {srcLabel}</p>
+        </div>
+        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+          {srcLabel} live
+        </span>
       </div>
 
-      {!hasJortt ? (
-        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
-          <Scale size={32} className="text-neutral-300" />
-          <div className="mt-4 text-[15px] font-semibold text-neutral-700">Jortt not connected</div>
-          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-            Connect Jortt to unlock revenue, OpEx, and derived equity rollup. Full asset/liability detail requires Xero or Jortt with the purchase-invoice scope.
+      {/* Assets, Liabilities, Equity */}
+      <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+        {/* Assets */}
+        <Card className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50">
+              <Wallet size={14} className="text-emerald-600" />
+            </div>
+            <div className="text-[13px] font-semibold">Assets</div>
           </div>
-        </div>
-      ) : (
-        <>
-          {/* Bridge notice */}
-          <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <Scale size={16} className="mt-0.5 flex-shrink-0 text-amber-700" />
-            <div className="flex-1 text-[12px]">
-              <div className="font-semibold text-neutral-900">Derived view — Jortt bridge mode</div>
-              <div className="mt-0.5 text-neutral-600">
-                Showing YTD revenue and OpEx from Jortt. Full balance sheet (cash, AR, AP, VAT) requires
-                Xero or the Jortt <code className="rounded bg-neutral-100 px-1">purchase_invoices:read</code> scope.
+          <div className="space-y-3">
+            {currentAssets != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Current assets</span>
+                <span className="text-[13px] font-medium tabular-nums">€{currentAssets.toLocaleString()}</span>
               </div>
+            )}
+            {fixedAssets != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Fixed assets</span>
+                <span className="text-[13px] font-medium tabular-nums">€{fixedAssets.toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-neutral-500">Cash &amp; bank</span>
+              <span className="text-[13px] font-medium tabular-nums">
+                {cash != null ? `€${Math.round(cash).toLocaleString()}` : <span className="text-neutral-300 text-[11px]">—</span>}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-neutral-500">Accounts receivable</span>
+              <span className="text-[13px] font-medium tabular-nums">
+                {accountsReceivable != null ? `€${Math.round(accountsReceivable).toLocaleString()}` : <span className="text-neutral-400 text-[12px]">€0</span>}
+              </span>
+            </div>
+            <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-neutral-700">Total assets</span>
+              <span className="text-[14px] font-bold tabular-nums text-emerald-700">
+                {totalAssets != null
+                  ? `€${totalAssets.toLocaleString()}`
+                  : cash != null || accountsReceivable != null
+                    ? `€${Math.round((cash ?? 0) + (accountsReceivable ?? 0)).toLocaleString()}`
+                    : "—"}
+              </span>
             </div>
           </div>
+        </Card>
 
-          {/* KPI strip */}
-          <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <Card className="p-5">
-              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
-                <BrandIcon brand="jortt" size={14} /> Revenue YTD
+        {/* Liabilities */}
+        <Card className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-50">
+              <Scale size={14} className="text-rose-600" />
+            </div>
+            <div className="text-[13px] font-semibold">Liabilities</div>
+          </div>
+          <div className="space-y-3">
+            {currentLiabilities != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Current liabilities</span>
+                <span className="text-[13px] font-medium tabular-nums text-rose-600">€{currentLiabilities.toLocaleString()}</span>
               </div>
-              <div className="text-[28px] font-semibold tabular-nums">{fmt(ytdRevenue)}</div>
-              <div className="mt-1 text-[11px] text-neutral-400">
-                {jorttData?.invoiceCount ?? 0} invoices · {currentYear}
+            )}
+            {ytdExpenses != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Operating costs (YTD)</span>
+                <span className="text-[13px] font-medium tabular-nums">€{ytdExpenses.toLocaleString()}</span>
               </div>
-            </Card>
-            <Card className="p-5">
-              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
-                <BrandIcon brand="jortt" size={14} /> OpEx YTD
-              </div>
-              <div className="text-[28px] font-semibold tabular-nums">
-                {expensesScopeMissing ? "—" : fmt(ytdOpex)}
-              </div>
-              <div className="mt-1 text-[11px] text-neutral-400">
-                {expensesScopeMissing
-                  ? "expenses:read scope not granted"
-                  : `${jorttData?.expenseCount ?? 0} expenses · ${currentYear}`}
-              </div>
-            </Card>
-            <Card className={`p-5 ${ytdNet >= 0 ? "border-emerald-200 bg-emerald-50/20" : "border-rose-200 bg-rose-50/20"}`}>
-              <div className="flex items-center gap-2 text-[12px] font-medium text-neutral-500 mb-2">
-                <Scale size={14} /> Net retained (YTD)
-              </div>
-              <div className={`text-[28px] font-semibold tabular-nums ${ytdNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {expensesScopeMissing ? "—" : fmt(ytdNet)}
-              </div>
-              <div className="mt-1 text-[11px] text-neutral-400">Revenue − OpEx (Jortt-derived)</div>
-            </Card>
-          </section>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-neutral-500">Ad spend (TW · NL)</span>
+              <span className="text-[13px] font-medium tabular-nums">
+                {nlTW?.adSpend != null ? `€${Math.round(nlTW.adSpend).toLocaleString()}` : "—"}
+              </span>
+            </div>
+            <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-neutral-700">Total liabilities</span>
+              <span className="text-[14px] font-bold tabular-nums text-rose-700">
+                {totalLiabilities != null
+                  ? `€${totalLiabilities.toLocaleString()}`
+                  : currentLiabilities != null
+                    ? `€${currentLiabilities.toLocaleString()}`
+                    : ytdExpenses != null ? `€${ytdExpenses.toLocaleString()}` : "—"}
+              </span>
+            </div>
+          </div>
+        </Card>
 
-          {/* MTD snapshot */}
-          <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <Card className="p-5">
-              <div className="text-[12px] font-medium text-neutral-500 mb-2">Revenue MTD</div>
-              <div className="text-[22px] font-semibold tabular-nums">{fmt(mtdRevenue)}</div>
-            </Card>
-            <Card className="p-5">
-              <div className="text-[12px] font-medium text-neutral-500 mb-2">OpEx MTD</div>
-              <div className="text-[22px] font-semibold tabular-nums">
-                {expensesScopeMissing ? "—" : fmt(mtdOpex)}
+        {/* Equity / Net position */}
+        <Card className="p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-50">
+              <TrendingUp size={14} className="text-violet-600" />
+            </div>
+            <div className="text-[13px] font-semibold">Equity &amp; P&amp;L</div>
+          </div>
+          <div className="space-y-3">
+            {equity != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">Total equity</span>
+                <span className={`text-[13px] font-medium tabular-nums ${equity >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {equity >= 0 ? "+" : "−"}€{Math.abs(equity).toLocaleString()}
+                </span>
               </div>
-            </Card>
-            <Card className="p-5">
-              <div className="text-[12px] font-medium text-neutral-500 mb-2">Net MTD</div>
-              <div className={`text-[22px] font-semibold tabular-nums ${mtdNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {expensesScopeMissing ? "—" : fmt(mtdNet)}
+            )}
+            {ytdRevenue != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">YTD revenue</span>
+                <span className="text-[13px] font-medium tabular-nums">€{ytdRevenue.toLocaleString()}</span>
               </div>
-            </Card>
-          </section>
+            )}
+            {ytdExpenses != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-neutral-500">YTD expenses</span>
+                <span className="text-[13px] font-medium tabular-nums text-rose-600">−€{ytdExpenses.toLocaleString()}</span>
+              </div>
+            )}
+            {ytdRevenue == null && jorttRevTotal > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] text-neutral-500">Revenue (12mo)</span>
+                  <span className="text-[13px] font-medium tabular-nums">€{Math.round(jorttRevTotal).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] text-neutral-500">Costs (12mo)</span>
+                  <span className="text-[13px] font-medium tabular-nums text-rose-600">
+                    {jorttExpTotal > 0 ? `−€${Math.round(jorttExpTotal).toLocaleString()}` : "—"}
+                  </span>
+                </div>
+              </>
+            )}
+            <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-neutral-700">Net profit (YTD)</span>
+              <span className={`text-[14px] font-bold tabular-nums ${(ytdNetProfit ?? 0) >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {ytdNetProfit != null
+                  ? `${ytdNetProfit >= 0 ? "+" : "−"}€${Math.abs(ytdNetProfit).toLocaleString()}`
+                  : jorttRevTotal > 0 && jorttExpTotal > 0
+                    ? `€${Math.round(jorttRevTotal - jorttExpTotal).toLocaleString()}`
+                    : "—"}
+              </span>
+            </div>
+          </div>
+        </Card>
+      </div>
 
-          {/* Monthly breakdown */}
-          {Object.keys(revenueByMonth).length > 0 && (
-            <Card className="mt-3 p-5">
-              <div className="mb-4 text-[13px] font-semibold">Monthly position (Jortt)</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="border-b border-neutral-200 text-neutral-500">
-                      <th className="py-2 text-left font-medium">Month</th>
-                      <th className="py-2 text-right font-medium">Revenue</th>
-                      <th className="py-2 text-right font-medium">OpEx</th>
-                      <th className="py-2 text-right font-medium">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(revenueByMonth)
-                      .sort(([a], [b]) => parseMonth(a).getTime() - parseMonth(b).getTime())
-                      .map(([month, rev]) => {
-                        const op = opexByMonth.find((o) => o.month === month)?.total ?? 0;
-                        const net = rev - op;
-                        return (
-                          <tr key={month} className="border-b border-neutral-100 last:border-0">
-                            <td className="py-2 font-medium text-neutral-700">{month}</td>
-                            <td className="py-2 text-right tabular-nums">{fmt(rev)}</td>
-                            <td className="py-2 text-right tabular-nums text-neutral-500">
-                              {expensesScopeMissing ? "—" : fmt(op)}
-                            </td>
-                            <td className={`py-2 text-right tabular-nums font-medium ${net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                              {expensesScopeMissing ? "—" : fmt(net)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+      {/* Bank accounts (Xero only) */}
+      {xeroData?.bankAccounts?.length > 0 && (
+        <Card className="mt-3 p-5">
+          <div className="mb-3 text-[13px] font-semibold">Bank accounts · Xero</div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {xeroData.bankAccounts.map(acc => (
+              <div key={acc.name} className="rounded-lg bg-neutral-50 px-4 py-3">
+                <div className="text-[11px] text-neutral-500 truncate">{acc.name}</div>
+                <div className={`mt-1 text-[18px] font-semibold tabular-nums ${acc.balance < 0 ? "text-rose-600" : "text-neutral-900"}`}>
+                  €{Math.round(Math.abs(acc.balance)).toLocaleString()}
+                </div>
+                {acc.balance < 0 && <div className="text-[10px] text-rose-400">overdrawn</div>}
               </div>
-            </Card>
+            ))}
+          </div>
+          {cash != null && (
+            <div className="mt-3 border-t border-neutral-100 pt-3 flex items-center justify-between">
+              <span className="text-[12px] font-medium text-neutral-500">Total cash position</span>
+              <span className={`text-[15px] font-bold tabular-nums ${cash >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                €{Math.round(Math.abs(cash)).toLocaleString()}
+              </span>
+            </div>
           )}
-        </>
+        </Card>
       )}
+
+      {/* Revenue trend chart */}
+      {revenueMonths.length > 0 && (
+        <Card className="mt-3 p-5">
+          <div className="mb-4">
+            <div className="text-[13px] font-semibold">Revenue trend · 12 months</div>
+            <div className="text-[12px] text-neutral-400">{srcLabel} · accounting revenue</div>
+          </div>
+          <div className="h-[200px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+              <BarChart data={revenueMonths} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                <CartesianGrid stroke="#f4f4f5" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }} formatter={v => [`€${v.toLocaleString()}`, "Revenue"]} />
+                <Bar dataKey="revenue" fill="#171717" radius={[4, 4, 0, 0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
+      {/* Key stats row */}
+      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: "Accounts receivable", value: accountsReceivable != null ? `€${Math.round(accountsReceivable).toLocaleString()}` : "€0", sub: `${unpaidCount} unpaid invoice${unpaidCount !== 1 ? "s" : ""}` },
+          { label: "Overdue amount", value: overdueAmount != null ? `€${Math.round(overdueAmount).toLocaleString()}` : "€0", sub: xeroData?.overdueInvoiceCount > 0 ? `${xeroData.overdueInvoiceCount} overdue` : "All current" },
+          { label: "Net margin (YTD)", value: ytdRevenue && ytdNetProfit != null ? `${((ytdNetProfit / ytdRevenue) * 100).toFixed(1)}%` : "—", sub: "Net profit ÷ revenue" },
+          { label: "Equity", value: equity != null ? `€${Math.abs(equity).toLocaleString()}` : "—", sub: equity != null ? (equity >= 0 ? "Positive" : "Negative") : srcLabel },
+        ].map(m => (
+          <Card key={m.label} className="p-4">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{m.label}</div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">{m.value}</div>
+            <div className="mt-0.5 text-[11px] text-neutral-400">{m.sub}</div>
+          </Card>
+        ))}
+      </div>
     </>
   );
 };
@@ -1755,63 +2300,377 @@ const BalanceView = ({ jorttData = null } = {}) => {
    VIEW: PILLAR 5 — FORECAST
    ========================================================================= */
 
-/* ============================= GROWTH PLAN 2026 (used in ForecastView) ============================= */
-
-const GrowthPlanSection = () => null
-
 /* =========================================================================
    VIEW: PILLAR 5 — FORECAST
    ========================================================================= */
 
-const ForecastView = () => (
-  <>
-    <div>
-      <div className="text-[12px] font-medium text-neutral-400">Pillar 5</div>
-      <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Forecast</h1>
-      <p className="mt-1 text-[13px] text-neutral-500">Trend-based cash flow projection and growth plan.</p>
-    </div>
-    <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
-      <Sparkles size={32} className="text-neutral-300" />
-      <div className="mt-4 text-[15px] font-semibold text-neutral-700">Forecast not yet available</div>
-      <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
-        Cash flow forecast builds from connected live data. Connect Xero for payables/receivables, and allow 3+ months of Shopify history to accumulate for trend-based projections.
+function parseMonthKey(mk) {
+  if (!mk) return new Date(0);
+  return new Date("1 " + mk.replace("'", "20"));
+}
+
+const ForecastView = ({ jorttData = null, xeroData = null, shopifyMonthly = null }) => {
+  // Xero is primary accounting source; fall back to Jortt then Shopify
+  const hasData = !!(xeroData?.live || jorttData?.live || shopifyMonthly?.length > 0);
+  const acctSrcLabel = xeroData?.live ? "Xero" : jorttData?.live ? "Jortt" : "Shopify";
+
+  // Active accounting data (Xero first, Jortt fallback)
+  const acctRevByMonth = xeroData?.revenueByMonth ?? jorttData?.revenueByMonth ?? {};
+  const acctExpByMonth = xeroData?.expensesByMonth ?? jorttData?.expensesByMonth ?? {};
+  const cashBalance    = xeroData?.cashBalance ?? jorttData?.cashBalance ?? null;
+
+  // Build sorted historical monthly data merging accounting + Shopify
+  const chartData = useMemo(() => {
+    const allMonths = new Set([
+      ...Object.keys(acctRevByMonth),
+      ...Object.keys(acctExpByMonth),
+      ...(shopifyMonthly?.map(m => m.month) ?? []),
+    ]);
+    allMonths.delete("");
+
+    return Array.from(allMonths)
+      .sort((a, b) => parseMonthKey(a) - parseMonthKey(b))
+      .map(month => {
+        const acctRev = acctRevByMonth[month] ?? 0;
+        const shopRev = shopifyMonthly?.find(m => m.month === month)?.revenue ?? 0;
+        // Prefer Xero/Jortt net profit by month if available
+        const acctNet = xeroData?.netProfitByMonth?.[month] ?? null;
+        const expenses = acctExpByMonth[month] ?? 0;
+        const revenue  = acctRev > 0 ? acctRev : shopRev;
+        return {
+          month,
+          revenue:   Math.round(revenue),
+          expenses:  Math.round(expenses),
+          netProfit: acctNet != null ? Math.round(acctNet) : Math.round(revenue - expenses),
+        };
+      })
+      .filter(m => m.revenue > 0 || m.expenses > 0);
+  }, [xeroData, jorttData, shopifyMonthly]);
+
+  // Compute growth rate and 6-month projection
+  const { allData, growthRatePct } = useMemo(() => {
+    if (chartData.length < 2) return { allData: chartData, growthRatePct: 0 };
+
+    const recent      = chartData.slice(-3);
+    const avgRevenue  = recent.reduce((s, m) => s + m.revenue,  0) / recent.length;
+    const avgExpenses = recent.reduce((s, m) => s + m.expenses, 0) / recent.length;
+
+    const rates = [];
+    for (let i = 1; i < recent.length; i++) {
+      if (recent[i - 1].revenue > 0)
+        rates.push((recent[i].revenue - recent[i - 1].revenue) / recent[i - 1].revenue);
+    }
+    const rawRate    = rates.length ? rates.reduce((s, r) => s + r, 0) / rates.length : 0;
+    const growthRate = Math.max(-0.15, Math.min(0.15, rawRate));
+
+    const lastDate = parseMonthKey(chartData[chartData.length - 1].month);
+    const projected = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(lastDate);
+      d.setMonth(d.getMonth() + i + 1);
+      const month    = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+      const revenue  = Math.round(avgRevenue  * Math.pow(1 + growthRate, i + 1));
+      const expenses = Math.round(avgExpenses * Math.pow(1.02, i + 1));
+      return { month, projRevenue: revenue, projExpenses: expenses, projNetProfit: revenue - expenses };
+    });
+
+    // Merge: historical rows keep revenue/expenses/netProfit; projected rows have projRevenue etc.
+    const combined = [
+      ...chartData.map(m => ({ ...m, projRevenue: undefined, projExpenses: undefined, projNetProfit: undefined })),
+      ...projected.map(m => ({ ...m, revenue: undefined, expenses: undefined, netProfit: undefined })),
+    ];
+
+    return { allData: combined, growthRatePct: +(rawRate * 100).toFixed(1) };
+  }, [chartData]);
+
+  const last         = chartData[chartData.length - 1];
+  const runRate      = last?.revenue ?? 0;
+  const projMonths   = allData.filter(m => m.projRevenue != null);
+  const annualFwd    = projMonths.length === 6
+    ? Math.round([...chartData.slice(-6), ...projMonths.map(m => ({ revenue: m.projRevenue }))].reduce((s, m) => s + (m.revenue ?? 0), 0))
+    : runRate * 12;
+  const recentMargin = (() => {
+    const r3 = chartData.slice(-3).filter(m => m.revenue > 0);
+    if (!r3.length) return null;
+    return (r3.reduce((s, m) => s + m.netProfit / m.revenue, 0) / r3.length * 100).toFixed(1);
+  })();
+
+  if (!hasData) {
+    return (
+      <>
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 5</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Forecast</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">Trend-based cash flow projection and growth plan.</p>
+        </div>
+        <div className="mt-6 flex flex-col items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 py-16 text-center">
+          <Sparkles size={32} className="text-neutral-300" />
+          <div className="mt-4 text-[15px] font-semibold text-neutral-700">Forecast not yet available</div>
+          <div className="mt-2 max-w-sm text-[13px] text-neutral-400">
+            Cash flow forecast builds from connected live data. Connect Xero or Jortt for revenue &amp; expenses, and allow 3+ months of history to accumulate for trend-based projections.
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-[12px] font-medium text-neutral-400">Pillar 5</div>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Forecast</h1>
+          <p className="mt-1 text-[13px] text-neutral-500">
+            Trend-based projection · {chartData.length} months history · 6-month forward model
+          </p>
+        </div>
+        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700">
+          {growthRatePct > 0 ? "+" : ""}{growthRatePct}% MoM trend
+        </span>
       </div>
-    </div>
-  </>
-)
+
+      {/* Key metric cards */}
+      <Card className="mt-6 p-6">
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+          {[
+            {
+              label: "Current run rate",
+              value: runRate > 0 ? `€${runRate.toLocaleString()}/mo` : "—",
+              sub: last?.month ? `Last: ${last.month}` : "No data",
+            },
+            {
+              label: "Annualized (run rate)",
+              value: runRate > 0 ? `€${(runRate * 12).toLocaleString()}` : "—",
+              sub: "Current month × 12",
+            },
+            {
+              label: "12-month projected",
+              value: annualFwd > 0 ? `€${annualFwd.toLocaleString()}` : "—",
+              sub: projMonths.length > 0 ? "Trend-adjusted forward" : "Based on run rate",
+            },
+            {
+              label: "Cash position",
+              value: cashBalance != null ? `€${Math.round(cashBalance).toLocaleString()}` : "—",
+              sub: cashBalance != null ? `${acctSrcLabel} cash & bank` : `Connect ${acctSrcLabel}`,
+            },
+          ].map(m => (
+            <div key={m.label}>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{m.label}</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums">{m.value}</div>
+              <div className="mt-0.5 text-[11px] text-neutral-400">{m.sub}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Revenue & expenses chart */}
+      <Card className="mt-3 p-5">
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <div className="text-[13px] font-semibold">Revenue, expenses &amp; net profit</div>
+            <div className="text-[12px] text-neutral-400">Solid = historical · Shaded = 6-month projection</div>
+          </div>
+          {recentMargin != null && (
+            <div className="text-right">
+              <div className="text-[11px] text-neutral-400">Avg net margin</div>
+              <div className={`text-[15px] font-semibold tabular-nums ${parseFloat(recentMargin) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {recentMargin}%
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
+            <ComposedChart data={allData} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid stroke="#f4f4f5" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#a3a3a3", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `€${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
+                formatter={(v, name) => [v != null ? `€${Math.round(v).toLocaleString()}` : "—", name]}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" />
+              {/* Historical */}
+              <Bar dataKey="revenue"   name="Revenue"       fill="#171717" radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="expenses"  name="Expenses"      fill="#d4d4d8" radius={[3, 3, 0, 0]} maxBarSize={32} />
+              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              {/* Projected */}
+              <Bar dataKey="projRevenue"   name="Rev (proj)"  fill="#a78bfa" radius={[3, 3, 0, 0]} maxBarSize={32} opacity={0.55} />
+              <Bar dataKey="projExpenses"  name="Exp (proj)"  fill="#c4b5fd" radius={[3, 3, 0, 0]} maxBarSize={32} opacity={0.45} />
+              <Line type="monotone" dataKey="projNetProfit" name="Profit (proj)" stroke="#10b981" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Monthly P&L table */}
+      <Card className="mt-3 overflow-hidden">
+        <div className="border-b border-neutral-100 px-5 py-3">
+          <div className="text-[13px] font-semibold">Monthly P&amp;L breakdown</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-neutral-100 bg-neutral-50">
+                <th className="px-5 py-2.5 text-left font-medium text-neutral-400">Month</th>
+                <th className="px-4 py-2.5 text-right font-medium text-neutral-400">Revenue</th>
+                <th className="px-4 py-2.5 text-right font-medium text-neutral-400">Expenses</th>
+                <th className="px-4 py-2.5 text-right font-medium text-neutral-400">Net profit</th>
+                <th className="px-4 py-2.5 text-right font-medium text-neutral-400">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allData.map((row, i) => {
+                const isProj = row.projRevenue != null;
+                const rev  = isProj ? row.projRevenue  : row.revenue;
+                const exp  = isProj ? row.projExpenses : row.expenses;
+                const net  = isProj ? row.projNetProfit : row.netProfit;
+                const margin = rev > 0 ? ((net / rev) * 100).toFixed(1) : null;
+                return (
+                  <tr key={i} className={`border-b border-neutral-50 ${isProj ? "bg-violet-50/40" : "hover:bg-neutral-50"}`}>
+                    <td className="px-5 py-2.5 font-medium text-neutral-700">
+                      {row.month}
+                      {isProj && <span className="ml-1.5 rounded bg-violet-100 px-1 py-0.5 text-[10px] text-violet-600">proj</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-neutral-700">€{(rev ?? 0).toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-neutral-500">€{(exp ?? 0).toLocaleString()}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${(net ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {(net ?? 0) >= 0 ? "+" : ""}€{Math.abs(net ?? 0).toLocaleString()}
+                    </td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums text-[11px] ${margin != null && parseFloat(margin) >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                      {margin != null ? `${margin}%` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* P&L summary from Jortt */}
+      {jorttData?.plSummary && (
+        <Card className="mt-3 p-5">
+          <div className="mb-3 text-[13px] font-semibold">P&amp;L summary · Jortt (YTD)</div>
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: "Revenue",      value: jorttData.plSummary.revenue,     color: "text-neutral-900" },
+              { label: "Total costs",  value: jorttData.plSummary.costs,       color: "text-neutral-500" },
+              { label: "Gross profit", value: jorttData.plSummary.grossProfit, color: jorttData.plSummary.grossProfit >= 0 ? "text-emerald-600" : "text-rose-600" },
+            ].map(m => (
+              <div key={m.label}>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{m.label}</div>
+                <div className={`mt-1 text-[20px] font-semibold tabular-nums ${m.color}`}>
+                  €{Math.round(m.value).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </>
+  );
+};
 
 /* =========================================================================
    MAIN APP
    ========================================================================= */
 
-export default function FinanceDashboard({ user = null, liveData = null, connections = {} }) {
-  const [range, setRange] = useState("30d");
+export default function FinanceDashboard({ user = null, liveData = null, connections = {}, syncedAt = null, dataIsStale = false, hasAnyData = false }) {
+  const router = useRouter();
+  const [dateRange, setDateRange]   = useState({ from: drStartOfMonth(), to: drToday() });
+  const [rangeData, setRangeData]   = useState(null);
+  const [rangeSyncing, setRangeSyncing] = useState(false);
+
+  const handleDateChange = useCallback(async (from, to) => {
+    setDateRange({ from, to });
+    const isCurrentMonth = from === drStartOfMonth() && to === drToday();
+    if (isCurrentMonth) {
+      setRangeData(null); // use live data
+      return;
+    }
+    setRangeSyncing(true);
+    setRangeData(null);
+    try {
+      const res  = await fetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
+      const json = await res.json();
+      setRangeData(json.rangeData ?? null);
+    } catch {
+      setRangeData(null);
+    } finally {
+      setRangeSyncing(false);
+    }
+  }, []);
   const [view, setView] = useState("overview");
   const [avatarFailed, setAvatarFailed] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState("updating...");
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
 
+  const handleSync = useCallback(async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      // /api/sync now returns immediately (~50ms) and runs in the background.
+      const res = await fetch("/api/sync", { method: "POST" });
+      if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+      // Poll the dashboard a few times so cards fill in as jobs complete.
+      // Background jobs typically finish within 60s.
+      const intervals = [3000, 8000, 15000, 30000, 60000];
+      for (const delay of intervals) {
+        await new Promise((r) => setTimeout(r, delay));
+        try { await router.invalidate(); } catch { /* ignore */ }
+      }
+    } catch (err) {
+      setSyncError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [syncing, router]);
+
+  // Auto-sync in background if data is stale or missing
   useEffect(() => {
-    setLastUpdated(new Date().toLocaleString());
-  }, []);
+    if (dataIsStale || !hasAnyData) {
+      handleSync();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Live data only (no mock fallbacks) ──────────────────────────────
-  // Cache may return {__empty:true}/{__error:...} objects — guard everything as arrays/objects.
-  const asArr = <T,>(v: any): T[] => (Array.isArray(v) ? v : []);
-  const shopifyMarketsArr = asArr<any>(liveData?.shopifyMarkets);
-  const activeMarkets     = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
+  const syncLabel = (() => {
+    if (!syncedAt) return "Never synced";
+    const mins = Math.round((Date.now() - new Date(syncedAt).getTime()) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.round(mins / 60)}h ago`;
+  })();
+
+  // ── Live data only (no mock fallbacks) ────────────────────────────────
+  // Cache may return {__empty:true} or {__error:...} objects instead of arrays — guard everything.
+  const asArr = (v) => (Array.isArray(v) ? v : []);
+  const shopifyToday      = liveData?.shopifyToday ?? null;
+  const shopifyMarketsArr = asArr(liveData?.shopifyMarkets);
+  const activeMarkets     = shopifyMarketsArr.some(m => m?.live) ? shopifyMarketsArr : null;
   const shopifyLive       = !!activeMarkets;
-  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !(liveData.jortt as any).__empty && !(liveData.jortt as any).__error ? liveData.jortt : null;
-  const activeOpexByMonth = asArr<any>(jorttObj?.opexByMonth).length > 0 ? jorttObj!.opexByMonth : null;
+  const jorttObj          = liveData?.jortt && typeof liveData.jortt === "object" && !liveData.jortt.__empty && !liveData.jortt.__error ? liveData.jortt : null;
+  const xeroObj           = liveData?.xero && typeof liveData.xero === "object" && !liveData.xero.__empty && !liveData.xero.__error ? liveData.xero : null;
+  const activeOpexByMonth = asArr(jorttObj?.opexByMonth).length > 0 ? jorttObj.opexByMonth : null;
   const activeOpexDetail  = jorttObj?.opexDetail ?? null;
   const jorttLive         = !!(jorttObj?.live);
-  const twData            = asArr<any>(liveData?.tripleWhale).filter((m: any) => m?.live);
+  const xeroLive          = !!(xeroObj?.live);
+  const twData            = asArr(liveData?.tripleWhale).filter(m => m?.live);
   const twLive            = twData.length > 0;
-  const loopLive          = asArr<any>(liveData?.loop).some((m: any) => m?.live);
-  const liveSources       = [shopifyLive, jorttLive, twLive, loopLive].filter(Boolean).length;
+  const juoArr            = asArr(liveData?.juo);
+  const loopArr           = asArr(liveData?.loop);
+  const juoLive           = juoArr.some(m => m?.live);
+  const loopLive          = loopArr.some(m => m?.live);
+  const subLive           = juoLive || loopLive;
+  // Combined subscription data: JUO (NL) + Loop (UK/US/EU)
+  const allSubData        = [...juoArr, ...loopArr].filter(m => m?.live);
+  const liveSources       = [shopifyLive, jorttLive || xeroLive, twLive, subLive].filter(Boolean).length;
+  // Safe values to pass into subcomponents (markers stripped to null/[])
+  const safeShopifyMonthly = asArr(liveData?.shopifyMonthly);
 
   async function handleLogout() {
-    const { supabase } = await import("@/integrations/supabase/client");
-    await supabase.auth.signOut();
+    await fetch("/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }
 
@@ -1871,6 +2730,22 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Sync button */}
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition ${
+                dataIsStale && !syncing
+                  ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : "border-neutral-200 bg-neutral-50 text-neutral-500 hover:bg-neutral-100"
+              } disabled:opacity-60`}
+            >
+              <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
+              {syncing ? "Syncing…" : syncLabel}
+            </button>
+            {syncError && (
+              <span className="text-[11px] text-rose-500">{syncError}</span>
+            )}
             <div className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[12px] text-neutral-500">
               <Search size={12} />
               <span>Search</span>
@@ -1928,10 +2803,8 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
               <div className="space-y-1 px-2.5 text-[12px] text-neutral-500">
                 <div className="flex items-center justify-between"><span>Shopify Plus</span><StatusDot status={shopifyLive ? "ok" : "error"} /></div>
                 <div className="flex items-center justify-between"><span>Triple Whale</span><StatusDot status={twLive ? "ok" : "error"} /></div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">Jortt <span className="text-[9px] text-[#13B5EA] font-medium">â†’ Xero</span></span>
-                  <StatusDot status={jorttLive ? "ok" : "error"} />
-                </div>
+                <div className="flex items-center justify-between"><span>Jortt</span><StatusDot status={jorttLive ? "ok" : "error"} /></div>
+                <div className="flex items-center justify-between"><span>Xero</span><StatusDot status={xeroLive ? "ok" : "error"} /></div>
               </div>
             </div>
           </nav>
@@ -1969,19 +2842,19 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
             </div>
           </div>
 
-          {view === "overview" && <OverviewView range={range} setRange={setRange} liveMarkets={activeMarkets} twData={twData} loopData={asArr<any>(liveData?.loop)} />}
+          {view === "overview" && <OverviewView dateRange={dateRange} onDateChange={handleDateChange} liveMarkets={activeMarkets} twData={twData} subData={allSubData} shopifyMonthly={safeShopifyMonthly} jorttData={jorttObj} rangeData={rangeData} rangeSyncing={rangeSyncing} />}
           {view === "metrics" && <MetricsView twData={twData} />}
-          {view === "daily" && (shopifyLive ? <DailyPnLView hourlyData={(liveData as any)?.shopifyHourly} liveMarkets={activeMarkets} twData={twData} jorttData={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
+          {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={asArr<any>(liveData?.shopifyMonthly)} twData={twData} jortt={jorttObj} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
-          {view === "balance" && <BalanceView jorttData={jorttObj} />}
-          {view === "forecast" && <ForecastView />}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "balance" && <BalanceView jorttData={jorttObj} xeroData={xeroObj} shopifyMarkets={activeMarkets} twData={twData} />}
+          {view === "forecast" && <ForecastView jorttData={jorttObj} xeroData={xeroObj} shopifyMonthly={safeShopifyMonthly} />}
           {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
           {view === "sync" && <SyncView initialConnections={connections} />}
 
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {liveSources > 0
-              ? `${liveSources} live source${liveSources > 1 ? "s" : ""} · ${[shopifyLive && "Shopify", jorttLive && "Jortt", twLive && "Triple Whale", loopLive && "Loop"].filter(Boolean).join(", ")} · ${lastUpdated}`
+              ? `${liveSources} live source${liveSources > 1 ? "s" : ""} · ${[shopifyLive && "Shopify", jorttLive && "Jortt", twLive && "Triple Whale", juoLive && "Juo (NL)", loopLive && "Loop (UK)"].filter(Boolean).join(", ")} · synced ${syncLabel}`
               : `No live sources connected · Add API keys to .env.local or connect via Sync view`}
           </div>
         </main>
