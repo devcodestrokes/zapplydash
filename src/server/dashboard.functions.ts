@@ -43,7 +43,7 @@ export const getTripleWhaleRange = createServerFn({ method: "POST" })
       try {
         const rows = await withTimeout(
           fetchTripleWhale(data.from, data.to, key),
-          25_000,
+          150_000,
           "Triple Whale fetch"
         );
         const result = { rows: (rows ?? []) as any[], error: null as string | null };
