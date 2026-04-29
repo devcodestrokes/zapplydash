@@ -2188,7 +2188,7 @@ export async function fetchShopifyRepeatFunnel() {
     let cursor: string | null = null;
     let hasNextPage = true;
     let page = 0;
-    const maxPages = 120; // ~30k orders per store over 540d
+    const maxPages = 600; // up to ~150k orders per store over 540d (sorted oldest-first so partial fetches still cover early cohorts)
 
     try {
       while (hasNextPage && page < maxPages) {
