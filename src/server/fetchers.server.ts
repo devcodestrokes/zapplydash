@@ -826,9 +826,12 @@ async function _fetchJuo() {
   const JUO_BASE = "https://api.juo.io";
   const headers  = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
   const allSubs: any[] = [];
-  const MAX_PAGES = 100;
+  const MAX_PAGES = 300;
   // Always build absolute URLs — Juo's Link header returns relative paths
-  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100`;
+  // Fetch the active book directly. Pulling every historical cancelled/expired
+  // subscription first can cap the response before all active subscriptions are
+  // seen, which makes MRR and active-subscriber finance metrics inaccurate.
+  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100&status=active`;
   let page = 0;
 
   try {
@@ -894,7 +897,7 @@ async function _fetchJuo() {
     const currency = activeSubs[0]?.currencyCode ?? "EUR";
 
     return [{
-      market: "NL", flag: "🇳🇱", platform: "juo", live: true,
+      market: "NL", flag: "🇳🇱", platform: "juo", live: true, calcVersion: 2,
       mrr: +mrr.toFixed(2), activeSubs: activeSubs.length,
       pausedSubs: pausedSubs.length, canceledSubs: canceledSubs.length,
       totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
