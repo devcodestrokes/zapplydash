@@ -131,6 +131,7 @@ function OverviewPage() {
             rangeData={rangeData}
             rangeSyncing={rangeSyncing}
             shopifyDaily={data?.shopifyDaily ?? null}
+            tripleWhaleCustomerEconomics={data?.tripleWhaleCustomerEconomics ?? null}
             tripleWhaleDaily={data?.tripleWhaleDaily ?? null}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
