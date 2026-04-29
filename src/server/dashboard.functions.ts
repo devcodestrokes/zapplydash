@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readCacheKeys, ageMinutes } from "./cache.server";
+import { readCacheKeys, writeCache, ageMinutes } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
-import { fetchTripleWhale } from "./fetchers.server";
+import { fetchTripleWhale, fetchTripleWhaleCustomerEconomics } from "./fetchers.server";
 import { getProgress } from "./progress.server";
 
 // In-memory range cache (per Worker instance). Triple Whale aggregates are
@@ -146,6 +146,18 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
 
   const dataIsStale = ageMinutes(oldestSyncedAt) > 30;
   const hasAnyData = !!(shopifyMarketsCache || tripleWhaleCache || loopCache || juoCache || xeroCache);
+  let tripleWhaleCustomerEconomics = tripleWhaleCustomerEconomicsCache?.payload ?? null;
+  if (!tripleWhaleCustomerEconomics || ageMinutes(tripleWhaleCustomerEconomicsCache?.fetchedAt) > 720) {
+    try {
+      const fresh = await withTimeout(fetchTripleWhaleCustomerEconomics(), 12_000, "Triple Whale customer economics");
+      if (fresh) {
+        tripleWhaleCustomerEconomics = fresh;
+        await writeCache("triplewhale", "customer_economics", fresh);
+      }
+    } catch (err: any) {
+      console.error("getDashboardData customer economics failed:", err?.message);
+    }
+  }
 
   return {
     shopifyMarkets: shopifyMarketsCache?.payload ?? null,
@@ -153,7 +165,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     shopifyToday: shopifyTodayCache?.payload ?? null,
     shopifyDaily: shopifyDailyCache?.payload ?? null,
     tripleWhale: tripleWhaleCache?.payload ?? null,
-    tripleWhaleCustomerEconomics: tripleWhaleCustomerEconomicsCache?.payload ?? null,
+    tripleWhaleCustomerEconomics,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
