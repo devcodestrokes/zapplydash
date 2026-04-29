@@ -139,7 +139,7 @@ const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null, until?: string |
       totalDiscountsSet{ shopMoney { amount } }
       totalRefundedSet { shopMoney { amount } }
       createdAt
-      customer { id }
+      customer { id numberOfOrders }
     }}
   }
 }`;
