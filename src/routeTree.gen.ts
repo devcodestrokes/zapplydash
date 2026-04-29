@@ -22,6 +22,7 @@ import { Route as PillarsMarginPerMarketRouteImport } from './routes/pillars.mar
 import { Route as PillarsForecastRouteImport } from './routes/pillars.forecast'
 import { Route as PillarsDailyPnlRouteImport } from './routes/pillars.daily-pnl'
 import { Route as PillarsBalanceSheetRouteImport } from './routes/pillars.balance-sheet'
+import { Route as OperationsSyncStatusRouteImport } from './routes/operations.sync-status'
 import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
@@ -99,6 +100,11 @@ const PillarsDailyPnlRoute = PillarsDailyPnlRouteImport.update({
 const PillarsBalanceSheetRoute = PillarsBalanceSheetRouteImport.update({
   id: '/pillars/balance-sheet',
   path: '/pillars/balance-sheet',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperationsSyncStatusRoute = OperationsSyncStatusRouteImport.update({
+  id: '/operations/sync-status',
+  path: '/operations/sync-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthLogoutRoute = AuthLogoutRouteImport.update({
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
   '/pillars/forecast': typeof PillarsForecastRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
   '/pillars/forecast': typeof PillarsForecastRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
+  '/operations/sync-status': typeof OperationsSyncStatusRoute
   '/pillars/balance-sheet': typeof PillarsBalanceSheetRoute
   '/pillars/daily-pnl': typeof PillarsDailyPnlRoute
   '/pillars/forecast': typeof PillarsForecastRoute
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
     | '/pillars/forecast'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
     | '/pillars/forecast'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/api/sync'
     | '/auth/callback'
     | '/auth/logout'
+    | '/operations/sync-status'
     | '/pillars/balance-sheet'
     | '/pillars/daily-pnl'
     | '/pillars/forecast'
@@ -352,6 +364,7 @@ export interface RootRouteChildren {
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
+  OperationsSyncStatusRoute: typeof OperationsSyncStatusRoute
   PillarsBalanceSheetRoute: typeof PillarsBalanceSheetRoute
   PillarsDailyPnlRoute: typeof PillarsDailyPnlRoute
   PillarsForecastRoute: typeof PillarsForecastRoute
@@ -456,6 +469,13 @@ declare module '@tanstack/react-router' {
       path: '/pillars/balance-sheet'
       fullPath: '/pillars/balance-sheet'
       preLoaderRoute: typeof PillarsBalanceSheetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operations/sync-status': {
+      id: '/operations/sync-status'
+      path: '/operations/sync-status'
+      fullPath: '/operations/sync-status'
+      preLoaderRoute: typeof OperationsSyncStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/logout': {
@@ -591,6 +611,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
+  OperationsSyncStatusRoute: OperationsSyncStatusRoute,
   PillarsBalanceSheetRoute: PillarsBalanceSheetRoute,
   PillarsDailyPnlRoute: PillarsDailyPnlRoute,
   PillarsForecastRoute: PillarsForecastRoute,
