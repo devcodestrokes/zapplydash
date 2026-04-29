@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "@tanstack/react-router";
 import SyncView from "./SyncView";
+import shopifyGlyph from "@/assets/shopify-glyph.png";
 import {
   AreaChart,
   Area,
@@ -630,7 +631,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <div className="flex items-start justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
-              <BrandIcon brand="shopify" size={14} />
+              <img src={shopifyGlyph} alt="Shopify" className="h-4 w-4 object-contain" />
               <span>Revenue</span>
               <span className="text-[11px] text-neutral-400">· selected period</span>
             </div>
