@@ -1369,7 +1369,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <div className="h-56">
           {chartsReady && (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrr ?? 0), subs: m.activeSubs ?? 0 }))}>
+              <ComposedChart data={subDataEUR.map((m: any) => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrrEUR ?? 0), subs: m.activeSubs ?? 0 }))}>
                 <CartesianGrid stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
