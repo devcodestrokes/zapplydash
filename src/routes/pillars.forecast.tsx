@@ -200,6 +200,10 @@ function ForecastPage() {
           </div>
         </div>
 
+        {tab === "growth" ? (
+          <GrowthPlan2026 />
+        ) : (
+        <>
         {/* Method banner */}
         <Card className="mt-5 p-4">
           <div className="flex items-start gap-3">
@@ -370,13 +374,300 @@ function ForecastPage() {
         <div className="mt-6 text-center text-[11px] text-neutral-400">
           Synced · {new Date().toLocaleString()} · Cash anchor: {fmtMoney(startCash)}
         </div>
-
-        {tab === "growth" && (
-          <Card className="mt-6 p-6 text-center text-[13px] text-neutral-500">
-            Growth Plan 2026 view — coming soon. Switch to <button onClick={() => setTab("cashflow")} className="underline">13-week cashflow</button> to view current model.
-          </Card>
+        </>
         )}
       </div>
     </DashboardShell>
+  );
+}
+
+// =============== Growth Plan 2026 ===============
+
+type Market = { code: "NL" | "GB" | "US"; name: string; color: string; bar: string };
+const MARKETS: Market[] = [
+  { code: "NL", name: "Netherlands",    color: "bg-neutral-900", bar: "bg-neutral-900" },
+  { code: "GB", name: "United Kingdom", color: "bg-indigo-500",  bar: "bg-indigo-500" },
+  { code: "US", name: "United States",  color: "bg-amber-500",   bar: "bg-amber-500" },
+];
+
+function GrowthCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>;
+}
+
+function fmtM(n: number) {
+  return `€${(n / 1_000_000).toFixed(1)}M`;
+}
+function fmtK(n: number) {
+  if (n === 0) return "—";
+  return `€${Math.round(n / 1000)}k`;
+}
+
+function GrowthPlan2026() {
+  const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
+
+  const plan = {
+    NL: { target: 26_000, marketing: 5_200,  margin: 0.40, share: 0.26, ytdPct: 29.8, status: "On pace" as const },
+    GB: { target: 49_000, marketing: 22_050, margin: 0.34, share: 0.49, ytdPct: 21.8, status: "Behind"  as const },
+    US: { target: 25_000, marketing: 8_750,  margin: 0.14, share: 0.25, ytdPct: 0.5,  status: "Behind"  as const },
+  };
+  const totalTarget = plan.NL.target + plan.GB.target + plan.US.target;
+  const totalMarketing = plan.NL.marketing + plan.GB.marketing + plan.US.marketing;
+  const totalNetProfit = plan.NL.target * plan.NL.margin + plan.GB.target * plan.GB.margin + plan.US.target * plan.US.margin;
+  const blendedMargin = totalNetProfit / totalTarget;
+  const blendedMER = totalTarget / totalMarketing;
+  const ytdOverall = plan.NL.ytdPct * plan.NL.share + plan.GB.ytdPct * plan.GB.share + plan.US.ytdPct * plan.US.share;
+
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const seasonality = [0.06, 0.05, 0.06, 0.06, 0.07, 0.07, 0.08, 0.10, 0.11, 0.12, 0.16, 0.06];
+  const currentMonthIdx = new Date().getMonth();
+  const rows = months.map((m, i) => {
+    const factor = seasonality[i];
+    const usAdj = i < 6 ? 0 : factor;
+    const nl = Math.round(plan.NL.target * factor);
+    const gb = Math.round(plan.GB.target * factor);
+    const us = Math.round(plan.US.target * usAdj);
+    const total = nl + gb + us;
+    const marketing = Math.round(total * (totalMarketing / totalTarget));
+    const netProfit = i === currentMonthIdx ? -10_000 : Math.round(total * blendedMargin);
+    const margin = total > 0 ? (netProfit / total) * 100 : 0;
+    return { m, i, nl, gb, us, total, marketing, netProfit, margin, isMTD: i === currentMonthIdx, isPast: i < currentMonthIdx };
+  });
+
+  const assumptions = {
+    NL: [{ k: "Repeat customer AOV", v: "€59" }, { k: "New customer AOV", v: "€78" }, { k: "aMER target", v: "1.70×" }, { k: "nCAC", v: "€46" }, { k: "Gross margin", v: "75%" }],
+    GB: [{ k: "Repeat customer AOV", v: "€70" }, { k: "New customer AOV", v: "€71" }, { k: "aMER target", v: "2.00×" }, { k: "nCAC", v: "€36" }, { k: "Gross margin", v: "75%" }],
+    US: [{ k: "Repeat customer AOV", v: "€70" }, { k: "New customer AOV", v: "€80" }, { k: "aMER target", v: "1.43×" }, { k: "nCAC", v: "€50" }, { k: "Gross margin", v: "75%" }, { k: "Launch", v: "Q2 2026" }],
+  };
+
+  void metric;
+
+  return (
+    <>
+      <GrowthCard className="mt-5 p-4">
+        <div className="flex items-start gap-3">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100">
+            <Sparkles className="h-4 w-4 text-neutral-600" />
+          </div>
+          <div className="text-[13px]">
+            <div className="font-semibold text-neutral-900">Growth Plan 2026 · NL + UK + US combined · source: Finance planning sheet</div>
+            <div className="text-neutral-500 mt-0.5">Monthly targets built from per-market assumptions (marketing spend, MER, new customer AOV, repeat revenue growth). Edit in the assumptions sheet.</div>
+          </div>
+        </div>
+      </GrowthCard>
+
+      <GrowthCard className="mt-3 p-5">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="text-[14px] font-semibold">Year-to-date progress</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Apr MTD · tracking against full-year plan</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[12px] text-neutral-500 tabular-nums">{fmtM(totalTarget * (ytdOverall / 100))} / {fmtM(totalTarget)}</div>
+            <div className="text-[22px] font-semibold tabular-nums">{ytdOverall.toFixed(1)}%</div>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="relative h-2 rounded-full bg-neutral-100 overflow-hidden">
+            <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" style={{ width: `${ytdOverall}%` }} />
+            <div className="absolute inset-y-0" style={{ left: "30.5%", width: 2, background: "#a3a3a3" }} />
+          </div>
+          <div className="mt-1.5 flex justify-between text-[11px] text-neutral-400">
+            <span>Start of year</span>
+            <span>| Expected pace (30.5%)</span>
+            <span>Year-end target</span>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {MARKETS.map((mk) => {
+            const p = plan[mk.code];
+            return (
+              <div key={mk.code}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[13px]">
+                    <span className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</span>
+                    <span className="font-medium text-neutral-800">{mk.name}</span>
+                  </div>
+                  <span className={`text-[11px] font-medium ${p.status === "On pace" ? "text-emerald-600" : "text-amber-600"}`}>{p.status}</span>
+                </div>
+                <div className="flex items-center justify-between mt-1 text-[11px] text-neutral-500 tabular-nums">
+                  <span>{fmtM(p.target * (p.ytdPct / 100))} / {fmtM(p.target)}</span>
+                  <span className="font-semibold text-neutral-700">{p.ytdPct.toFixed(1)}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                  <div className={`h-full ${mk.bar} rounded-full`} style={{ width: `${p.ytdPct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </GrowthCard>
+
+      <GrowthCard className="mt-3 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">2026 Revenue Target</span>
+              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">● Annual plan</span>
+            </div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalTarget)}</div>
+            <div className="text-[11px] text-neutral-500">Combined NL + GB + US · Jan–Dec 2026</div>
+            <div className="mt-3 h-px bg-neutral-100" />
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {MARKETS.map((mk) => (
+                <div key={mk.code}>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target)}</div>
+                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].share * 100)}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="md:border-l md:border-neutral-100 md:pl-6">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Net Profit Target</div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalNetProfit)}</div>
+            <div className="text-[11px] text-neutral-500">{(blendedMargin * 100).toFixed(1)}% net margin</div>
+            <div className="mt-3 h-px bg-neutral-100" />
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {MARKETS.map((mk) => (
+                <div key={mk.code}>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target * plan[mk.code].margin)}</div>
+                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].margin * 100)}% margin</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="md:border-l md:border-neutral-100 md:pl-6">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Marketing Spend</div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalMarketing)}</div>
+            <div className="text-[11px] text-neutral-500">Blended MER {blendedMER.toFixed(2)}×</div>
+            <div className="mt-3 h-px bg-neutral-100" />
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {MARKETS.map((mk) => (
+                <div key={mk.code}>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code} {mk.code}</div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].marketing)}</div>
+                  <div className="text-[10px] text-neutral-400">{Math.round((plan[mk.code].marketing / plan[mk.code].target) * 100)}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </GrowthCard>
+
+      <GrowthCard className="mt-3 p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-[14px] font-semibold">Monthly breakdown per market</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Dec 2026 · stacked by market</div>
+          </div>
+          <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-1 text-[12px] font-medium">
+            {([
+              { k: "revenue", l: "Revenue" },
+              { k: "netprofit", l: "Net profit" },
+              { k: "marketing", l: "Marketing" },
+            ] as const).map((t) => (
+              <button
+                key={t.k}
+                onClick={() => setMetric(t.k)}
+                className={`rounded-md px-3 py-1.5 transition ${metric === t.k ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
+              >
+                {t.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </GrowthCard>
+
+      <GrowthCard className="mt-3 p-5">
+        <div className="text-[14px] font-semibold">Monthly targets detail</div>
+        <div className="text-[12px] text-neutral-500 mt-0.5">Revenue, marketing spend, and net profit per market</div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+                <th className="py-2 pr-3">Month</th>
+                <th className="py-2 px-3 text-right">NL Rev</th>
+                <th className="py-2 px-3 text-right">UK Rev</th>
+                <th className="py-2 px-3 text-right">US Rev</th>
+                <th className="py-2 px-3 text-right border-l border-neutral-100">Total</th>
+                <th className="py-2 px-3 text-right">Marketing</th>
+                <th className="py-2 px-3 text-right">Net profit</th>
+                <th className="py-2 pl-3 text-right">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const dim = !r.isPast && !r.isMTD;
+                const rowBg = r.isMTD ? "bg-amber-50/40" : "";
+                const txt = dim ? "text-neutral-400" : "text-neutral-700";
+                const profitTxt = r.netProfit < 0 ? "text-rose-600" : dim ? "text-emerald-400" : "text-emerald-600";
+                return (
+                  <tr key={r.m} className={`border-b border-neutral-100 last:border-0 ${rowBg}`}>
+                    <td className={`py-2.5 pr-3 ${txt}`}>
+                      <span className="inline-flex items-center gap-2">
+                        {r.isPast ? (
+                          <span className="text-emerald-500">✓</span>
+                        ) : r.isMTD ? (
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full border border-neutral-300 inline-block" />
+                        )}
+                        <span className="font-medium">{r.m}</span>
+                        {r.isMTD && <span className="rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">MTD</span>}
+                      </span>
+                    </td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.nl)}</td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.gb)}</td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.us)}</td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums font-semibold border-l border-neutral-100 ${dim ? "text-neutral-500" : "text-neutral-900"}`}>{fmtK(r.total)}</td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.marketing)}</td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums font-medium ${profitTxt}`}>{r.netProfit < 0 ? `-€${Math.abs(Math.round(r.netProfit / 1000))}k` : fmtK(r.netProfit)}</td>
+                    <td className={`py-2.5 pl-3 text-right tabular-nums ${r.margin < 0 ? "text-rose-600" : dim ? "text-neutral-400" : "text-neutral-700"}`}>{r.margin.toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-neutral-200 font-semibold">
+                <td className="py-3 pr-3">Total 2026</td>
+                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.NL.target)}</td>
+                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.GB.target)}</td>
+                <td className="py-3 px-3 text-right tabular-nums">{fmtM(plan.US.target)}</td>
+                <td className="py-3 px-3 text-right tabular-nums border-l border-neutral-100">{fmtM(totalTarget)}</td>
+                <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalMarketing)}</td>
+                <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalNetProfit)}</td>
+                <td className="py-3 pl-3 text-right tabular-nums">{(blendedMargin * 100).toFixed(1)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </GrowthCard>
+
+      <GrowthCard className="mt-3 p-5">
+        <div className="flex items-center gap-2">
+          <Info className="h-4 w-4 text-neutral-400" />
+          <div className="text-[14px] font-semibold">Key assumptions per market</div>
+        </div>
+        <div className="mt-4 space-y-3">
+          {MARKETS.map((mk) => (
+            <div key={mk.code} className="rounded-lg border border-neutral-200 p-4">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${mk.color}`} />
+                <span className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</span>
+                <span className="text-[13px] font-semibold">{mk.name}</span>
+              </div>
+              <div className="mt-3 divide-y divide-neutral-100">
+                {assumptions[mk.code].map((a) => (
+                  <div key={a.k} className="flex items-center justify-between py-2 text-[13px]">
+                    <span className="text-neutral-500">{a.k}</span>
+                    <span className="font-medium text-neutral-800 tabular-nums">{a.v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </GrowthCard>
+    </>
   );
 }
