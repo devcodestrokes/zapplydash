@@ -1,22 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
 import { OverviewView } from "@/components/FinanceDashboard";
 
-const PRESETS = ["today","yesterday","7d","30d","mtd","last_month","90d","ytd","custom"] as const;
-type Preset = (typeof PRESETS)[number];
-
-const searchSchema = z.object({
-  preset: z.enum(PRESETS).catch("30d").default("30d"),
-  from: z.string().catch("").default(""),
-  to: z.string().catch("").default(""),
-});
-
 export const Route = createFileRoute("/overview-dashboard")({
-  validateSearch: (input: Record<string, unknown>) => searchSchema.parse(input),
+  // Accept any incoming search params (legacy preset/from/to) without erroring
+  validateSearch: (input: Record<string, unknown>) => input,
   head: () => ({
     meta: [
       { title: "Overview — Zapply" },
@@ -25,6 +16,14 @@ export const Route = createFileRoute("/overview-dashboard")({
   }),
   component: OverviewPage,
 });
+
+// Match drStartOfMonth() / drToday() in FinanceDashboard.jsx (YYYY-MM-DD strings)
+function startOfMonthStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function todayStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function SkeletonBox({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-neutral-200/70 ${className}`} />;
@@ -46,10 +45,12 @@ function OverviewSkeleton() {
 
 function OverviewPage() {
   const { user } = useDashboardSession();
-  const search = Route.useSearch();
-  const [range, setRange] = useState<string>(search.preset === "7d" || search.preset === "30d" || search.preset === "90d" ? search.preset : "30d");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const [dateRange, setDateRange] = useState({ from: startOfMonthStr(), to: todayStr() });
+  const [rangeData, setRangeData] = useState<any>(null);
+  const [rangeSyncing, setRangeSyncing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -59,26 +60,59 @@ function OverviewPage() {
     return () => { alive = false; };
   }, []);
 
-  // Normalize live data into shapes OverviewView expects
-  const shopifyMarketsArr = Array.isArray(data?.shopifyMarkets) ? data.shopifyMarkets : [];
+  const handleDateChange = useCallback(async (from: string, to: string) => {
+    setDateRange({ from, to });
+    const isCurrentMonth = from === startOfMonthStr() && to === todayStr();
+    if (isCurrentMonth) {
+      setRangeData(null);
+      return;
+    }
+    setRangeSyncing(true);
+    setRangeData(null);
+    try {
+      const res = await fetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
+      const json = await res.json();
+      setRangeData(json.rangeData ?? null);
+    } catch {
+      setRangeData(null);
+    } finally {
+      setRangeSyncing(false);
+    }
+  }, []);
+
+  // Normalize live data into the shapes OverviewView expects
+  const asArr = (v: any) => (Array.isArray(v) ? v : []);
+  const shopifyMarketsArr = asArr(data?.shopifyMarkets);
   const liveMarkets = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
-  const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
-  const loopData = Array.isArray(data?.loop) ? data.loop : [];
+  const twData = asArr(data?.tripleWhale).filter((m: any) => m?.live);
+  const juoArr = asArr(data?.juo);
+  const loopArr = asArr(data?.loop);
+  const allSubData = [...juoArr, ...loopArr].filter((m: any) => m?.live);
+  const shopifyMonthly = asArr(data?.shopifyMonthly);
+  const jorttObj =
+    data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error
+      ? data.jortt
+      : null;
 
   return (
     <DashboardShell user={user ?? { email: "", name: "Loading…", avatar: null }} title="Overview">
       {loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="p-6 bg-neutral-50 min-h-full" style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}>
+        <div
+          className="p-6 bg-neutral-50 min-h-full"
+          style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}
+        >
           <OverviewView
-            dateRange={range}
-            onDateChange={setRange}
+            dateRange={dateRange}
+            onDateChange={handleDateChange}
             liveMarkets={liveMarkets}
             twData={twData}
-            subData={loopData}
-            shopifyMonthly={Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : null}
-            jorttData={data?.jortt && !data.jortt.__empty && !data.jortt.__error ? data.jortt : null}
+            subData={allSubData}
+            shopifyMonthly={shopifyMonthly}
+            jorttData={jorttObj}
+            rangeData={rangeData}
+            rangeSyncing={rangeSyncing}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {data?.syncedAt ? `Synced · ${new Date(data.syncedAt).toLocaleString()}` : "No live sources connected"}
