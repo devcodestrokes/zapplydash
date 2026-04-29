@@ -622,7 +622,52 @@ function BalanceSheetPage() {
                 <span className="text-neutral-400">Click a row to select a week</span>
               </button>
               {showWeeks && (
-                <div className="mt-2 text-[12px] text-neutral-400">Weekly trend data not available yet.</div>
+                weeklyTrend.length === 0 ? (
+                  <div className="mt-3 text-[12px] text-neutral-400">{DASH}</div>
+                ) : (
+                  <div className="mt-3 overflow-hidden rounded-lg border border-neutral-100">
+                    <div className="grid grid-cols-[0.7fr_1fr_1fr_1.2fr_1fr] bg-neutral-50 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      <div>Week</div>
+                      <div className="text-right">Cash</div>
+                      <div className="text-right">Cash after debt</div>
+                      <div className="text-right">Cash + assets after debt</div>
+                      <div className="text-right">Δ Cash WoW</div>
+                    </div>
+                    {weeklyTrend.map((w, i) => {
+                      const isCurrent = i === weeklyTrend.length - 1;
+                      const wowPos = w.wowAbs != null && w.wowAbs >= 0;
+                      return (
+                        <div
+                          key={w.label}
+                          className={`grid grid-cols-[0.7fr_1fr_1fr_1.2fr_1fr] items-center border-t border-neutral-100 px-4 py-3 text-[12px] ${
+                            isCurrent ? "bg-neutral-50/60" : ""
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium text-neutral-900">
+                              {w.label}{" "}
+                              {isCurrent && (
+                                <span className="ml-1 text-[10px] font-medium text-emerald-600">current</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-neutral-400">{w.range}</div>
+                          </div>
+                          <div className="text-right tabular-nums font-semibold">{fmt(w.cash)}</div>
+                          <div className="text-right tabular-nums text-neutral-700">{fmt(w.cashAfterDebt)}</div>
+                          <div className="text-right tabular-nums text-neutral-700">{fmt(w.cashPlusAssetsAfterDebt)}</div>
+                          <div className="text-right tabular-nums">
+                            <span className={wowPos ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                              {w.wowAbs == null ? DASH : `${wowPos ? "+" : "-"}${fmt(Math.abs(w.wowAbs)).replace(/^[-]/, "")}`}
+                            </span>{" "}
+                            <span className="text-[10px] text-neutral-400">
+                              {w.wowPct == null ? "" : `(${fmtPct(w.wowPct)})`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
