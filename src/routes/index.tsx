@@ -2,6 +2,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
-    throw redirect({ to: "/overview-dashboard" });
+    throw redirect({ to: "/overview-dashboard", search: { preset: "mtd", from: "", to: "" } });
   },
 });
