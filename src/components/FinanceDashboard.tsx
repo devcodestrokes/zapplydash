@@ -697,7 +697,28 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const twTotalAdSpend     = effectiveTWData?.filter(t => t.live && t.adSpend     != null).reduce((s, t) => s + (t.adSpend     ?? 0), 0) || null;
   const liveLoop        = subData.find(s => s.market === "UK") ?? null;
   const liveJuo         = subData.find(s => s.market === "NL") ?? null;
-  const liveMRR         = subData.length > 0 ? subData.reduce((s, m) => s + (m.mrr ?? 0), 0) : null;
+  // FX rates from Shopify markets (currency → EUR rate). Subscription rows
+  // come from Loop (GBP/USD/EUR) and Juo (EUR) without their own FX, so we
+  // borrow rates from the matching Shopify market when available.
+  const fxRateByMarket: Record<string, number> = {};
+  for (const m of (liveMarkets ?? [])) {
+    if (m?.code && typeof m.fxRate === "number") fxRateByMarket[m.code] = m.fxRate;
+  }
+  const fallbackFx: Record<string, number> = { EUR: 1, GBP: 1.17, USD: 0.92 };
+  const subToEUR = (m: any): number => {
+    const native = m?.mrr ?? 0;
+    if (!native) return 0;
+    const code = m?.market;
+    const cur = m?.currency ?? "EUR";
+    if (cur === "EUR") return native;
+    const rate = fxRateByMarket[code] ?? fallbackFx[cur] ?? 1;
+    return native * rate;
+  };
+  // Decorate subData with eurMrr for downstream calculations
+  const subDataEUR = subData.map((m: any) => ({ ...m, mrrEUR: subToEUR(m) }));
+  const liveMRR         = subDataEUR.length > 0
+    ? +subDataEUR.reduce((s, m) => s + (m.mrrEUR ?? 0), 0).toFixed(2)
+    : null;
   const revenueBreakdownMarkets = effectiveMarkets?.filter(m => m.live) ?? [];
 
   // ─── Today's Profit (est.) — uses cached daily Shopify revenue + TW ad spend ───
@@ -1192,14 +1213,15 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
 
           <div className="mt-5 border-t border-neutral-100 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
             <span className="text-neutral-400 font-medium">Split:</span>
-            {subData.map(m => {
+            {subDataEUR.map(m => {
               const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
-              const sharePct = liveMRR > 0 ? Math.round(((m.mrr ?? 0) / liveMRR) * 100) : 0;
+              const sharePct = liveMRR > 0 ? Math.round(((m.mrrEUR ?? 0) / liveMRR) * 100) : 0;
               const mrrLabel = (m.mrr ?? 0) >= 1000 ? `${sym}${((m.mrr ?? 0)/1000).toFixed(0)}k` : `${sym}${Math.round(m.mrr ?? 0)}`;
+              const eurLabel = m.currency !== "EUR" && m.mrrEUR ? ` (€${Math.round(m.mrrEUR).toLocaleString()})` : "";
               return (
                 <span key={m.market} className="inline-flex items-center gap-1.5">
                   <span className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">{m.flag} {m.market}</span>
-                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR</span>
+                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR{eurLabel}</span>
                   <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">{sharePct}%</span>
                 </span>
               );
@@ -1347,7 +1369,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <div className="h-56">
           {chartsReady && (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={subData.map(m => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrr ?? 0), subs: m.activeSubs ?? 0 }))}>
+              <ComposedChart data={subDataEUR.map((m: any) => ({ name: `${m.flag} ${m.market}`, mrr: Math.round(m.mrrEUR ?? 0), subs: m.activeSubs ?? 0 }))}>
                 <CartesianGrid stroke="#f3f4f6" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                 <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
