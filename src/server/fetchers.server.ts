@@ -139,7 +139,7 @@ const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null, until?: string |
       totalDiscountsSet{ shopMoney { amount } }
       totalRefundedSet { shopMoney { amount } }
       createdAt
-      customer { id }
+      customer { id numberOfOrders }
     }}
   }
 }`;
@@ -826,9 +826,12 @@ async function _fetchJuo() {
   const JUO_BASE = "https://api.juo.io";
   const headers  = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
   const allSubs: any[] = [];
-  const MAX_PAGES = 100;
+  const MAX_PAGES = 300;
   // Always build absolute URLs — Juo's Link header returns relative paths
-  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100`;
+  // Fetch the active book directly. Pulling every historical cancelled/expired
+  // subscription first can cap the response before all active subscriptions are
+  // seen, which makes MRR and active-subscriber finance metrics inaccurate.
+  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100&status=active`;
   let page = 0;
 
   try {
@@ -894,7 +897,7 @@ async function _fetchJuo() {
     const currency = activeSubs[0]?.currencyCode ?? "EUR";
 
     return [{
-      market: "NL", flag: "🇳🇱", platform: "juo", live: true,
+      market: "NL", flag: "🇳🇱", platform: "juo", live: true, calcVersion: 2,
       mrr: +mrr.toFixed(2), activeSubs: activeSubs.length,
       pausedSubs: pausedSubs.length, canceledSubs: canceledSubs.length,
       totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
@@ -925,21 +928,23 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const now        = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const allSubs: any[] = [];
-  const MAX_PAGES = 60;
+  const MAX_PAGES = 500;
+  const PAGE_SIZE = 200;
   let apiReached  = false; // true once we get at least one 200 response
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     // Loop rate limit: ~1 req/s — wait 600ms between every page
     if (page > 1) await new Promise(r => setTimeout(r, 600));
 
-    let res: Response = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, {
+    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
+    let res: Response = await fetch(url, {
       headers, cache: "no-store",
     });
 
     // On 429: wait 15s and retry once — if still 429, stop gracefully with data collected so far
     if (res.status === 429) {
       await new Promise(r => setTimeout(r, 15000));
-      res = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
+      res = await fetch(url, { headers, cache: "no-store" });
     }
     if (res.status === 429) {
       console.warn(`Loop ${market}: rate-limited at page ${page}, returning ${allSubs.length} subs collected so far`);
@@ -952,15 +957,16 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     const json   = await res.json();
     const batch: any[] = json.data ?? [];
     allSubs.push(...batch);
-    if (!json.pageInfo?.hasNextPage || batch.length === 0) break;
+    const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
+    if (!hasNext || batch.length === 0) break;
   }
 
   // Return null only if the API never responded (key invalid / network error)
   if (!apiReached) return null;
 
   const currency         = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
-  const activeSubs       = allSubs.filter(s => s.status === "ACTIVE");
-  const canceledSubs     = allSubs.filter(s => s.status === "CANCELLED");
+  const activeSubs       = allSubs.filter(s => (s.status ?? "").toUpperCase() === "ACTIVE");
+  const canceledSubs: any[] = [];
   const mrr              = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
   const newThisMonth     = allSubs.filter(s => s.createdAt && new Date(s.createdAt) >= monthStart).length;
   const churnedThisMonth = canceledSubs.filter(s => s.cancelledAt && new Date(s.cancelledAt) >= monthStart).length;
@@ -970,7 +976,7 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     : null;
 
   return {
-    market, flag, platform: "loop", live: true,
+    market, flag, platform: "loop", live: true, calcVersion: 2,
     mrr: Math.round(mrr), activeSubs: activeSubs.length,
     totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
     arpu: arpu != null ? +arpu.toFixed(2) : null, churnRate, currency,
@@ -2162,8 +2168,10 @@ export async function fetchShopifyRepeatFunnel() {
   const sinceDate = daysAgoIso(lookbackDays);
   const since = `${sinceDate}T00:00:00Z`;
 
-  // customerId → sorted list of order createdAt timestamps (across all stores).
-  const customerOrders = new Map<string, string[]>();
+  // customerId → sorted list of observed order timestamps + Shopify's lifetime
+  // order count. Lifetime count prevents a truncated lookback window from
+  // pretending older customers are new first-time buyers.
+  const customerOrders = new Map<string, { dates: string[]; lifetimeOrders: number }>();
 
   for (const { code, storeKey } of SHOPIFY_STORES) {
     const store = process.env[storeKey];
@@ -2198,9 +2206,11 @@ export async function fetchShopifyRepeatFunnel() {
         for (const { node: o } of edges) {
           const cid = o.customer?.id;
           if (!cid) continue;
-          const arr = customerOrders.get(cid) ?? [];
-          arr.push(o.createdAt);
-          customerOrders.set(cid, arr);
+          const lifetimeOrders = Number(o.customer?.numberOfOrders ?? 0) || 0;
+          const entry = customerOrders.get(cid) ?? { dates: [], lifetimeOrders: 0 };
+          entry.dates.push(o.createdAt);
+          entry.lifetimeOrders = Math.max(entry.lifetimeOrders, lifetimeOrders, entry.dates.length);
+          customerOrders.set(cid, entry);
         }
       }
     } catch (err: any) {
@@ -2210,8 +2220,8 @@ export async function fetchShopifyRepeatFunnel() {
 
   if (customerOrders.size === 0) return null;
 
-  // Sort each customer's order timeline ascending
-  for (const arr of customerOrders.values()) arr.sort();
+  // Sort each customer's observed order timeline ascending
+  for (const entry of customerOrders.values()) entry.dates.sort();
 
   const now = Date.now();
   const DAY = 86_400_000;
@@ -2232,7 +2242,13 @@ export async function fetchShopifyRepeatFunnel() {
   };
 
   const cohortBuckets = new Map<string, string[][]>(); // monthKey → array of customer order arrays
-  for (const orders of customerOrders.values()) {
+  for (const entry of customerOrders.values()) {
+    const orders = entry.dates;
+    if (orders.length === 0) continue;
+    // If Shopify says the customer has more lifetime orders than we fetched in
+    // the lookback, their first order is outside this dataset, so exclude them
+    // from first-time-buyer cohorts instead of inflating recent cohort sizes.
+    if (entry.lifetimeOrders > orders.length) continue;
     const first = new Date(orders[0]);
     if (first.getTime() <= datasetEdgeTs) continue;
     const key = monthKeyFromDate(first);
@@ -2316,6 +2332,7 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
+    calcVersion: 2,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
