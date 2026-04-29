@@ -438,15 +438,39 @@ export async function fetchTripleWhale(
       const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
       if (!shop) return { market, flag, live: false };
 
-      try {
+      // Triple Whale's summary-page endpoint returns 698 metrics; under load it
+      // can routinely take 30–50s. Use a 60s timeout and retry once on abort to
+      // avoid blanking the dashboard on a single slow response.
+      const TW_TIMEOUT_MS = 60_000;
+      const callTW = async () => {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 20_000); // 20s per store
-        const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
-          method: "POST",
-          headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
-          signal: ctrl.signal,
-        }).finally(() => clearTimeout(timer));
+        const timer = setTimeout(() => ctrl.abort(), TW_TIMEOUT_MS);
+        try {
+          return await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
+            method: "POST",
+            headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+            signal: ctrl.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      try {
+        let res: Response;
+        try {
+          res = await callTW();
+        } catch (firstErr: any) {
+          // Retry once on abort/network errors before giving up
+          const msg = firstErr?.message || String(firstErr);
+          if (/abort|timeout|network/i.test(msg)) {
+            console.warn(`Triple Whale ${market} first attempt failed (${msg}), retrying...`);
+            res = await callTW();
+          } else {
+            throw firstErr;
+          }
+        }
 
         if (!res.ok) {
           const body = await res.text();
