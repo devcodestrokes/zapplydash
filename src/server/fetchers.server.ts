@@ -2317,9 +2317,10 @@ export async function fetchShopifyRepeatFunnel() {
 
   return {
     cohortSize,
-    cohortWindowDays: 30,
-    cohortStartedDaysAgo: 120,
-    cohortEndedDaysAgo: 90,
+    cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
+    cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
+    cohortStartedDaysAgo: selectedCohort ? Math.floor((now - selectedCohort.start.getTime()) / DAY) : 0,
+    cohortEndedDaysAgo: selectedCohort ? selectedCohort.daysSinceEnd : 0,
     funnel,
     monthlyCohorts,
     totalCustomersAnalyzed: customerOrders.size,
