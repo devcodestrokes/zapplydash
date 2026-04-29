@@ -2168,8 +2168,10 @@ export async function fetchShopifyRepeatFunnel() {
   const sinceDate = daysAgoIso(lookbackDays);
   const since = `${sinceDate}T00:00:00Z`;
 
-  // customerId → sorted list of order createdAt timestamps (across all stores).
-  const customerOrders = new Map<string, string[]>();
+  // customerId → sorted list of observed order timestamps + Shopify's lifetime
+  // order count. Lifetime count prevents a truncated lookback window from
+  // pretending older customers are new first-time buyers.
+  const customerOrders = new Map<string, { dates: string[]; lifetimeOrders: number }>();
 
   for (const { code, storeKey } of SHOPIFY_STORES) {
     const store = process.env[storeKey];
@@ -2204,9 +2206,11 @@ export async function fetchShopifyRepeatFunnel() {
         for (const { node: o } of edges) {
           const cid = o.customer?.id;
           if (!cid) continue;
-          const arr = customerOrders.get(cid) ?? [];
-          arr.push(o.createdAt);
-          customerOrders.set(cid, arr);
+          const lifetimeOrders = Number(o.customer?.numberOfOrders ?? 0) || 0;
+          const entry = customerOrders.get(cid) ?? { dates: [], lifetimeOrders: 0 };
+          entry.dates.push(o.createdAt);
+          entry.lifetimeOrders = Math.max(entry.lifetimeOrders, lifetimeOrders, entry.dates.length);
+          customerOrders.set(cid, entry);
         }
       }
     } catch (err: any) {
@@ -2216,8 +2220,8 @@ export async function fetchShopifyRepeatFunnel() {
 
   if (customerOrders.size === 0) return null;
 
-  // Sort each customer's order timeline ascending
-  for (const arr of customerOrders.values()) arr.sort();
+  // Sort each customer's observed order timeline ascending
+  for (const entry of customerOrders.values()) entry.dates.sort();
 
   const now = Date.now();
   const DAY = 86_400_000;
