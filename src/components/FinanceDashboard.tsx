@@ -836,6 +836,32 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             )}
           </div>
         </div>
+        <div className="mt-3 overflow-hidden rounded-lg border border-neutral-100">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="bg-neutral-50 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                <th className="px-3 py-2 text-left">API feed</th>
+                <th className="px-3 py-2 text-left">Expected data</th>
+                <th className="px-3 py-2 text-right">Rows</th>
+                <th className="px-3 py-2 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboardDiagnostics.apiRows.map((s: any) => (
+                <tr key={`${s.provider}-${s.key}`} className="border-t border-neutral-100">
+                  <td className="px-3 py-2 font-medium text-neutral-700">{s.label}</td>
+                  <td className="px-3 py-2 text-neutral-500">{s.error ?? s.expected}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">{s.rowCount ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${s.status === "healthy" ? "bg-emerald-50 text-emerald-700" : s.status === "degraded" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     )}
 
