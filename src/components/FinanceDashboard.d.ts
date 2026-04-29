@@ -17,6 +17,16 @@ interface LiveData {
   xero?: Record<string, any> | null;
 }
 
+export function OverviewView(props?: {
+  range?: string;
+  setRange?: (r: string) => void;
+  data?: any[];
+  totals?: any;
+  liveMarkets?: any[] | null;
+  twData?: any[];
+  loopData?: any[] | null;
+}): React.JSX.Element;
+
 export function MarketsView(props?: {
   liveMarkets?: any[] | null;
   twData?: any[];
