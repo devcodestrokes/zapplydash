@@ -28,18 +28,66 @@ interface Job {
 }
 
 const ALL_JOBS: Job[] = [
-  { name: "shopify_markets", provider: "shopify",     key: "markets",       fn: () => fetchShopifyMarkets(), maxAgeMin: 30 },
-  { name: "shopify_monthly", provider: "shopify",     key: "monthly",       fn: fetchShopifyMonthly,         maxAgeMin: 60 },
-  { name: "shopify_today",   provider: "shopify",     key: "today",         fn: fetchShopifyToday,           maxAgeMin: 10 },
-  { name: "shopify_daily",   provider: "shopify",     key: "daily",         fn: fetchShopifyDaily,           maxAgeMin: 720 },
-  { name: "shopify_repeat_funnel", provider: "shopify", key: "repeat_funnel", fn: fetchShopifyRepeatFunnel,  maxAgeMin: 720 },
-  { name: "triplewhale",     provider: "triplewhale", key: "summary",       fn: () => fetchTripleWhale(),    maxAgeMin: 30 },
-  { name: "triplewhale_customer_economics", provider: "triplewhale", key: "customer_economics", fn: fetchTripleWhaleCustomerEconomics, maxAgeMin: 720 },
-  { name: "triplewhale_daily", provider: "triplewhale", key: "daily",       fn: fetchTripleWhaleDaily,       maxAgeMin: 720 },
-  { name: "jortt",           provider: "jortt",       key: "invoices",      fn: fetchJortt,                  maxAgeMin: 60 },
-  { name: "juo",             provider: "juo",         key: "subscriptions", fn: fetchJuoRaw,                 maxAgeMin: 60 },
-  { name: "loop",            provider: "loop",        key: "subscriptions", fn: fetchLoopRaw,                maxAgeMin: 60 },
-  { name: "xero",            provider: "xero",        key: "accounting",    fn: fetchXero,                   maxAgeMin: 60 },
+  {
+    name: "shopify_markets",
+    provider: "shopify",
+    key: "markets",
+    fn: () => fetchShopifyMarkets(),
+    maxAgeMin: 30,
+  },
+  {
+    name: "shopify_monthly",
+    provider: "shopify",
+    key: "monthly",
+    fn: fetchShopifyMonthly,
+    maxAgeMin: 60,
+  },
+  {
+    name: "shopify_today",
+    provider: "shopify",
+    key: "today",
+    fn: fetchShopifyToday,
+    maxAgeMin: 10,
+  },
+  {
+    name: "shopify_daily",
+    provider: "shopify",
+    key: "daily",
+    fn: fetchShopifyDaily,
+    maxAgeMin: 720,
+  },
+  {
+    name: "shopify_repeat_funnel",
+    provider: "shopify",
+    key: "repeat_funnel",
+    fn: fetchShopifyRepeatFunnel,
+    maxAgeMin: 720,
+  },
+  {
+    name: "triplewhale",
+    provider: "triplewhale",
+    key: "summary",
+    fn: () => fetchTripleWhale(),
+    maxAgeMin: 30,
+  },
+  {
+    name: "triplewhale_customer_economics",
+    provider: "triplewhale",
+    key: "customer_economics",
+    fn: fetchTripleWhaleCustomerEconomics,
+    maxAgeMin: 720,
+  },
+  {
+    name: "triplewhale_daily",
+    provider: "triplewhale",
+    key: "daily",
+    fn: fetchTripleWhaleDaily,
+    maxAgeMin: 720,
+  },
+  { name: "jortt", provider: "jortt", key: "invoices", fn: fetchJortt, maxAgeMin: 60 },
+  { name: "juo", provider: "juo", key: "subscriptions", fn: fetchJuoRaw, maxAgeMin: 60 },
+  { name: "loop", provider: "loop", key: "subscriptions", fn: fetchLoopRaw, maxAgeMin: 60 },
+  { name: "xero", provider: "xero", key: "accounting", fn: fetchXero, maxAgeMin: 60 },
 ];
 
 async function runJob(job: Job): Promise<void> {
@@ -62,7 +110,7 @@ async function runJob(job: Job): Promise<void> {
           !(existingRow.payload as any).__error;
         if (hasGoodPrevious) {
           console.warn(
-            `[sync] ${job.name} returned no data — keeping previous cached payload (fetched ${existingRow!.fetchedAt})`
+            `[sync] ${job.name} returned no data — keeping previous cached payload (fetched ${existingRow!.fetchedAt})`,
           );
         } else {
           await writeCache(job.provider, job.key, {
@@ -137,11 +185,34 @@ export function refreshStaleInBackground(cache: CacheMap): void {
     const age = ageMinutes(entry?.fetchedAt);
     const payload = entry?.payload as any;
     const needsFreshCalc =
-      (job.provider === "loop" && job.key === "subscriptions" && !Array.isArray(payload?.__empty) && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 3)) ||
-      (job.provider === "juo" && job.key === "subscriptions" && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 2)) ||
-      (job.provider === "shopify" && job.key === "monthly" && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 2)) ||
-      (job.provider === "shopify" && job.key === "daily" && payload && !payload.__empty && !payload.__error && payload.calcVersion !== 2) ||
-      (job.provider === "shopify" && job.key === "repeat_funnel" && payload && !payload.__empty && !payload.__error && payload.calcVersion !== 4);
+      (job.provider === "loop" &&
+        job.key === "subscriptions" &&
+        !Array.isArray(payload?.__empty) &&
+        !payload?.__error &&
+        Array.isArray(payload) &&
+        payload.some((row: any) => row?.calcVersion !== 3)) ||
+      (job.provider === "juo" &&
+        job.key === "subscriptions" &&
+        !payload?.__error &&
+        Array.isArray(payload) &&
+        payload.some((row: any) => row?.calcVersion !== 2)) ||
+      (job.provider === "shopify" &&
+        job.key === "monthly" &&
+        !payload?.__error &&
+        Array.isArray(payload) &&
+        payload.some((row: any) => row?.calcVersion !== 2)) ||
+      (job.provider === "shopify" &&
+        job.key === "daily" &&
+        payload &&
+        !payload.__empty &&
+        !payload.__error &&
+        payload.calcVersion !== 2) ||
+      (job.provider === "shopify" &&
+        job.key === "repeat_funnel" &&
+        payload &&
+        !payload.__empty &&
+        !payload.__error &&
+        payload.calcVersion !== 4);
     if (!entry || age > job.maxAgeMin || needsFreshCalc) {
       void runJob(job);
     }

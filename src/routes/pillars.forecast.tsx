@@ -12,7 +12,17 @@ import {
   Line,
   Area,
 } from "recharts";
-import { Sparkles, Target, Users, Building2, Clapperboard, Laptop, ClipboardList, Wallet, Info } from "lucide-react";
+import {
+  Sparkles,
+  Target,
+  Users,
+  Building2,
+  Clapperboard,
+  Laptop,
+  ClipboardList,
+  Wallet,
+  Info,
+} from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
@@ -39,7 +49,9 @@ function fmtSigned(n: number | null | undefined) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>;
+  return (
+    <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>
+  );
 }
 
 type WeekRow = {
@@ -72,17 +84,26 @@ function ForecastPage() {
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const { weeks, totals, startCash, monthlyAvgRev, momTrend } = useMemo(() => {
     const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
-    const xero = data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error ? data.xero : null;
+    const xero =
+      data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
+        ? data.xero
+        : null;
 
     const lastN = shopifyMonthly.slice(-3);
-    const avgRev = lastN.length ? lastN.reduce((s, r) => s + (r.revenue ?? 0), 0) / lastN.length : 0;
+    const avgRev = lastN.length
+      ? lastN.reduce((s, r) => s + (r.revenue ?? 0), 0) / lastN.length
+      : 0;
     const prevN = shopifyMonthly.slice(-6, -3);
-    const prevAvg = prevN.length ? prevN.reduce((s, r) => s + (r.revenue ?? 0), 0) / prevN.length : avgRev;
+    const prevAvg = prevN.length
+      ? prevN.reduce((s, r) => s + (r.revenue ?? 0), 0) / prevN.length
+      : avgRev;
     const mom = prevAvg > 0 ? (avgRev - prevAvg) / prevAvg : 0.04;
 
     const cash0 = xero?.cashBalance ?? 0;
@@ -125,7 +146,13 @@ function ForecastPage() {
 
     return {
       weeks: rows,
-      totals: { inflow: totalIn, outflow: totalOut, net: totalIn - totalOut, ending: rows.at(-1)?.cumulative ?? cash0, endingWeek: rows.at(-1)?.weekNo ?? 0 },
+      totals: {
+        inflow: totalIn,
+        outflow: totalOut,
+        net: totalIn - totalOut,
+        ending: rows.at(-1)?.cumulative ?? cash0,
+        endingWeek: rows.at(-1)?.weekNo ?? 0,
+      },
       startCash: cash0,
       monthlyAvgRev: avgRev,
       momTrend: mom,
@@ -138,12 +165,66 @@ function ForecastPage() {
     const flexBudget = Math.max(monthRev * 0.18, 200); // 18% of revenue available as flex
     // Categories — Fixed values are static contracts (placeholder), Flex scale w/ revenue
     const cats = [
-      { key: "ad",       icon: Target,        name: "Ad spend",              sub: "Meta, Google, TikTok",           type: "flex",  budget: Math.round(flexBudget * 0.55), spent: 0, color: "emerald" },
-      { key: "team",     icon: Users,         name: "Team",                   sub: "Freelancers + management fee · mostly locked in", type: "fixed", budget: 63,  spent: 62, color: "rose" },
-      { key: "agency",   icon: Building2,     name: "Agencies",               sub: "Agency A, Agency B, Agency C",   type: "flex",  budget: 22,  spent: 21, color: "rose" },
-      { key: "content",  icon: Clapperboard,  name: "Content samenwerkingen", sub: "Creators, content shoots, influencer fees", type: "flex", budget: Math.round(flexBudget * 0.22), spent: 0, color: "emerald" },
-      { key: "soft",     icon: Laptop,        name: "Software",               sub: "Recurring SaaS · mostly locked", type: "fixed", budget: 16,  spent: 15, color: "amber" },
-      { key: "other",    icon: ClipboardList, name: "Other (rent, travel, legal)", sub: "Office, legal, insurance, bank costs", type: "fixed", budget: 40, spent: 38, color: "rose" },
+      {
+        key: "ad",
+        icon: Target,
+        name: "Ad spend",
+        sub: "Meta, Google, TikTok",
+        type: "flex",
+        budget: Math.round(flexBudget * 0.55),
+        spent: 0,
+        color: "emerald",
+      },
+      {
+        key: "team",
+        icon: Users,
+        name: "Team",
+        sub: "Freelancers + management fee · mostly locked in",
+        type: "fixed",
+        budget: 63,
+        spent: 62,
+        color: "rose",
+      },
+      {
+        key: "agency",
+        icon: Building2,
+        name: "Agencies",
+        sub: "Agency A, Agency B, Agency C",
+        type: "flex",
+        budget: 22,
+        spent: 21,
+        color: "rose",
+      },
+      {
+        key: "content",
+        icon: Clapperboard,
+        name: "Content samenwerkingen",
+        sub: "Creators, content shoots, influencer fees",
+        type: "flex",
+        budget: Math.round(flexBudget * 0.22),
+        spent: 0,
+        color: "emerald",
+      },
+      {
+        key: "soft",
+        icon: Laptop,
+        name: "Software",
+        sub: "Recurring SaaS · mostly locked",
+        type: "fixed",
+        budget: 16,
+        spent: 15,
+        color: "amber",
+      },
+      {
+        key: "other",
+        icon: ClipboardList,
+        name: "Other (rent, travel, legal)",
+        sub: "Office, legal, insurance, bank costs",
+        type: "fixed",
+        budget: 40,
+        spent: 38,
+        color: "rose",
+      },
     ].map((c) => {
       // For flex categories, derive spent ~ 66% of budget so far in month
       const spent = c.type === "flex" ? Math.round(c.budget * 0.66) : c.spent;
@@ -163,7 +244,9 @@ function ForecastPage() {
           <SkeletonBox className="h-8 w-64" />
           <SkeletonBox className="h-4 w-96" />
           <div className="space-y-3 mt-6">
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonBox key={i} className="h-24" />)}
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonBox key={i} className="h-24" />
+            ))}
           </div>
           <SkeletonBox className="h-80 mt-3" />
         </div>
@@ -172,7 +255,9 @@ function ForecastPage() {
   }
 
   const trendPct = (momTrend * 100).toFixed(1);
-  const monthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "2-digit" }).replace(" ", " '");
+  const monthLabel = new Date()
+    .toLocaleDateString("en-US", { month: "long", year: "2-digit" })
+    .replace(" ", " '");
 
   return (
     <DashboardShell user={user} title="Forecast">
@@ -182,7 +267,9 @@ function ForecastPage() {
           <div>
             <div className="text-[12px] font-medium text-neutral-400">Pillar 5</div>
             <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Forecast</h1>
-            <p className="mt-1 text-[13px] text-neutral-500">Trend-based projection with configurable assumptions</p>
+            <p className="mt-1 text-[13px] text-neutral-500">
+              Trend-based projection with configurable assumptions
+            </p>
           </div>
           <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-1 text-[12px] font-medium">
             <button
@@ -203,178 +290,291 @@ function ForecastPage() {
         {tab === "growth" ? (
           <GrowthPlan2026 data={data} />
         ) : (
-        <>
-        {/* Method banner */}
-        <Card className="mt-5 p-4">
-          <div className="flex items-start gap-3">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100">
-              <Sparkles className="h-4 w-4 text-neutral-600" />
-            </div>
-            <div className="text-[13px]">
-              <div className="font-semibold text-neutral-900">
-                Forecast method: Trend + seasonality · Backtest MAE last 4 weeks: <span className="text-amber-600">14.2%</span>
-              </div>
-              <div className="text-neutral-500 mt-0.5">
-                Shaded bands show ±1 std dev confidence range. Edit assumptions in the panel below to model scenarios.
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* KPI stacked cards */}
-        <div className="mt-3 space-y-3">
-          <Card className="px-5 py-4">
-            <div className="text-[12px] text-neutral-500">Total inflow (13w)</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-600">{fmtMoney(totals.inflow)}</div>
-          </Card>
-          <Card className="px-5 py-4">
-            <div className="text-[12px] text-neutral-500">Total outflow (13w)</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums text-rose-600">{fmtMoney(totals.outflow)}</div>
-          </Card>
-          <Card className="px-5 py-4">
-            <div className="text-[12px] text-neutral-500">Net change</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtSigned(totals.net)}</div>
-          </Card>
-          <Card className="px-5 py-4">
-            <div className="text-[12px] text-neutral-500">Ending cash (W{totals.endingWeek})</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtMoney(totals.ending)}</div>
-          </Card>
-        </div>
-
-        {/* 13-week chart */}
-        <Card className="mt-3 p-5">
-          <div className="mb-4">
-            <div className="text-[14px] font-semibold">13-week rolling cashflow</div>
-            <div className="text-[12px] text-neutral-400">Weekly inflows, outflows and cumulative cash position</div>
-          </div>
-          <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
-              <ComposedChart data={weeks} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
-                <CartesianGrid stroke="#f4f4f5" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `€${Math.round(v / 1000)}k`} />
-                <Tooltip
-                  contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
-                  formatter={(v: any) => (v == null ? "—" : `€${Number(v).toLocaleString()}`)}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
-                <Area type="monotone" dataKey="upper" stroke="none" fill="#10b981" fillOpacity={0.08} name="Upper band" legendType="none" />
-                <Area type="monotone" dataKey="lower" stroke="none" fill="#ffffff" fillOpacity={1} name="Lower band" legendType="none" />
-                <Bar dataKey="inflow" name="Inflow" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                <Bar dataKey="outflow" name="Outflow" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={20} />
-                <Line type="monotone" dataKey="cumulative" name="Cumulative cash" stroke="#171717" strokeWidth={2.5} dot={{ r: 3 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Spending allowance */}
-        <Card className="mt-3 p-5 bg-emerald-50/30 border-emerald-100/60">
-          <div className="flex items-start justify-between flex-wrap gap-3">
-            <div className="flex items-start gap-3">
-              <Wallet className="h-5 w-5 text-emerald-600 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="text-[14px] font-semibold">This month's spending allowance</div>
-                  <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">Dynamic · {monthLabel}</span>
+          <>
+            {/* Method banner */}
+            <Card className="mt-5 p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100">
+                  <Sparkles className="h-4 w-4 text-neutral-600" />
                 </div>
-                <div className="text-[12px] text-neutral-500 mt-0.5">How much you can commit this month per category · adjusts with forecast revenue &amp; cash</div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-wide text-neutral-400">Total available</div>
-              <div className="text-[24px] font-semibold tabular-nums">{fmtMoney(allowance.totalBudget)}</div>
-              <div className="text-[11px] text-neutral-500">{fmtMoney(allowance.totalSpent)} committed · {fmtMoney(allowance.totalLeft)} free</div>
-            </div>
-          </div>
-        </Card>
-
-        <div className="mt-3 space-y-3">
-          {allowance.cats.map((c) => {
-            const Icon = c.icon;
-            const barColor =
-              c.color === "emerald" ? "bg-emerald-500" :
-              c.color === "rose"    ? "bg-rose-500" :
-              c.color === "amber"   ? "bg-amber-500" : "bg-neutral-500";
-            const leftPill =
-              c.color === "emerald" ? "bg-emerald-50 text-emerald-700" :
-              c.color === "rose"    ? "bg-rose-50 text-rose-700" :
-              c.color === "amber"   ? "bg-amber-50 text-amber-700" : "bg-neutral-50 text-neutral-600";
-            return (
-              <Card key={c.key} className="p-4">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100 shrink-0">
-                      <Icon className="h-4 w-4 text-neutral-700" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-[14px] font-semibold">{c.name}</div>
-                        {c.type === "fixed" && (
-                          <span className="rounded-full bg-neutral-100 text-neutral-600 px-2 py-0.5 text-[10px] font-medium">Fixed</span>
-                        )}
-                      </div>
-                      <div className="text-[12px] text-neutral-500 mt-0.5">{c.sub}</div>
-                    </div>
+                <div className="text-[13px]">
+                  <div className="font-semibold text-neutral-900">
+                    Forecast method: Trend + seasonality · Backtest MAE last 4 weeks:{" "}
+                    <span className="text-amber-600">14.2%</span>
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${leftPill}`}>{fmtMoney(c.left)} left</span>
-                    <div className="text-[12px] text-neutral-600 mt-1 tabular-nums">{fmtMoney(c.spent)} / {fmtMoney(c.budget)}</div>
+                  <div className="text-neutral-500 mt-0.5">
+                    Shaded bands show ±1 std dev confidence range. Edit assumptions in the panel
+                    below to model scenarios.
                   </div>
                 </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                    <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${c.pct}%` }} />
-                  </div>
-                  <div className="text-[12px] text-neutral-500 tabular-nums w-10 text-right">{c.pct}%</div>
+              </div>
+            </Card>
+
+            {/* KPI stacked cards */}
+            <div className="mt-3 space-y-3">
+              <Card className="px-5 py-4">
+                <div className="text-[12px] text-neutral-500">Total inflow (13w)</div>
+                <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-600">
+                  {fmtMoney(totals.inflow)}
                 </div>
               </Card>
-            );
-          })}
-        </div>
-
-        <Card className="mt-3 p-4">
-          <div className="flex items-start gap-2 text-[12px] text-neutral-600">
-            <Info className="h-4 w-4 mt-0.5 text-neutral-400 shrink-0" />
-            <div>
-              <span className="font-semibold">How this updates:</span> Fixed categories (Team, Software, Other) are locked against contracts. Flex categories (Ad spend, Agencies, Content) recalculate weekly based on forecast revenue, target contribution margin, and current cash runway. If revenue drops, flex allowances drop with it.
+              <Card className="px-5 py-4">
+                <div className="text-[12px] text-neutral-500">Total outflow (13w)</div>
+                <div className="mt-1 text-[22px] font-semibold tabular-nums text-rose-600">
+                  {fmtMoney(totals.outflow)}
+                </div>
+              </Card>
+              <Card className="px-5 py-4">
+                <div className="text-[12px] text-neutral-500">Net change</div>
+                <div className="mt-1 text-[22px] font-semibold tabular-nums">
+                  {fmtSigned(totals.net)}
+                </div>
+              </Card>
+              <Card className="px-5 py-4">
+                <div className="text-[12px] text-neutral-500">
+                  Ending cash (W{totals.endingWeek})
+                </div>
+                <div className="mt-1 text-[22px] font-semibold tabular-nums">
+                  {fmtMoney(totals.ending)}
+                </div>
+              </Card>
             </div>
-          </div>
-        </Card>
 
-        {/* Assumptions panel */}
-        <Card className="mt-6 p-5">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <div className="text-[14px] font-semibold">Assumptions panel</div>
-              <div className="text-[12px] text-neutral-500 mt-0.5">Adjust to model scenarios</div>
-            </div>
-            <button className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-50">
-              Save scenario
-            </button>
-          </div>
-          <div className="mt-4 space-y-3">
-            {[
-              { label: "Growth rate (MoM)", value: `+${trendPct}%`, sub: `Trailing trend: +${trendPct}%` },
-              { label: "Target ROAS", value: "4.0x", sub: "Current blended: 4.12x" },
-              { label: "Seasonality", value: "On", sub: "Dec +35%, summer −25%" },
-              { label: "Planned ad spend (May)", value: "€36,000", sub: "Up €1,320 from April" },
-              { label: "New hire (Jun)", value: "+€4,500/mo", sub: "Starts June 1" },
-              { label: "Supplier PO received (May)", value: "€52,000", sub: "Inventory cap" },
-            ].map((a) => (
-              <div key={a.label} className="rounded-lg border border-neutral-200 px-4 py-3">
-                <div className="text-[12px] text-neutral-500">{a.label}</div>
-                <div className="mt-1 text-[18px] font-semibold tabular-nums">{a.value}</div>
-                <div className="text-[11px] text-neutral-400 mt-0.5">{a.sub}</div>
+            {/* 13-week chart */}
+            <Card className="mt-3 p-5">
+              <div className="mb-4">
+                <div className="text-[14px] font-semibold">13-week rolling cashflow</div>
+                <div className="text-[12px] text-neutral-400">
+                  Weekly inflows, outflows and cumulative cash position
+                </div>
               </div>
-            ))}
-          </div>
-        </Card>
+              <div className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={320}>
+                  <ComposedChart data={weeks} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="#f4f4f5" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: "#a3a3a3", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "#a3a3a3", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) => `€${Math.round(v / 1000)}k`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "white",
+                        border: "1px solid #e5e5e5",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                      formatter={(v: any) => (v == null ? "—" : `€${Number(v).toLocaleString()}`)}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
+                    <Area
+                      type="monotone"
+                      dataKey="upper"
+                      stroke="none"
+                      fill="#10b981"
+                      fillOpacity={0.08}
+                      name="Upper band"
+                      legendType="none"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="lower"
+                      stroke="none"
+                      fill="#ffffff"
+                      fillOpacity={1}
+                      name="Lower band"
+                      legendType="none"
+                    />
+                    <Bar
+                      dataKey="inflow"
+                      name="Inflow"
+                      fill="#10b981"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={20}
+                    />
+                    <Bar
+                      dataKey="outflow"
+                      name="Outflow"
+                      fill="#f43f5e"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={20}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cumulative"
+                      name="Cumulative cash"
+                      stroke="#171717"
+                      strokeWidth={2.5}
+                      dot={{ r: 3 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
 
-        <div className="mt-6 text-center text-[11px] text-neutral-400">
-          Synced · {new Date().toLocaleString()} · Cash anchor: {fmtMoney(startCash)}
-        </div>
-        </>
+            {/* Spending allowance */}
+            <Card className="mt-3 p-5 bg-emerald-50/30 border-emerald-100/60">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div className="flex items-start gap-3">
+                  <Wallet className="h-5 w-5 text-emerald-600 mt-0.5" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-[14px] font-semibold">
+                        This month's spending allowance
+                      </div>
+                      <span className="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
+                        Dynamic · {monthLabel}
+                      </span>
+                    </div>
+                    <div className="text-[12px] text-neutral-500 mt-0.5">
+                      How much you can commit this month per category · adjusts with forecast
+                      revenue &amp; cash
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] uppercase tracking-wide text-neutral-400">
+                    Total available
+                  </div>
+                  <div className="text-[24px] font-semibold tabular-nums">
+                    {fmtMoney(allowance.totalBudget)}
+                  </div>
+                  <div className="text-[11px] text-neutral-500">
+                    {fmtMoney(allowance.totalSpent)} committed · {fmtMoney(allowance.totalLeft)}{" "}
+                    free
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <div className="mt-3 space-y-3">
+              {allowance.cats.map((c) => {
+                const Icon = c.icon;
+                const barColor =
+                  c.color === "emerald"
+                    ? "bg-emerald-500"
+                    : c.color === "rose"
+                      ? "bg-rose-500"
+                      : c.color === "amber"
+                        ? "bg-amber-500"
+                        : "bg-neutral-500";
+                const leftPill =
+                  c.color === "emerald"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : c.color === "rose"
+                      ? "bg-rose-50 text-rose-700"
+                      : c.color === "amber"
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-neutral-50 text-neutral-600";
+                return (
+                  <Card key={c.key} className="p-4">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100 shrink-0">
+                          <Icon className="h-4 w-4 text-neutral-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <div className="text-[14px] font-semibold">{c.name}</div>
+                            {c.type === "fixed" && (
+                              <span className="rounded-full bg-neutral-100 text-neutral-600 px-2 py-0.5 text-[10px] font-medium">
+                                Fixed
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[12px] text-neutral-500 mt-0.5">{c.sub}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${leftPill}`}
+                        >
+                          {fmtMoney(c.left)} left
+                        </span>
+                        <div className="text-[12px] text-neutral-600 mt-1 tabular-nums">
+                          {fmtMoney(c.spent)} / {fmtMoney(c.budget)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex-1 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
+                        <div
+                          className={`h-full ${barColor} rounded-full transition-all`}
+                          style={{ width: `${c.pct}%` }}
+                        />
+                      </div>
+                      <div className="text-[12px] text-neutral-500 tabular-nums w-10 text-right">
+                        {c.pct}%
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <Card className="mt-3 p-4">
+              <div className="flex items-start gap-2 text-[12px] text-neutral-600">
+                <Info className="h-4 w-4 mt-0.5 text-neutral-400 shrink-0" />
+                <div>
+                  <span className="font-semibold">How this updates:</span> Fixed categories (Team,
+                  Software, Other) are locked against contracts. Flex categories (Ad spend,
+                  Agencies, Content) recalculate weekly based on forecast revenue, target
+                  contribution margin, and current cash runway. If revenue drops, flex allowances
+                  drop with it.
+                </div>
+              </div>
+            </Card>
+
+            {/* Assumptions panel */}
+            <Card className="mt-6 p-5">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-[14px] font-semibold">Assumptions panel</div>
+                  <div className="text-[12px] text-neutral-500 mt-0.5">
+                    Adjust to model scenarios
+                  </div>
+                </div>
+                <button className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium text-neutral-700 hover:bg-neutral-50">
+                  Save scenario
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {[
+                  {
+                    label: "Growth rate (MoM)",
+                    value: `+${trendPct}%`,
+                    sub: `Trailing trend: +${trendPct}%`,
+                  },
+                  { label: "Target ROAS", value: "4.0x", sub: "Current blended: 4.12x" },
+                  { label: "Seasonality", value: "On", sub: "Dec +35%, summer −25%" },
+                  {
+                    label: "Planned ad spend (May)",
+                    value: "€36,000",
+                    sub: "Up €1,320 from April",
+                  },
+                  { label: "New hire (Jun)", value: "+€4,500/mo", sub: "Starts June 1" },
+                  { label: "Supplier PO received (May)", value: "€52,000", sub: "Inventory cap" },
+                ].map((a) => (
+                  <div key={a.label} className="rounded-lg border border-neutral-200 px-4 py-3">
+                    <div className="text-[12px] text-neutral-500">{a.label}</div>
+                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{a.value}</div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">{a.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <div className="mt-6 text-center text-[11px] text-neutral-400">
+              Synced · {new Date().toLocaleString()} · Cash anchor: {fmtMoney(startCash)}
+            </div>
+          </>
         )}
       </div>
     </DashboardShell>
@@ -386,14 +586,22 @@ function ForecastPage() {
 type MarketCode = "NL" | "UK" | "US" | "EU";
 type Market = { code: MarketCode; name: string; color: string; bar: string };
 const MARKETS: Market[] = [
-  { code: "NL", name: "Netherlands",    color: "bg-neutral-900", bar: "bg-neutral-900" },
-  { code: "UK", name: "United Kingdom", color: "bg-indigo-500",  bar: "bg-indigo-500" },
-  { code: "US", name: "United States",  color: "bg-amber-500",   bar: "bg-amber-500" },
-  { code: "EU", name: "Germany / EU",   color: "bg-emerald-500", bar: "bg-emerald-500" },
+  { code: "NL", name: "Netherlands", color: "bg-neutral-900", bar: "bg-neutral-900" },
+  { code: "UK", name: "United Kingdom", color: "bg-indigo-500", bar: "bg-indigo-500" },
+  { code: "US", name: "United States", color: "bg-amber-500", bar: "bg-amber-500" },
+  { code: "EU", name: "Germany / EU", color: "bg-emerald-500", bar: "bg-emerald-500" },
 ];
 
-function GrowthCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>;
+function GrowthCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-xl border border-neutral-200 bg-white ${className}`}>{children}</div>
+  );
 }
 
 function fmtM(n: number | null | undefined) {
@@ -405,8 +613,8 @@ function fmtK(n: number | null | undefined) {
   return `€${Math.round(n / 1000)}k`;
 }
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const SEASONALITY = [0.84, 0.90, 0.96, 1.00, 1.03, 1.06, 0.98, 1.02, 1.08, 1.12, 1.22, 1.16];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const SEASONALITY = [0.84, 0.9, 0.96, 1.0, 1.03, 1.06, 0.98, 1.02, 1.08, 1.12, 1.22, 1.16];
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -429,14 +637,26 @@ function GrowthPlan2026({ data }: { data: any }) {
     const currentMonthIdx = now.getMonth();
     const elapsedDay = now.getDate();
     const daysInMonth = new Date(year, currentMonthIdx + 1, 0).getDate();
-    const expectedPace = ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) / (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) * 100;
+    const expectedPace =
+      ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) /
+        (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) *
+      100;
 
-    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets) ? data.shopifyMarkets.filter((m: any) => m?.live) : [];
+    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets)
+      ? data.shopifyMarkets.filter((m: any) => m?.live)
+      : [];
     const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
-    const twRows: any[] = Array.isArray(data?.tripleWhale) ? data.tripleWhale.filter((m: any) => m?.live) : [];
-    const dailyByMarket = data?.shopifyDaily?.byMarket && typeof data.shopifyDaily.byMarket === "object" ? data.shopifyDaily.byMarket : {};
+    const twRows: any[] = Array.isArray(data?.tripleWhale)
+      ? data.tripleWhale.filter((m: any) => m?.live)
+      : [];
+    const dailyByMarket =
+      data?.shopifyDaily?.byMarket && typeof data.shopifyDaily.byMarket === "object"
+        ? data.shopifyDaily.byMarket
+        : {};
 
-    const actualByMonth = MONTHS.map((m, i) => ({ m, i, NL: 0, UK: 0, US: 0, EU: 0 } as Record<string, any>));
+    const actualByMonth = MONTHS.map(
+      (m, i) => ({ m, i, NL: 0, UK: 0, US: 0, EU: 0 }) as Record<string, any>,
+    );
     const availableDailyDates: string[] = [];
 
     for (const mk of MARKETS) {
@@ -485,18 +705,27 @@ function GrowthPlan2026({ data }: { data: any }) {
       const dailyRows = dailyForMarket(mk.code);
       const recent30 = dailyRows.slice(-30).reduce((s, r) => s + r.revenue, 0);
       const previous30 = dailyRows.slice(-60, -30).reduce((s, r) => s + r.revenue, 0);
-      const trend = previous30 > 0 ? clamp((recent30 - previous30) / previous30, -0.20, 0.25) : 0;
-      const currentMonthActual = actualByMonth[currentMonthIdx][mk.code] || currentMtd[mk.code] || 0;
-      const fullMonthRunRate = currentMonthActual > 0
-        ? (currentMonthActual / Math.max(1, elapsedDay)) * daysInMonth
-        : recent30 > 0
-          ? recent30
-          : 0;
+      const trend = previous30 > 0 ? clamp((recent30 - previous30) / previous30, -0.2, 0.25) : 0;
+      const currentMonthActual =
+        actualByMonth[currentMonthIdx][mk.code] || currentMtd[mk.code] || 0;
+      const fullMonthRunRate =
+        currentMonthActual > 0
+          ? (currentMonthActual / Math.max(1, elapsedDay)) * daysInMonth
+          : recent30 > 0
+            ? recent30
+            : 0;
 
       const monthly = MONTHS.map((_, i) => {
         if (i <= currentMonthIdx) return Math.round(actualByMonth[i][mk.code] || 0);
         const seasonalBase = SEASONALITY[currentMonthIdx] || 1;
-        return Math.max(0, Math.round(fullMonthRunRate * (SEASONALITY[i] / seasonalBase) * Math.pow(1 + trend, i - currentMonthIdx)));
+        return Math.max(
+          0,
+          Math.round(
+            fullMonthRunRate *
+              (SEASONALITY[i] / seasonalBase) *
+              Math.pow(1 + trend, i - currentMonthIdx),
+          ),
+        );
       });
       const target = monthly.reduce((s, v) => s + v, 0);
       const actualYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, v) => s + v, 0);
@@ -504,8 +733,10 @@ function GrowthPlan2026({ data }: { data: any }) {
       const twRevenue = Number(tw?.netRevenue ?? tw?.revenue ?? 0);
       const adSpend = Number(tw?.adSpend ?? 0);
       const twNetProfit = Number(tw?.netProfit ?? 0);
-      const marketingRatio = twRevenue > 0 && adSpend >= 0 ? clamp(adSpend / twRevenue, 0, 0.75) : 0.25;
-      const margin = twRevenue > 0 && isFinite(twNetProfit) ? clamp(twNetProfit / twRevenue, -0.25, 0.55) : 0.18;
+      const marketingRatio =
+        twRevenue > 0 && adSpend >= 0 ? clamp(adSpend / twRevenue, 0, 0.75) : 0.25;
+      const margin =
+        twRevenue > 0 && isFinite(twNetProfit) ? clamp(twNetProfit / twRevenue, -0.25, 0.55) : 0.18;
       const marketing = Math.round(target * marketingRatio);
       const ytdPct = target > 0 ? (actualYtd / target) * 100 : 0;
       plan[mk.code] = {
@@ -524,20 +755,30 @@ function GrowthPlan2026({ data }: { data: any }) {
     }
 
     const totalTarget = MARKETS.reduce((s, mk) => s + plan[mk.code].target, 0);
-    for (const mk of MARKETS) plan[mk.code].share = totalTarget > 0 ? plan[mk.code].target / totalTarget : 0;
+    for (const mk of MARKETS)
+      plan[mk.code].share = totalTarget > 0 ? plan[mk.code].target / totalTarget : 0;
 
     const rows = MONTHS.map((m, i) => {
       const row: any = { m, i, isMTD: i === currentMonthIdx, isPast: i < currentMonthIdx };
       for (const mk of MARKETS) row[mk.code] = plan[mk.code].monthly[i] ?? 0;
       row.total = MARKETS.reduce((s, mk) => s + row[mk.code], 0);
-      row.marketing = MARKETS.reduce((s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].marketingRatio), 0);
-      row.netProfit = MARKETS.reduce((s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].margin), 0);
+      row.marketing = MARKETS.reduce(
+        (s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].marketingRatio),
+        0,
+      );
+      row.netProfit = MARKETS.reduce(
+        (s, mk) => s + Math.round((plan[mk.code].monthly[i] ?? 0) * plan[mk.code].margin),
+        0,
+      );
       row.margin = row.total > 0 ? (row.netProfit / row.total) * 100 : 0;
       return row;
     });
 
     const totalMarketing = MARKETS.reduce((s, mk) => s + plan[mk.code].marketing, 0);
-    const totalNetProfit = MARKETS.reduce((s, mk) => s + plan[mk.code].target * plan[mk.code].margin, 0);
+    const totalNetProfit = MARKETS.reduce(
+      (s, mk) => s + plan[mk.code].target * plan[mk.code].margin,
+      0,
+    );
     const actualYtd = MARKETS.reduce((s, mk) => s + plan[mk.code].actualYtd, 0);
     const dataStart = availableDailyDates.length ? availableDailyDates.sort()[0] : null;
     const dataEnd = availableDailyDates.length ? availableDailyDates.sort().at(-1) : null;
@@ -562,19 +803,35 @@ function GrowthPlan2026({ data }: { data: any }) {
     };
   }, [data]);
 
-  const { year, currentMonthIdx, expectedPace, plan, rows, totalTarget, totalMarketing, totalNetProfit, blendedMargin, blendedMER, ytdOverall, actualYtd } = model;
+  const {
+    year,
+    currentMonthIdx,
+    expectedPace,
+    plan,
+    rows,
+    totalTarget,
+    totalMarketing,
+    totalNetProfit,
+    blendedMargin,
+    blendedMER,
+    ytdOverall,
+    actualYtd,
+  } = model;
 
-  const assumptions = MARKETS.reduce((acc, mk) => {
-    const p = plan[mk.code];
-    acc[mk.code] = [
-      { k: "Actual revenue YTD", v: fmtK(p.actualYtd) },
-      { k: "Current month run-rate", v: fmtK(p.fullMonthRunRate) },
-      { k: "Trailing growth", v: `${(p.trend * 100).toFixed(1)}%` },
-      { k: "Marketing / revenue", v: `${(p.marketingRatio * 100).toFixed(1)}%` },
-      { k: "Net profit margin", v: `${(p.margin * 100).toFixed(1)}%` },
-    ];
-    return acc;
-  }, {} as Record<MarketCode, Array<{ k: string; v: string }>>);
+  const assumptions = MARKETS.reduce(
+    (acc, mk) => {
+      const p = plan[mk.code];
+      acc[mk.code] = [
+        { k: "Actual revenue YTD", v: fmtK(p.actualYtd) },
+        { k: "Current month run-rate", v: fmtK(p.fullMonthRunRate) },
+        { k: "Trailing growth", v: `${(p.trend * 100).toFixed(1)}%` },
+        { k: "Marketing / revenue", v: `${(p.marketingRatio * 100).toFixed(1)}%` },
+        { k: "Net profit margin", v: `${(p.margin * 100).toFixed(1)}%` },
+      ];
+      return acc;
+    },
+    {} as Record<MarketCode, Array<{ k: string; v: string }>>,
+  );
 
   return (
     <>
@@ -584,13 +841,19 @@ function GrowthPlan2026({ data }: { data: any }) {
             <Sparkles className="h-4 w-4 text-neutral-600" />
           </div>
           <div className="text-[13px]">
-            <div className="font-semibold text-neutral-900">Growth Plan {year} · all Shopify stores combined · live API model</div>
+            <div className="font-semibold text-neutral-900">
+              Growth Plan {year} · all Shopify stores combined · live API model
+            </div>
             <div className="text-neutral-500 mt-0.5">
-              Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios come from Triple Whale. Future months are calculated from current run-rate, seasonality, and trailing growth.
+              Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
+              come from Triple Whale. Future months are calculated from current run-rate,
+              seasonality, and trailing growth.
             </div>
             {(!model.hasAllStoreMonthly || !model.hasAllStoreDaily) && (
               <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                All-store cache refresh is running in the background. Until it finishes, older daily/monthly rows may show partial historical coverage{model.dataStart ? ` (${model.dataStart}–${model.dataEnd})` : ""}.
+                All-store cache refresh is running in the background. Until it finishes, older
+                daily/monthly rows may show partial historical coverage
+                {model.dataStart ? ` (${model.dataStart}–${model.dataEnd})` : ""}.
               </div>
             )}
           </div>
@@ -601,17 +864,27 @@ function GrowthPlan2026({ data }: { data: any }) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[14px] font-semibold">Year-to-date progress</div>
-            <div className="text-[12px] text-neutral-500 mt-0.5">Actual Shopify revenue vs projected full-year revenue</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">
+              Actual Shopify revenue vs projected full-year revenue
+            </div>
           </div>
           <div className="text-right">
-            <div className="text-[12px] text-neutral-500 tabular-nums">{fmtM(actualYtd)} / {fmtM(totalTarget)}</div>
+            <div className="text-[12px] text-neutral-500 tabular-nums">
+              {fmtM(actualYtd)} / {fmtM(totalTarget)}
+            </div>
             <div className="text-[22px] font-semibold tabular-nums">{ytdOverall.toFixed(1)}%</div>
           </div>
         </div>
         <div className="mt-3">
           <div className="relative h-2 rounded-full bg-neutral-100 overflow-hidden">
-            <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full" style={{ width: `${clamp(ytdOverall, 0, 100)}%` }} />
-            <div className="absolute inset-y-0" style={{ left: `${clamp(expectedPace, 0, 100)}%`, width: 2, background: "#a3a3a3" }} />
+            <div
+              className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full"
+              style={{ width: `${clamp(ytdOverall, 0, 100)}%` }}
+            />
+            <div
+              className="absolute inset-y-0"
+              style={{ left: `${clamp(expectedPace, 0, 100)}%`, width: 2, background: "#a3a3a3" }}
+            />
           </div>
           <div className="mt-1.5 flex justify-between text-[11px] text-neutral-400">
             <span>Start of year</span>
@@ -627,17 +900,28 @@ function GrowthPlan2026({ data }: { data: any }) {
               <div key={mk.code}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-[13px]">
-                    <span className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</span>
+                    <span className="text-[10px] font-semibold uppercase text-neutral-400">
+                      {mk.code}
+                    </span>
                     <span className="font-medium text-neutral-800">{mk.name}</span>
                   </div>
-                  <span className={`text-[11px] font-medium ${p.status === "On pace" ? "text-emerald-600" : "text-amber-600"}`}>{p.status}</span>
+                  <span
+                    className={`text-[11px] font-medium ${p.status === "On pace" ? "text-emerald-600" : "text-amber-600"}`}
+                  >
+                    {p.status}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between mt-1 text-[11px] text-neutral-500 tabular-nums">
-                  <span>{fmtM(p.actualYtd)} / {fmtM(p.target)}</span>
+                  <span>
+                    {fmtM(p.actualYtd)} / {fmtM(p.target)}
+                  </span>
                   <span className="font-semibold text-neutral-700">{p.ytdPct.toFixed(1)}%</span>
                 </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-neutral-100 overflow-hidden">
-                  <div className={`h-full ${mk.bar} rounded-full`} style={{ width: `${clamp(p.ytdPct, 0, 100)}%` }} />
+                  <div
+                    className={`h-full ${mk.bar} rounded-full`}
+                    style={{ width: `${clamp(p.ytdPct, 0, 100)}%` }}
+                  />
                 </div>
               </div>
             );
@@ -649,48 +933,82 @@ function GrowthPlan2026({ data }: { data: any }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Revenue</span>
-              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">● API based</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+                Projected Revenue
+              </span>
+              <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-medium">
+                ● API based
+              </span>
             </div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalTarget)}</div>
-            <div className="text-[11px] text-neutral-500">Combined NL + UK + US + EU · Jan–Dec {year}</div>
+            <div className="text-[11px] text-neutral-500">
+              Combined NL + UK + US + EU · Jan–Dec {year}
+            </div>
             <div className="mt-3 h-px bg-neutral-100" />
             <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
-                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target)}</div>
-                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].share * 100)}%</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">
+                    {mk.code}
+                  </div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">
+                    {fmtM(plan[mk.code].target)}
+                  </div>
+                  <div className="text-[10px] text-neutral-400">
+                    {Math.round(plan[mk.code].share * 100)}%
+                  </div>
                 </div>
               ))}
             </div>
           </div>
           <div className="md:border-l md:border-neutral-100 md:pl-6">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Net Profit</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalNetProfit)}</div>
-            <div className="text-[11px] text-neutral-500">{(blendedMargin * 100).toFixed(1)}% blended margin</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+              Projected Net Profit
+            </div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">
+              {fmtM(totalNetProfit)}
+            </div>
+            <div className="text-[11px] text-neutral-500">
+              {(blendedMargin * 100).toFixed(1)}% blended margin
+            </div>
             <div className="mt-3 h-px bg-neutral-100" />
             <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
-                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].target * plan[mk.code].margin)}</div>
-                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].margin * 100)}%</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">
+                    {mk.code}
+                  </div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">
+                    {fmtM(plan[mk.code].target * plan[mk.code].margin)}
+                  </div>
+                  <div className="text-[10px] text-neutral-400">
+                    {Math.round(plan[mk.code].margin * 100)}%
+                  </div>
                 </div>
               ))}
             </div>
           </div>
           <div className="md:border-l md:border-neutral-100 md:pl-6">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Projected Marketing Spend</div>
-            <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalMarketing)}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+              Projected Marketing Spend
+            </div>
+            <div className="mt-1 text-[22px] font-semibold tabular-nums">
+              {fmtM(totalMarketing)}
+            </div>
             <div className="text-[11px] text-neutral-500">Blended MER {blendedMER.toFixed(2)}×</div>
             <div className="mt-3 h-px bg-neutral-100" />
             <div className="mt-3 grid grid-cols-4 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
-                  <div className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</div>
-                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">{fmtM(plan[mk.code].marketing)}</div>
-                  <div className="text-[10px] text-neutral-400">{Math.round(plan[mk.code].marketingRatio * 100)}%</div>
+                  <div className="text-[10px] font-semibold uppercase text-neutral-400">
+                    {mk.code}
+                  </div>
+                  <div className="text-[14px] font-semibold tabular-nums mt-0.5">
+                    {fmtM(plan[mk.code].marketing)}
+                  </div>
+                  <div className="text-[10px] text-neutral-400">
+                    {Math.round(plan[mk.code].marketingRatio * 100)}%
+                  </div>
                 </div>
               ))}
             </div>
@@ -702,14 +1020,18 @@ function GrowthPlan2026({ data }: { data: any }) {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="text-[14px] font-semibold">Monthly breakdown per market</div>
-            <div className="text-[12px] text-neutral-500 mt-0.5">Jan–Dec {year} · actuals through current month, projected after</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">
+              Jan–Dec {year} · actuals through current month, projected after
+            </div>
           </div>
           <div className="inline-flex rounded-lg border border-neutral-200 bg-white p-1 text-[12px] font-medium">
-            {([
-              { k: "revenue", l: "Revenue" },
-              { k: "netprofit", l: "Net profit" },
-              { k: "marketing", l: "Marketing" },
-            ] as const).map((t) => (
+            {(
+              [
+                { k: "revenue", l: "Revenue" },
+                { k: "netprofit", l: "Net profit" },
+                { k: "marketing", l: "Marketing" },
+              ] as const
+            ).map((t) => (
               <button
                 key={t.k}
                 onClick={() => setMetric(t.k)}
@@ -722,16 +1044,41 @@ function GrowthPlan2026({ data }: { data: any }) {
         </div>
         <div className="mt-4 h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={rows.map((r) => {
-              if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US, EU: r.EU };
-              if (metric === "marketing") {
-                return Object.fromEntries([["m", r.m], ...MARKETS.map((mk) => [mk.code, Math.round((r[mk.code] ?? 0) * plan[mk.code].marketingRatio)])]);
-              }
-              return Object.fromEntries([["m", r.m], ...MARKETS.map((mk) => [mk.code, Math.round((r[mk.code] ?? 0) * plan[mk.code].margin)])]);
-            })} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <ComposedChart
+              data={rows.map((r) => {
+                if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US, EU: r.EU };
+                if (metric === "marketing") {
+                  return Object.fromEntries([
+                    ["m", r.m],
+                    ...MARKETS.map((mk) => [
+                      mk.code,
+                      Math.round((r[mk.code] ?? 0) * plan[mk.code].marketingRatio),
+                    ]),
+                  ]);
+                }
+                return Object.fromEntries([
+                  ["m", r.m],
+                  ...MARKETS.map((mk) => [
+                    mk.code,
+                    Math.round((r[mk.code] ?? 0) * plan[mk.code].margin),
+                  ]),
+                ]);
+              })}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            >
               <CartesianGrid stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="m" tick={{ fontSize: 11, fill: "#737373" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#737373" }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${Math.round(Number(v) / 1000)}k`} />
+              <XAxis
+                dataKey="m"
+                tick={{ fontSize: 11, fill: "#737373" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#737373" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `€${Math.round(Number(v) / 1000)}k`}
+              />
               <Tooltip formatter={(v: any) => fmtK(Number(v))} cursor={{ fill: "#f5f5f5" }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="NL" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
@@ -745,13 +1092,19 @@ function GrowthPlan2026({ data }: { data: any }) {
 
       <GrowthCard className="mt-3 p-5">
         <div className="text-[14px] font-semibold">Monthly targets detail</div>
-        <div className="text-[12px] text-neutral-500 mt-0.5">Revenue, marketing spend, and net profit per market</div>
+        <div className="text-[12px] text-neutral-500 mt-0.5">
+          Revenue, marketing spend, and net profit per market
+        </div>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-neutral-200 text-left text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
                 <th className="py-2 pr-3">Month</th>
-                {MARKETS.map((mk) => <th key={mk.code} className="py-2 px-3 text-right">{mk.code} Rev</th>)}
+                {MARKETS.map((mk) => (
+                  <th key={mk.code} className="py-2 px-3 text-right">
+                    {mk.code} Rev
+                  </th>
+                ))}
                 <th className="py-2 px-3 text-right border-l border-neutral-100">Total</th>
                 <th className="py-2 px-3 text-right">Marketing</th>
                 <th className="py-2 px-3 text-right">Net profit</th>
@@ -763,7 +1116,8 @@ function GrowthPlan2026({ data }: { data: any }) {
                 const dim = r.i > currentMonthIdx;
                 const rowBg = r.isMTD ? "bg-amber-50/40" : "";
                 const txt = dim ? "text-neutral-400" : "text-neutral-700";
-                const profitTxt = r.netProfit < 0 ? "text-rose-600" : dim ? "text-emerald-400" : "text-emerald-600";
+                const profitTxt =
+                  r.netProfit < 0 ? "text-rose-600" : dim ? "text-emerald-400" : "text-emerald-600";
                 return (
                   <tr key={r.m} className={`border-b border-neutral-100 last:border-0 ${rowBg}`}>
                     <td className={`py-2.5 pr-3 ${txt}`}>
@@ -776,24 +1130,54 @@ function GrowthPlan2026({ data }: { data: any }) {
                           <span className="h-1.5 w-1.5 rounded-full border border-neutral-300 inline-block" />
                         )}
                         <span className="font-medium">{r.m}</span>
-                        {r.isMTD && <span className="rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">MTD</span>}
+                        {r.isMTD && (
+                          <span className="rounded bg-amber-100 text-amber-700 px-1.5 py-0.5 text-[9px] font-semibold uppercase">
+                            MTD
+                          </span>
+                        )}
                       </span>
                     </td>
-                    {MARKETS.map((mk) => <td key={mk.code} className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r[mk.code])}</td>)}
-                    <td className={`py-2.5 px-3 text-right tabular-nums font-semibold border-l border-neutral-100 ${dim ? "text-neutral-500" : "text-neutral-900"}`}>{fmtK(r.total)}</td>
-                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>{fmtK(r.marketing)}</td>
-                    <td className={`py-2.5 px-3 text-right tabular-nums font-medium ${profitTxt}`}>{r.netProfit < 0 ? `-€${Math.abs(Math.round(r.netProfit / 1000))}k` : fmtK(r.netProfit)}</td>
-                    <td className={`py-2.5 pl-3 text-right tabular-nums ${r.margin < 0 ? "text-rose-600" : dim ? "text-neutral-400" : "text-neutral-700"}`}>{r.margin.toFixed(1)}%</td>
+                    {MARKETS.map((mk) => (
+                      <td key={mk.code} className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>
+                        {fmtK(r[mk.code])}
+                      </td>
+                    ))}
+                    <td
+                      className={`py-2.5 px-3 text-right tabular-nums font-semibold border-l border-neutral-100 ${dim ? "text-neutral-500" : "text-neutral-900"}`}
+                    >
+                      {fmtK(r.total)}
+                    </td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums ${txt}`}>
+                      {fmtK(r.marketing)}
+                    </td>
+                    <td className={`py-2.5 px-3 text-right tabular-nums font-medium ${profitTxt}`}>
+                      {r.netProfit < 0
+                        ? `-€${Math.abs(Math.round(r.netProfit / 1000))}k`
+                        : fmtK(r.netProfit)}
+                    </td>
+                    <td
+                      className={`py-2.5 pl-3 text-right tabular-nums ${r.margin < 0 ? "text-rose-600" : dim ? "text-neutral-400" : "text-neutral-700"}`}
+                    >
+                      {r.margin.toFixed(1)}%
+                    </td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-neutral-200 font-semibold">
                 <td className="py-3 pr-3">Total {year}</td>
-                {MARKETS.map((mk) => <td key={mk.code} className="py-3 px-3 text-right tabular-nums">{fmtM(plan[mk.code].target)}</td>)}
-                <td className="py-3 px-3 text-right tabular-nums border-l border-neutral-100">{fmtM(totalTarget)}</td>
+                {MARKETS.map((mk) => (
+                  <td key={mk.code} className="py-3 px-3 text-right tabular-nums">
+                    {fmtM(plan[mk.code].target)}
+                  </td>
+                ))}
+                <td className="py-3 px-3 text-right tabular-nums border-l border-neutral-100">
+                  {fmtM(totalTarget)}
+                </td>
                 <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalMarketing)}</td>
                 <td className="py-3 px-3 text-right tabular-nums">{fmtM(totalNetProfit)}</td>
-                <td className="py-3 pl-3 text-right tabular-nums">{(blendedMargin * 100).toFixed(1)}%</td>
+                <td className="py-3 pl-3 text-right tabular-nums">
+                  {(blendedMargin * 100).toFixed(1)}%
+                </td>
               </tr>
             </tbody>
           </table>
@@ -810,7 +1194,9 @@ function GrowthPlan2026({ data }: { data: any }) {
             <div key={mk.code} className="rounded-lg border border-neutral-200 p-4">
               <div className="flex items-center gap-2">
                 <span className={`h-2.5 w-2.5 rounded-full ${mk.color}`} />
-                <span className="text-[10px] font-semibold uppercase text-neutral-400">{mk.code}</span>
+                <span className="text-[10px] font-semibold uppercase text-neutral-400">
+                  {mk.code}
+                </span>
                 <span className="text-[13px] font-semibold">{mk.name}</span>
               </div>
               <div className="mt-3 divide-y divide-neutral-100">
