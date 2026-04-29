@@ -200,6 +200,10 @@ function ForecastPage() {
           </div>
         </div>
 
+        {tab === "growth" ? (
+          <GrowthPlan2026 />
+        ) : (
+        <>
         {/* Method banner */}
         <Card className="mt-5 p-4">
           <div className="flex items-start gap-3">
