@@ -87,6 +87,9 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
     s === "degraded" ? "bg-amber-500" :
     s === "error" ? "bg-rose-500" :
     s === "disconnected" ? "bg-neutral-400" : "bg-neutral-300 animate-pulse";
+
+  const isActive = (to: string, exact?: boolean) =>
+    exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
     exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
 
   const handleSignOut = async () => {
