@@ -285,34 +285,58 @@ function SyncStatusPage() {
         {/* Data flow */}
         <div className="rounded-xl border border-neutral-200 bg-white p-5">
           <div className="text-[14px] font-semibold">Data flow</div>
-          <div className="text-[12px] text-neutral-500 mt-0.5">How data moves from source to dashboard.</div>
+          <div className="text-[12px] text-neutral-500 mt-0.5">How data moves from each source to the dashboard.</div>
 
-          <div className="mt-6 flex items-center justify-between gap-2">
-            {[
-              { name: "Shopify",      sub: "Orders, customers",        bg: "bg-emerald-50", fg: "text-emerald-600",  icon: <Plug className="h-5 w-5" /> },
-              { name: "Triple Whale", sub: data ? CONNECTORS[1].unit(data, []) : "—", bg: "bg-violet-50",  fg: "text-violet-600",  icon: <Plug className="h-5 w-5" /> },
-              { name: "Jortt",        sub: "Accounting totals",        bg: "bg-teal-50",    fg: "text-teal-600",    icon: <Plug className="h-5 w-5" />, footnote: "→ Xero soon" },
-              { name: "Dashboard",    sub: "Reconciled view",          bg: "bg-neutral-900", fg: "text-white",      icon: <LayoutGrid className="h-5 w-5" />, dark: true },
-            ].map((node, i, arr) => (
-              <div key={node.name} className="flex items-center flex-1 last:flex-none">
-                <div className="flex flex-col items-center text-center">
-                  <div className={`grid h-14 w-14 place-items-center rounded-xl ${node.bg} ${node.dark ? "" : "ring-1 ring-neutral-100"}`}>
-                    <span className={node.fg}>{node.icon}</span>
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+            {/* Sources column */}
+            <div className="space-y-2">
+              <div className="text-[11px] uppercase tracking-wide text-neutral-400 font-medium mb-2">Data sources</div>
+              {[
+                { name: "Shopify Plus",  providerKeys: ["shopify"],     bg: "bg-emerald-50",  fg: "text-emerald-600" },
+                { name: "Triple Whale",  providerKeys: ["triplewhale"], bg: "bg-violet-50",   fg: "text-violet-600" },
+                { name: "Loop",          providerKeys: ["loop"],        bg: "bg-violet-50",   fg: "text-violet-600" },
+                { name: "Juo",           providerKeys: ["juo"],         bg: "bg-fuchsia-50",  fg: "text-fuchsia-600" },
+                { name: "Jortt",         providerKeys: ["jortt"],       bg: "bg-teal-50",     fg: "text-teal-600", suffix: "→ Xero" },
+                { name: "Xero",          providerKeys: ["xero"],        bg: "bg-sky-50",      fg: "text-sky-600",  suffix: "incoming" },
+              ].map((node) => {
+                const matching = (status?.sources ?? []).filter((s) => node.providerKeys.includes(s.provider));
+                const st = aggregateStatus(matching);
+                const isPending = !status;
+                return (
+                  <div key={node.name} className="flex items-center justify-between gap-3 rounded-lg ring-1 ring-neutral-100 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`grid h-7 w-7 place-items-center rounded-md ${node.bg}`}>
+                        <Plug className={`h-3.5 w-3.5 ${node.fg}`} />
+                      </span>
+                      <span className="text-[13px] font-medium text-neutral-900 truncate">{node.name}</span>
+                      {node.suffix && (
+                        <span className="text-[11px] text-neutral-400">{node.suffix}</span>
+                      )}
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium">
+                      <span className={`h-1.5 w-1.5 rounded-full ${isPending ? "bg-neutral-300 animate-pulse" : STATUS_DOT[st]}`} />
+                      <span className={isPending ? "text-neutral-400" : STATUS_TXT[st]}>
+                        {isPending ? "…" : STATUS_LABEL[st]}
+                      </span>
+                    </span>
                   </div>
-                  <div className="mt-2 text-[13px] font-semibold text-neutral-900">{node.name}</div>
-                  <div className="text-[11px] text-neutral-500">{node.sub}</div>
-                  {node.footnote && (
-                    <div className="text-[11px] text-neutral-400 mt-0.5">{node.footnote}</div>
-                  )}
-                </div>
-                {i < arr.length - 1 && (
-                  <div className="flex-1 mx-3 flex items-center">
-                    <div className="h-px flex-1 bg-neutral-200" />
-                    <ChevronRight className="h-3.5 w-3.5 text-neutral-300 -ml-1" />
-                  </div>
-                )}
+                );
+              })}
+            </div>
+
+            {/* Arrow */}
+            <div className="hidden md:flex items-center justify-center">
+              <ChevronRight className="h-6 w-6 text-neutral-300" />
+            </div>
+
+            {/* Dashboard target */}
+            <div className="flex flex-col items-center text-center">
+              <div className="grid h-16 w-16 place-items-center rounded-xl bg-neutral-900">
+                <LayoutGrid className="h-6 w-6 text-white" />
               </div>
-            ))}
+              <div className="mt-2 text-[14px] font-semibold text-neutral-900">Dashboard</div>
+              <div className="text-[12px] text-neutral-500">Reconciled view</div>
+            </div>
           </div>
         </div>
 
