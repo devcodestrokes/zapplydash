@@ -248,7 +248,7 @@ const QuickRangePills = ({ from, to, onApply, disabled = false }) => {
   const today = drToday();
   const daysAgoStr = (n) => {
     const d = new Date();
-    d.setDate(d.getDate() - (n - 1));
+    d.setDate(d.getDate() - n);
     return d.toISOString().split("T")[0];
   };
   const PRESETS = [
