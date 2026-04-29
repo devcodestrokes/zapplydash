@@ -90,7 +90,6 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
-    exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
