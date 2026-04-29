@@ -1213,14 +1213,15 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
 
           <div className="mt-5 border-t border-neutral-100 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
             <span className="text-neutral-400 font-medium">Split:</span>
-            {subData.map(m => {
+            {subDataEUR.map(m => {
               const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
-              const sharePct = liveMRR > 0 ? Math.round(((m.mrr ?? 0) / liveMRR) * 100) : 0;
+              const sharePct = liveMRR > 0 ? Math.round(((m.mrrEUR ?? 0) / liveMRR) * 100) : 0;
               const mrrLabel = (m.mrr ?? 0) >= 1000 ? `${sym}${((m.mrr ?? 0)/1000).toFixed(0)}k` : `${sym}${Math.round(m.mrr ?? 0)}`;
+              const eurLabel = m.currency !== "EUR" && m.mrrEUR ? ` (€${Math.round(m.mrrEUR).toLocaleString()})` : "";
               return (
                 <span key={m.market} className="inline-flex items-center gap-1.5">
                   <span className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600">{m.flag} {m.market}</span>
-                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR</span>
+                  <span className="text-neutral-600">{(m.activeSubs ?? 0)} subs · {mrrLabel} MRR{eurLabel}</span>
                   <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">{sharePct}%</span>
                 </span>
               );
