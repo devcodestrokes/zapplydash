@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readCacheKeys, writeCache, ageMinutes } from "./cache.server";
+import { readCacheKeys, writeCache, ageMinutes, type CacheMap } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
 import { fetchTripleWhale, fetchTripleWhaleCustomerEconomics } from "./fetchers.server";
 import { getProgress } from "./progress.server";
@@ -121,7 +121,7 @@ function describePayload(payload: any): { ok: boolean; reason: string | null; ro
   return { ok: true, reason: null, rows };
 }
 
-function buildSourceStatus(cache: Awaited<ReturnType<typeof readCacheKeys>>) {
+function buildSourceStatus(cache: CacheMap) {
   const conns = getConnections();
   const get = (p: string, k: string) => cache[`${p}/${k}`] ?? null;
   function entry(provider: string, key: string, label: string, expected: string, maxAge = 60) {
