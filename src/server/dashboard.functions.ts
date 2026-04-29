@@ -112,6 +112,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     ["shopify", "today"],
     ["shopify", "daily"],
     ["triplewhale", "summary"],
+    ["triplewhale", "customer_economics"],
     ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
@@ -130,6 +131,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const shopifyTodayCache = get("shopify", "today");
   const shopifyDailyCache = get("shopify", "daily");
   const tripleWhaleCache = get("triplewhale", "summary");
+  const tripleWhaleCustomerEconomicsCache = get("triplewhale", "customer_economics");
   const tripleWhaleDailyCache = get("triplewhale", "daily");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
@@ -151,6 +153,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     shopifyToday: shopifyTodayCache?.payload ?? null,
     shopifyDaily: shopifyDailyCache?.payload ?? null,
     tripleWhale: tripleWhaleCache?.payload ?? null,
+    tripleWhaleCustomerEconomics: tripleWhaleCustomerEconomicsCache?.payload ?? null,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
