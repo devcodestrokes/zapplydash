@@ -63,8 +63,30 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const [status, setStatus] = useState<any>(null);
 
-  const isActive = (to: string, exact?: boolean) =>
+  useEffect(() => {
+    let alive = true;
+    const load = () => getSyncStatus().then((s) => alive && setStatus(s)).catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  const reconCount = status?.failing?.length ?? 0;
+  const sourceStatus = (keys: string[]): "healthy" | "degraded" | "error" | "disconnected" | "loading" => {
+    if (!status) return "loading";
+    const matches = (status.sources ?? []).filter((s: any) => keys.includes(s.provider));
+    if (matches.length === 0) return "disconnected";
+    if (matches.some((s: any) => s.status === "error" || s.status === "disconnected")) return "error";
+    if (matches.some((s: any) => s.status === "degraded")) return "degraded";
+    return "healthy";
+  };
+  const dotClass = (s: string) =>
+    s === "healthy" ? "bg-emerald-500" :
+    s === "degraded" ? "bg-amber-500" :
+    s === "error" ? "bg-rose-500" :
+    s === "disconnected" ? "bg-neutral-400" : "bg-neutral-300 animate-pulse";
     exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
 
   const handleSignOut = async () => {
