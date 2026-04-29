@@ -130,6 +130,8 @@ function OverviewPage() {
             jorttData={jorttObj}
             rangeData={rangeData}
             rangeSyncing={rangeSyncing}
+            shopifyDaily={data?.shopifyDaily ?? null}
+            tripleWhaleDaily={data?.tripleWhaleDaily ?? null}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {data?.syncedAt ? `Synced · ${new Date(data.syncedAt).toLocaleString()}` : "No live sources connected"}

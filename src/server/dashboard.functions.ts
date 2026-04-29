@@ -110,7 +110,9 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     ["shopify", "markets"],
     ["shopify", "monthly"],
     ["shopify", "today"],
+    ["shopify", "daily"],
     ["triplewhale", "summary"],
+    ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
     ["jortt", "invoices"],
@@ -126,7 +128,9 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const shopifyMarketsCache = get("shopify", "markets");
   const shopifyMonthlyCache = get("shopify", "monthly");
   const shopifyTodayCache = get("shopify", "today");
+  const shopifyDailyCache = get("shopify", "daily");
   const tripleWhaleCache = get("triplewhale", "summary");
+  const tripleWhaleDailyCache = get("triplewhale", "daily");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
   const jorttCache = get("jortt", "invoices");
@@ -145,7 +149,9 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     shopifyMarkets: shopifyMarketsCache?.payload ?? null,
     shopifyMonthly: shopifyMonthlyCache?.payload ?? null,
     shopifyToday: shopifyTodayCache?.payload ?? null,
+    shopifyDaily: shopifyDailyCache?.payload ?? null,
     tripleWhale: tripleWhaleCache?.payload ?? null,
+    tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
     jortt: jorttCache?.payload ?? null,
