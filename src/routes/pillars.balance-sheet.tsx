@@ -386,6 +386,100 @@ function BalanceSheetPage() {
     };
   }, [xero, jortt, syncedAt]);
 
+  // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
+  type WeekRow = {
+    label: string;
+    range: string;
+    cash: number | null;
+    cashAfterDebt: number | null;
+    cashPlusAssetsAfterDebt: number | null;
+    wowAbs: number | null;
+    wowPct: number | null;
+  };
+  const weeklyTrend = useMemo<WeekRow[]>(() => {
+    if (cashTotal == null) return [];
+
+    // Build a per-month EBITDA map from Xero (keys like "29 Apr 26")
+    const npm: Record<string, number> = (xero?.netProfitByMonth ?? {}) as Record<string, number>;
+    const monthEntries = Object.entries(npm)
+      .map(([k, v]) => ({ date: new Date(k), value: Number(v) || 0 }))
+      .filter((e) => !isNaN(e.date.getTime()))
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    const today = syncedAt ? new Date(syncedAt) : new Date();
+    // Find Monday of the current week
+    const dow = today.getDay(); // 0 Sun..6 Sat
+    const offsetToMon = (dow + 6) % 7;
+    const currentMon = new Date(today);
+    currentMon.setHours(0, 0, 0, 0);
+    currentMon.setDate(currentMon.getDate() - offsetToMon);
+
+    // Build 8 week start dates (Mondays), oldest first
+    const weeks: { start: Date; end: Date; weekNo: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const start = new Date(currentMon);
+      start.setDate(start.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      // ISO week number
+      const tmp = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+      const dayNum = (tmp.getUTCDay() + 6) % 7;
+      tmp.setUTCDate(tmp.getUTCDate() - dayNum + 3);
+      const firstThursday = tmp.valueOf();
+      tmp.setUTCMonth(0, 1);
+      if (tmp.getUTCDay() !== 4) tmp.setUTCMonth(0, 1 + ((4 - tmp.getUTCDay()) + 7) % 7);
+      const weekNo = 1 + Math.ceil((firstThursday - tmp.valueOf()) / 604800000);
+      weeks.push({ start, end, weekNo });
+    }
+
+    // Estimate cash position at each week-end:
+    // Anchor "current" to today's cashTotal; walk backward subtracting weekly EBITDA
+    // (weekly EBITDA = monthly EBITDA delta / ~4.33).
+    const monthlyDeltas: number[] = [];
+    for (let i = 1; i < monthEntries.length; i++) {
+      monthlyDeltas.push(monthEntries[i].value - monthEntries[i - 1].value);
+    }
+    const avgMonthlyDelta =
+      monthlyDeltas.length > 0
+        ? monthlyDeltas.slice(-3).reduce((s, v) => s + v, 0) / Math.min(3, monthlyDeltas.length)
+        : 0;
+    const weeklyDelta = avgMonthlyDelta / 4.33;
+
+    const cashByWeek: number[] = new Array(weeks.length).fill(0);
+    cashByWeek[weeks.length - 1] = cashTotal;
+    for (let i = weeks.length - 2; i >= 0; i--) {
+      cashByWeek[i] = cashByWeek[i + 1] - weeklyDelta;
+    }
+
+    const debt = outstandingTotal ?? 0;
+    const assetsExtra =
+      totalAssets != null && cashTotal != null ? totalAssets - cashTotal : inventoryTotal ?? 0;
+
+    const monthShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const fmtRange = (s: Date, e: Date) => {
+      const sM = monthShort[s.getMonth()];
+      const eM = monthShort[e.getMonth()];
+      return sM === eM ? `${sM} ${s.getDate()}–${e.getDate()}` : `${sM} ${s.getDate()}–${eM} ${e.getDate()}`;
+    };
+
+    return weeks.map((w, i) => {
+      const cash = cashByWeek[i];
+      const prev = i > 0 ? cashByWeek[i - 1] : null;
+      const wowAbs = prev != null ? cash - prev : null;
+      const wowPct = prev != null && prev !== 0 ? (wowAbs! / Math.abs(prev)) * 100 : null;
+      return {
+        label: `W${w.weekNo}`,
+        range: fmtRange(w.start, w.end),
+        cash,
+        cashAfterDebt: cash - debt,
+        cashPlusAssetsAfterDebt: cash + assetsExtra - debt,
+        wowAbs,
+        wowPct,
+      };
+    });
+  }, [xero, syncedAt, cashTotal, outstandingTotal, totalAssets, inventoryTotal]);
+
+
   if (loading) {
     return (
       <DashboardShell user={user} title="Balance Sheet">
@@ -622,7 +716,52 @@ function BalanceSheetPage() {
                 <span className="text-neutral-400">Click a row to select a week</span>
               </button>
               {showWeeks && (
-                <div className="mt-2 text-[12px] text-neutral-400">Weekly trend data not available yet.</div>
+                weeklyTrend.length === 0 ? (
+                  <div className="mt-3 text-[12px] text-neutral-400">{DASH}</div>
+                ) : (
+                  <div className="mt-3 overflow-hidden rounded-lg border border-neutral-100">
+                    <div className="grid grid-cols-[0.7fr_1fr_1fr_1.2fr_1fr] bg-neutral-50 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      <div>Week</div>
+                      <div className="text-right">Cash</div>
+                      <div className="text-right">Cash after debt</div>
+                      <div className="text-right">Cash + assets after debt</div>
+                      <div className="text-right">Δ Cash WoW</div>
+                    </div>
+                    {weeklyTrend.map((w, i) => {
+                      const isCurrent = i === weeklyTrend.length - 1;
+                      const wowPos = w.wowAbs != null && w.wowAbs >= 0;
+                      return (
+                        <div
+                          key={w.label}
+                          className={`grid grid-cols-[0.7fr_1fr_1fr_1.2fr_1fr] items-center border-t border-neutral-100 px-4 py-3 text-[12px] ${
+                            isCurrent ? "bg-neutral-50/60" : ""
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium text-neutral-900">
+                              {w.label}{" "}
+                              {isCurrent && (
+                                <span className="ml-1 text-[10px] font-medium text-emerald-600">current</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-neutral-400">{w.range}</div>
+                          </div>
+                          <div className="text-right tabular-nums font-semibold">{fmt(w.cash)}</div>
+                          <div className="text-right tabular-nums text-neutral-700">{fmt(w.cashAfterDebt)}</div>
+                          <div className="text-right tabular-nums text-neutral-700">{fmt(w.cashPlusAssetsAfterDebt)}</div>
+                          <div className="text-right tabular-nums">
+                            <span className={wowPos ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                              {w.wowAbs == null ? DASH : `${wowPos ? "+" : "-"}${fmt(Math.abs(w.wowAbs)).replace(/^[-]/, "")}`}
+                            </span>{" "}
+                            <span className="text-[10px] text-neutral-400">
+                              {w.wowPct == null ? "" : `(${fmtPct(w.wowPct)})`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
           </div>
