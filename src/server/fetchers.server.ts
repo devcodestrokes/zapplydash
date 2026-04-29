@@ -206,7 +206,7 @@ export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
       if (!token) return { code, flag, name, status: status ?? null, live: false };
 
       try {
-        const agg = await fetchShopifyAllOrders(store, token, since, 40, until);
+        const agg = await fetchShopifyAllOrders(store, token, since, 180, until);
         const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } = agg;
         const aov = orderCount > 0 ? revenue / orderCount : 0;
         if (truncated) console.warn(`Shopify ${code}: revenue capped at 40 pages (10,000 orders)`);
@@ -300,23 +300,48 @@ export async function fetchShopifyToday() {
   return markets.some((m: any) => m.live) ? { markets, fetchedAt: new Date().toISOString() } : null;
 }
 
-// Last 6 months of order aggregates — NL store, fully paginated
+// Last 6 months of order aggregates — all Shopify stores, converted to EUR.
 export async function fetchShopifyMonthly() {
-  const store = process.env.SHOPIFY_NL_STORE;
-  if (!store) return null;
-
-  const token = await getShopifyToken(store);
-  if (!token) return null;
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
+  if (!clientId) return null;
 
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const since = `${sixMonthsAgo.toISOString().split("T")[0]}T00:00:00Z`;
+  const sinceDay = since.slice(0, 10);
 
   try {
-    const { monthlySums } = await fetchShopifyAllOrders(store, token, since, 80);
-    return Object.entries(monthlySums)
+    const perStore = await Promise.all(
+      SHOPIFY_STORES.map(async ({ code, storeKey }: any) => {
+        const store = process.env[storeKey];
+        if (!store) return { code, monthlySums: {} as Record<string, { revenue: number; orders: number; refunds: number }> };
+        const token = await getShopifyToken(store);
+        if (!token) return { code, monthlySums: {} };
+        const { monthlySums, truncated } = await fetchShopifyAllOrders(store, token, since, 240);
+        if (truncated) console.warn(`Shopify monthly ${code}: capped at 240 pages (60,000 orders)`);
+        return { code, monthlySums };
+      })
+    );
+
+    const merged: Record<string, { revenue: number; orders: number; refunds: number; byMarket: Record<string, { revenue: number; orders: number; refunds: number }> }> = {};
+    for (const storeRow of perStore) {
+      for (const [month, row] of Object.entries(storeRow.monthlySums as Record<string, { revenue: number; orders: number; refunds: number }>)) {
+        if (!merged[month]) merged[month] = { revenue: 0, orders: 0, refunds: 0, byMarket: {} };
+        const endDay = new Date(`1 ${month.replace("'", "20")}`);
+        endDay.setMonth(endDay.getMonth() + 1, 0);
+        const fxRate = await getEurRate((SHOPIFY_STORES.find((s) => s.code === storeRow.code) as any)?.code === "UK" ? "GBP" : (SHOPIFY_STORES.find((s) => s.code === storeRow.code) as any)?.code === "US" ? "USD" : "EUR", sinceDay, endDay.toISOString().split("T")[0]);
+        const revenue = +(row.revenue * fxRate).toFixed(2);
+        const refunds = +(row.refunds * fxRate).toFixed(2);
+        merged[month].revenue += revenue;
+        merged[month].orders += row.orders;
+        merged[month].refunds += refunds;
+        merged[month].byMarket[storeRow.code] = { revenue, orders: row.orders, refunds };
+      }
+    }
+
+    return Object.entries(merged)
       .sort(([a], [b]) => new Date("1 " + a.replace("'", "20")).getTime() - new Date("1 " + b.replace("'", "20")).getTime())
-      .map(([month, data]) => ({ month, ...data }));
+      .map(([month, data]) => ({ month, ...data, calcVersion: 2 }));
   } catch {
     return null;
   }
@@ -650,7 +675,7 @@ export async function fetchShopifyDaily() {
         let cursor: string | null = null;
         let hasNextPage = true;
         let page = 0;
-        const maxPages = 80; // up to 20k orders / store / year
+        const maxPages = 240; // up to 60k orders / store / year
 
         while (hasNextPage && page < maxPages) {
           const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
