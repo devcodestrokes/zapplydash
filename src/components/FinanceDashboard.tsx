@@ -1016,7 +1016,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         <BrandIcon brand="triplewhale" size={12} />
         <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Customer economics</span>
         <div className="h-px flex-1 bg-neutral-200" />
-        <span className="text-[10px] text-neutral-400">Triple Whale · {isCurrentMonth ? "per acquired customer" : "current MTD only"}</span>
+        <span className="text-[10px] text-neutral-400">Triple Whale · per acquired customer</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -1026,29 +1026,29 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             value: liveNCPA !== null ? `€${liveNCPA.toFixed(2)}` : "—",
             delta: null,
             positive: false,
-            sub: liveNCPA !== null ? "Triple Whale · NL store live" : "Triple Whale not connected",
+            sub: liveNCPA !== null ? "Ad spend ÷ new customers" : "Triple Whale not connected",
             icon: Target,
             live: liveNCPA !== null,
           },
           {
-            label: "LTV:CPA",
-            fullLabel: "Lifetime value to CPA ratio",
-            value: liveLtvCpa !== null ? `${liveLtvCpa.toFixed(2)}×` : "—",
+            label: "90D LTV",
+            fullLabel: "Lifetime value · 90 days",
+            value: liveLtv90 !== null ? `€${liveLtv90.toFixed(2)}` : "—",
             delta: null,
             positive: true,
-            sub: liveLtvCpa !== null ? "Triple Whale · NL store" : "Triple Whale not connected",
+            sub: liveLtv90 !== null && liveNCPA ? `${(liveLtv90 / liveNCPA).toFixed(2)}× NCPA payback` : "Triple Whale not connected",
             icon: TrendingUp,
-            live: liveLtvCpa !== null,
+            live: liveLtv90 !== null,
           },
           {
-            label: "MER",
-            fullLabel: "Marketing Efficiency Ratio",
-            value: liveMER !== null ? `${liveMER.toFixed(2)}×` : "—",
+            label: "365D LTV",
+            fullLabel: "Lifetime value · 365 days",
+            value: liveLtv365 !== null ? `€${liveLtv365.toFixed(2)}` : "—",
             delta: null,
             positive: true,
-            sub: liveMER !== null ? "Revenue ÷ ad spend · NL" : "Triple Whale not connected",
+            sub: liveLtv365 !== null && liveNCPA ? `${(liveLtv365 / liveNCPA).toFixed(2)}× NCPA · healthy` : "Triple Whale not connected",
             icon: Sparkles,
-            live: liveMER !== null,
+            live: liveLtv365 !== null,
           },
         ].map((s) => (
           <Card key={s.label} className="p-4 transition hover:border-neutral-300">
