@@ -241,62 +241,15 @@ export const getSyncStatus = createServerFn({ method: "GET" }).handler(async () 
     ["shopify", "markets"],
     ["shopify", "monthly"],
     ["shopify", "today"],
+    ["shopify", "daily"],
+    ["shopify", "repeat_funnel"],
     ["triplewhale", "summary"],
+    ["triplewhale", "customer_economics"],
+    ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
     ["jortt", "invoices"],
     ["xero", "accounting"],
   ]);
-  const conns = getConnections();
-  const get = (p: string, k: string) => cache[`${p}/${k}`] ?? null;
-
-  function describe(payload: any): { ok: boolean; reason: string | null; rows: number | null } {
-    if (payload == null) return { ok: false, reason: "No data cached yet", rows: null };
-    if (typeof payload === "object") {
-      if (payload.__error) return { ok: false, reason: String(payload.__error).slice(0, 200), rows: null };
-      if (payload.__empty) return { ok: false, reason: "Provider returned empty payload", rows: 0 };
-    }
-    const rows = Array.isArray(payload) ? payload.length : Array.isArray(payload?.rows) ? payload.rows.length : null;
-    return { ok: true, reason: null, rows };
-  }
-
-  function entry(provider: string, key: string, label: string, expected: string) {
-    const c = get(provider, key);
-    const d = describe(c?.payload);
-    const connected = !!conns[provider];
-    let status: "healthy" | "degraded" | "error" | "disconnected";
-    if (!connected) status = "disconnected";
-    else if (!c) status = "error";
-    else if (!d.ok) status = "error";
-    else if (ageMinutes(c.fetchedAt) > 60) status = "degraded";
-    else status = "healthy";
-    return {
-      provider, key, label, expected,
-      connected,
-      status,
-      lastSyncedAt: c?.fetchedAt ?? null,
-      ageMinutes: c?.fetchedAt ? ageMinutes(c.fetchedAt) : null,
-      rowCount: d.rows,
-      error: d.reason,
-    };
-  }
-
-  const sources = [
-    entry("shopify", "markets", "Shopify Plus · Markets", "Per-market revenue & orders"),
-    entry("shopify", "monthly", "Shopify Plus · Monthly", "Last 12 months revenue"),
-    entry("shopify", "today", "Shopify Plus · Today", "Today's live orders"),
-    entry("triplewhale", "summary", "Triple Whale · Summary", "Ad spend, ROAS, MER"),
-    entry("juo", "subscriptions", "Juo · Subscriptions (NL)", "Active subs & MRR"),
-    entry("loop", "subscriptions", "Loop · Subscriptions (UK/US/EU)", "Active subs & MRR"),
-    entry("jortt", "invoices", "Jortt · Invoices", "Outstanding invoices"),
-    entry("xero", "accounting", "Xero · Accounting", "P&L, cash, balance sheet"),
-  ];
-
-  return {
-    sources,
-    failing: sources.filter((s) => s.status === "error" || s.status === "disconnected"),
-    degraded: sources.filter((s) => s.status === "degraded"),
-    healthy: sources.filter((s) => s.status === "healthy"),
-    checkedAt: Date.now(),
-  };
+  return buildSourceStatus(cache);
 });
