@@ -137,7 +137,7 @@ export function refreshStaleInBackground(cache: CacheMap): void {
     const age = ageMinutes(entry?.fetchedAt);
     const payload = entry?.payload as any;
     const needsFreshCalc =
-      (job.provider === "loop" && job.key === "subscriptions" && !Array.isArray(payload?.__empty) && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 2)) ||
+      (job.provider === "loop" && job.key === "subscriptions" && !Array.isArray(payload?.__empty) && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 3)) ||
       (job.provider === "juo" && job.key === "subscriptions" && !payload?.__error && Array.isArray(payload) && payload.some((row: any) => row?.calcVersion !== 2)) ||
       (job.provider === "shopify" && job.key === "repeat_funnel" && payload && !payload.__empty && !payload.__error && payload.calcVersion !== 2);
     if (!entry || age > job.maxAgeMin || needsFreshCalc) {

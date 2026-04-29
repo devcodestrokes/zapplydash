@@ -3106,7 +3106,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
   const twData            = asArr(liveData?.tripleWhale).filter(m => m?.live);
   const twLive            = twData.length > 0;
   const juoArr            = asArr(liveData?.juo).filter(m => m?.calcVersion === 2);
-  const loopArr           = asArr(liveData?.loop).filter(m => m?.calcVersion === 2);
+  const loopArr           = asArr(liveData?.loop).filter(m => m?.calcVersion === 3);
   const juoLive           = juoArr.some(m => m?.live);
   const loopLive          = loopArr.some(m => m?.live);
   const subLive           = juoLive || loopLive;

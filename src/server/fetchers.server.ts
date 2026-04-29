@@ -929,26 +929,32 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const allSubs: any[] = [];
   const MAX_PAGES = 500;
-  const PAGE_SIZE = 200;
+  // Loop currently caps this endpoint at 100 rows even when pageSize is higher.
+  // Keeping the requested size aligned prevents bad hasNext fallbacks and makes
+  // partial-page detection reliable.
+  const PAGE_SIZE = 100;
   let apiReached  = false; // true once we get at least one 200 response
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    // Loop rate limit: ~1 req/s — wait 600ms between every page
-    if (page > 1) await new Promise(r => setTimeout(r, 600));
+    // Loop rate limit: ~1 req/s — wait between every page. Do not write a
+    // partial subscription book as finance data; stale cache is safer than a
+    // fabricated total.
+    if (page > 1) await new Promise(r => setTimeout(r, 1300));
 
     const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
     let res: Response = await fetch(url, {
       headers, cache: "no-store",
     });
 
-    // On 429: wait 15s and retry once — if still 429, stop gracefully with data collected so far
+    // On 429: wait 15s and retry once — if still 429, abort this market so we
+    // do not cache partial totals as accurate subscriber counts.
     if (res.status === 429) {
       await new Promise(r => setTimeout(r, 15000));
       res = await fetch(url, { headers, cache: "no-store" });
     }
     if (res.status === 429) {
-      console.warn(`Loop ${market}: rate-limited at page ${page}, returning ${allSubs.length} subs collected so far`);
-      break; // Return partial data — don't drop everything we've already fetched
+      console.warn(`Loop ${market}: rate-limited at page ${page}; keeping previous cache instead of partial data`);
+      return null;
     }
 
     if (!res.ok) { console.error(`Loop ${market} page ${page} → ${res.status}`); break; }
@@ -976,7 +982,7 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     : null;
 
   return {
-    market, flag, platform: "loop", live: true, calcVersion: 2,
+    market, flag, platform: "loop", live: true, calcVersion: 3,
     mrr: Math.round(mrr), activeSubs: activeSubs.length,
     totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
     arpu: arpu != null ? +arpu.toFixed(2) : null, churnRate, currency,
