@@ -1213,6 +1213,120 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       </div>
     )}
 
+    {/* Repeat Purchase Funnel — real Shopify cohort data (90-day cohort) */}
+    {shopifyRepeatFunnel && shopifyRepeatFunnel.cohortSize > 0 && (() => {
+      const f = shopifyRepeatFunnel;
+      const orderColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
+      const orderDotColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
+      const labels = ["1st order", "2nd order", "3rd order", "4th order", "5th order", "6th order", "7th+ orders"];
+      const subs = ["First purchase", "Repeat to 2nd", "Repeat to 3rd", "Repeat to 4th", "Repeat to 5th", "Repeat to 6th", "Repeat to 7th+"];
+      const [showDeeper, setShowDeeper] = [false, () => {}]; // collapsed-style; full table always rendered for accuracy
+      const top4 = f.funnel.slice(0, 4);
+      const rest = f.funnel.slice(4);
+      return (
+        <Card className="mt-3 p-5">
+          <div className="flex items-start justify-between mb-1">
+            <div>
+              <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
+              <div className="mt-0.5 text-[12px] text-neutral-500">
+                Cohort of first-time buyers from {f.cohortEndedDaysAgo} days ago · tracks how many came back
+              </div>
+            </div>
+            <div className="text-right text-[11px] text-neutral-400">
+              Cohort size: <span className="font-semibold text-neutral-700">{f.cohortSize.toLocaleString()} first-time buyers</span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {top4.map((row: any, i: number) => (
+              <div key={row.order} className="rounded-lg border border-neutral-200 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <span className={`h-2 w-2 rounded-full ${orderDotColors[i]}`} />
+                    {labels[i]}
+                  </div>
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate.toFixed(1)}%</div>
+                  <div className="text-[12px] text-neutral-500">{subs[i]}</div>
+                </div>
+                <div className="mt-2 text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
+                  <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {rest.length > 0 && (
+            <div className="mt-4 rounded-lg border border-neutral-200">
+              <div className="flex items-center justify-between p-3 border-b border-neutral-100">
+                <div className="text-[12px] font-semibold text-neutral-700">Deeper cohort analysis</div>
+                <div className="text-[11px] text-neutral-400">5th+ orders, cohort-by-cohort, LTV projection</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
+                {rest.map((row: any, i: number) => (
+                  <div key={row.order} className="rounded-lg border border-neutral-100 p-3">
+                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      <span className={`h-2 w-2 rounded-full ${orderDotColors[i + 4]}`} />
+                      {labels[i + 4]}
+                    </div>
+                    <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate.toFixed(1)}%</div>
+                    <div className="text-[11px] text-neutral-400">{row.customers.toLocaleString()} customers</div>
+                    <div className="mt-2 h-1 w-full rounded-full bg-neutral-100 overflow-hidden">
+                      <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, row.rate * 4)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Monthly cohort table */}
+              {f.monthlyCohorts && f.monthlyCohorts.length > 0 && (
+                <div className="border-t border-neutral-100">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                        <th className="text-left px-4 py-2.5">Cohort</th>
+                        <th className="text-right px-4 py-2.5">Size</th>
+                        <th className="text-right px-4 py-2.5">2nd</th>
+                        <th className="text-right px-4 py-2.5">3rd</th>
+                        <th className="text-right px-4 py-2.5">4th</th>
+                        <th className="text-right px-4 py-2.5">Avg orders</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {f.monthlyCohorts.map((c: any, i: number) => (
+                        <tr key={c.month} className={`border-t border-neutral-100 ${c.maturing ? "bg-amber-50/40" : ""}`}>
+                          <td className="px-4 py-2.5">
+                            {c.month}
+                            {c.maturing && <span className="ml-2 text-[10px] text-amber-600">still maturing</span>}
+                          </td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{c.size}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{c.second !== null ? `${c.second.toFixed(1)}%` : "—"}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{c.third !== null ? `${c.third.toFixed(1)}%` : "—"}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{c.fourth !== null ? `${c.fourth.toFixed(1)}%` : "—"}</td>
+                          <td className="text-right px-4 py-2.5 tabular-nums">{c.avgOrders !== null ? c.avgOrders.toFixed(2) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-4 py-2.5 text-[11px] text-amber-600 border-t border-neutral-100 bg-amber-50/30">
+                    ⓘ Cohorts need at least 90 days to fully mature for 3rd/4th order data.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      );
+    })()}
+
+    {!shopifyRepeatFunnel && liveMRR !== null && (
+      <Card className="mt-3 p-5 text-center text-[13px] text-neutral-500">
+        <strong>Repeat purchase funnel</strong> — first sync in progress. Cohort data will appear once Shopify customer history is loaded (may take a few minutes).
+      </Card>
+    )}
+
     {/* MRR & active subscribers + New vs Churned (live data only) */}
     {liveMRR !== null && subData.length > 0 && (
       <Card className="mt-3 p-5">
