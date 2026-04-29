@@ -53,7 +53,7 @@ function OverviewPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const [dateRange, setDateRange] = useState({ from: startOfMonthStr(), to: todayStr() });
+  const [dateRange, setDateRange] = useState({ from: daysAgoStr(7), to: todayStr() });
   const [rangeData, setRangeData] = useState<any>(null);
   const [rangeSyncing, setRangeSyncing] = useState(false);
 
