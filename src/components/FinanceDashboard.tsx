@@ -2342,8 +2342,45 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
+  // Aggregate KPIs across ALL live markets (not just NL).
+  const liveTWAll = (twData ?? []).filter((t: any) => t?.live);
+  const sum = (key: string) => liveTWAll.reduce((s: number, t: any) => s + (typeof t?.[key] === "number" ? t[key] : 0), 0);
+  const totalRevenue = sum("revenue");
+  const totalAdSpend = sum("adSpend");
+  // Derive new customers per market from adSpend / NCPA, then sum.
+  const totalNewCustomers = liveTWAll.reduce((s: number, t: any) => {
+    if (typeof t?.adSpend === "number" && typeof t?.ncpa === "number" && t.ncpa > 0) {
+      return s + t.adSpend / t.ncpa;
+    }
+    return s;
+  }, 0);
+  const aggNCPA = totalNewCustomers > 0 ? totalAdSpend / totalNewCustomers : null;
+  const aggMER  = totalAdSpend > 0 ? totalRevenue / totalAdSpend : null;
+  // LTV:CPA — weight each market's ratio by its share of new customers.
+  const ltvCpaWeighted = (() => {
+    let num = 0, den = 0;
+    for (const t of liveTWAll) {
+      if (typeof t?.ltvCpa === "number" && typeof t?.adSpend === "number" && typeof t?.ncpa === "number" && t.ncpa > 0) {
+        const w = t.adSpend / t.ncpa;
+        num += t.ltvCpa * w;
+        den += w;
+      }
+    }
+    return den > 0 ? num / den : null;
+  })();
+  // Repeat rate = % of cohort that placed a 2nd order (from Shopify repeat funnel).
+  const repeatRate = (() => {
+    const f: any = shopifyRepeatFunnel;
+    if (!f) return null;
+    const second = f?.funnel?.find?.((r: any) => r.order === 2)?.rate;
+    if (typeof second === "number") return second;
+    const fallback = (f?.monthlyCohorts ?? []).find((c: any) => (c?.size ?? 0) > 0 && typeof c?.second === "number");
+    return fallback?.second ?? null;
+  })();
+  const marketCount = liveTWAll.length;
+  const twSub = marketCount > 0 ? `Triple Whale · ${marketCount} market${marketCount !== 1 ? "s" : ""}` : "TW not connected";
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
     return shopifyMonthly.map(({ month, revenue, refunds = 0 }) => {
