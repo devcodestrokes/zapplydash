@@ -928,21 +928,23 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const now        = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const allSubs: any[] = [];
-  const MAX_PAGES = 60;
+  const MAX_PAGES = 500;
+  const PAGE_SIZE = 200;
   let apiReached  = false; // true once we get at least one 200 response
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     // Loop rate limit: ~1 req/s — wait 600ms between every page
     if (page > 1) await new Promise(r => setTimeout(r, 600));
 
-    let res: Response = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, {
+    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
+    let res: Response = await fetch(url, {
       headers, cache: "no-store",
     });
 
     // On 429: wait 15s and retry once — if still 429, stop gracefully with data collected so far
     if (res.status === 429) {
       await new Promise(r => setTimeout(r, 15000));
-      res = await fetch(`${BASE}/admin/2023-10/subscription?limit=50&page=${page}`, { headers, cache: "no-store" });
+      res = await fetch(url, { headers, cache: "no-store" });
     }
     if (res.status === 429) {
       console.warn(`Loop ${market}: rate-limited at page ${page}, returning ${allSubs.length} subs collected so far`);
@@ -955,15 +957,16 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     const json   = await res.json();
     const batch: any[] = json.data ?? [];
     allSubs.push(...batch);
-    if (!json.pageInfo?.hasNextPage || batch.length === 0) break;
+    const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
+    if (!hasNext || batch.length === 0) break;
   }
 
   // Return null only if the API never responded (key invalid / network error)
   if (!apiReached) return null;
 
   const currency         = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
-  const activeSubs       = allSubs.filter(s => s.status === "ACTIVE");
-  const canceledSubs     = allSubs.filter(s => s.status === "CANCELLED");
+  const activeSubs       = allSubs.filter(s => (s.status ?? "").toUpperCase() === "ACTIVE");
+  const canceledSubs: any[] = [];
   const mrr              = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
   const newThisMonth     = allSubs.filter(s => s.createdAt && new Date(s.createdAt) >= monthStart).length;
   const churnedThisMonth = canceledSubs.filter(s => s.cancelledAt && new Date(s.cancelledAt) >= monthStart).length;
@@ -973,7 +976,7 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     : null;
 
   return {
-    market, flag, platform: "loop", live: true,
+    market, flag, platform: "loop", live: true, calcVersion: 2,
     mrr: Math.round(mrr), activeSubs: activeSubs.length,
     totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
     arpu: arpu != null ? +arpu.toFixed(2) : null, churnRate, currency,
