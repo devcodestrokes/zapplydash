@@ -1220,7 +1220,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       const orderDotColors = ["bg-neutral-900", "bg-violet-500", "bg-violet-400", "bg-violet-300", "bg-violet-200", "bg-violet-200", "bg-violet-100"];
       const labels = ["1st order", "2nd order", "3rd order", "4th order", "5th order", "6th order", "7th+ orders"];
       const subs = ["First purchase", "Repeat to 2nd", "Repeat to 3rd", "Repeat to 4th", "Repeat to 5th", "Repeat to 6th", "Repeat to 7th+"];
-      const [showDeeper, setShowDeeper] = [false, () => {}]; // collapsed-style; full table always rendered for accuracy
+      // (deeper analysis is always rendered for accuracy)
       const top4 = f.funnel.slice(0, 4);
       const rest = f.funnel.slice(4);
       return (
