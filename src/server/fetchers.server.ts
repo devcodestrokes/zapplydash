@@ -2155,12 +2155,14 @@ export async function fetchShopifyRepeatFunnel() {
   const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
   if (!clientId) return null;
 
-  const lookbackDays = 365;
+  // Look back 540 days so we can reliably identify a customer's TRUE first
+  // order. With only 365d we mis-label long-time customers as "first-time"
+  // when they re-order, and the older cohort window comes up empty.
+  const lookbackDays = 540;
   const sinceDate = daysAgoIso(lookbackDays);
   const since = `${sinceDate}T00:00:00Z`;
 
   // customerId → sorted list of order createdAt timestamps (across all stores).
-  // Keying by raw Shopify GID is safe — IDs do not collide between stores.
   const customerOrders = new Map<string, string[]>();
 
   for (const { code, storeKey } of SHOPIFY_STORES) {
@@ -2172,7 +2174,7 @@ export async function fetchShopifyRepeatFunnel() {
     let cursor: string | null = null;
     let hasNextPage = true;
     let page = 0;
-    const maxPages = 80; // ~20k orders per store
+    const maxPages = 120; // ~30k orders per store over 540d
 
     try {
       while (hasNextPage && page < maxPages) {
@@ -2213,36 +2215,28 @@ export async function fetchShopifyRepeatFunnel() {
 
   const now = Date.now();
   const DAY = 86_400_000;
+  // Customers whose first recorded order is right at the dataset boundary
+  // are almost certainly older customers with prior orders we can't see.
+  const datasetEdgeTs = now - (lookbackDays - 10) * DAY;
 
-  // ── 90-day cohort funnel ────────────────────────────────────────────
-  // First order in [120d, 90d] ago — gives a 30-day cohort that has had
-  // at least 90 days to repeat.
+  // ── 60-day cohort funnel ────────────────────────────────────────────
+  // Customers whose first order is in [120d, 60d] ago — a 60-day cohort
+  // that has had at least 60 days to repeat.
   const cohortStart = now - 120 * DAY;
-  const cohortEnd = now - 90 * DAY;
+  const cohortEnd = now - 60 * DAY;
   let cohortSize = 0;
-  const orderCounts = [0, 0, 0, 0, 0, 0, 0]; // 1st..7th+
+  // reachedN[i] = number of cohort customers who reached at least (i+1) orders
+  const reachedN = [0, 0, 0, 0, 0, 0, 0];
   for (const orders of customerOrders.values()) {
     const firstTs = new Date(orders[0]).getTime();
     if (firstTs < cohortStart || firstTs > cohortEnd) continue;
+    if (firstTs <= datasetEdgeTs) continue; // skip boundary-edge customers
     cohortSize++;
-    const n = Math.min(orders.length, 7);
-    // Customer reached order N → increments buckets 1..N
-    for (let i = 0; i < n; i++) orderCounts[i]++;
-    // 7+ bucket also captures anyone with 7 or more
-    if (orders.length >= 7) orderCounts[6]++;
-  }
-  // de-dupe the 7+ double-count from the loop above
-  if (cohortSize > 0) {
-    let bucket7 = 0;
-    for (const orders of customerOrders.values()) {
-      const firstTs = new Date(orders[0]).getTime();
-      if (firstTs < cohortStart || firstTs > cohortEnd) continue;
-      if (orders.length >= 7) bucket7++;
-    }
-    orderCounts[6] = bucket7;
+    const reached = Math.min(orders.length, 7);
+    for (let i = 0; i < reached; i++) reachedN[i]++;
   }
 
-  const funnel = orderCounts.map((c, i) => ({
+  const funnel = reachedN.map((c, i) => ({
     order: i + 1,
     customers: c,
     rate: cohortSize > 0 ? +((c / cohortSize) * 100).toFixed(1) : 0,
