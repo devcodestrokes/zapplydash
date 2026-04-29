@@ -1204,11 +1204,39 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{blendedChurn !== null ? `${blendedChurn.toFixed(1)}%` : "—"}</div>
               <div className="mt-1 text-[11px] text-neutral-400">{totalChurned > 0 ? `${totalChurned} lost this month` : "No churn this month"}</div>
             </div>
-            <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">New subscribers</div>
-              <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{totalNew.toLocaleString()}</div>
-              <div className="mt-1 text-[11px] text-neutral-400">Net {totalNew - totalChurned >= 0 ? "+" : ""}{totalNew - totalChurned} this month</div>
-            </div>
+            {(() => {
+              const f: any = shopifyRepeatFunnel;
+              const thirdRow = f?.funnel?.[2];
+              const rate: number | null = thirdRow?.rate ?? null;
+              // Compute delta vs prior mature cohort (first non-maturing cohort that is not the latest mature one)
+              const mature = (f?.monthlyCohorts ?? []).filter((c: any) => !c.maturing && c.third !== null);
+              const latest = mature[0];
+              const prior = mature[1];
+              const delta = latest && prior ? latest.third - prior.third : null;
+              return (
+                <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
+                  <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Repeat to 3rd order</div>
+                  {rate !== null ? (
+                    <>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <div className="text-[26px] font-semibold tabular-nums leading-none">{rate.toFixed(1)}%</div>
+                        {delta !== null && (
+                          <div className={`text-[12px] font-semibold tabular-nums ${delta >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-1 text-[11px] text-neutral-400">Of first-time buyers</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none text-neutral-400">—</div>
+                      <div className="mt-1 text-[11px] text-neutral-400">Cohort still maturing</div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="mt-5 border-t border-neutral-100 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
