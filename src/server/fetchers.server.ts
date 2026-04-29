@@ -27,25 +27,20 @@ function daysAgo(n: number): string {
 // Vite inlines these as string literals at build time, so the Worker bundle
 // always has them available regardless of runtime env injection.
 // The integrations + data_cache tables have permissive RLS for this use case.
-const VITE_SUPABASE_URL =
-  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-const VITE_SUPABASE_PUBLISHABLE_KEY =
-  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const VITE_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+const VITE_SUPABASE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as
+  | string
+  | undefined;
 
 function serviceClient() {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    VITE_SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || VITE_SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
-    throw new Error(
-      `Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`
-    );
+    throw new Error(`Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`);
   }
   return createSupabaseJS(url, key, { auth: { persistSession: false } });
 }
@@ -60,14 +55,20 @@ function serviceClient() {
 // Confirmed working on all 4 stores: zapply-nl, zapplyde, zapply-usa, zapplygermany
 
 const SHOPIFY_STORES = [
-  { code: "NL", flag: "🇳🇱", name: "Netherlands",   storeKey: "SHOPIFY_NL_STORE" },
+  { code: "NL", flag: "🇳🇱", name: "Netherlands", storeKey: "SHOPIFY_NL_STORE" },
   { code: "UK", flag: "🇬🇧", name: "United Kingdom", storeKey: "SHOPIFY_UK_STORE" },
-  { code: "US", flag: "🇺🇸", name: "United States",  storeKey: "SHOPIFY_US_STORE", status: "scaling" },
-  { code: "EU", flag: "🇩🇪", name: "Germany / EU",   storeKey: "SHOPIFY_EU_STORE" },
+  {
+    code: "US",
+    flag: "🇺🇸",
+    name: "United States",
+    storeKey: "SHOPIFY_US_STORE",
+    status: "scaling",
+  },
+  { code: "EU", flag: "🇩🇪", name: "Germany / EU", storeKey: "SHOPIFY_EU_STORE" },
 ] as const;
 
 async function getShopifyToken(store: string): Promise<string | null> {
-  const clientId     = process.env.SHOPIFY_APP_CLIENT_ID;
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
   const clientSecret = process.env.SHOPIFY_APP_CLIENT_SECRET;
   if (!clientId || !clientSecret || !store) return null;
 
@@ -98,9 +99,9 @@ async function getShopifyToken(store: string): Promise<string | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id:     clientId,
+        client_id: clientId,
         client_secret: clientSecret,
-        grant_type:    "client_credentials",
+        grant_type: "client_credentials",
       }),
       cache: "no-store",
     });
@@ -119,8 +120,14 @@ async function getShopifyToken(store: string): Promise<string | null> {
     await serviceClient()
       .from("integrations")
       .upsert(
-        { provider, access_token, expires_at: expiresAt, updated_at: new Date().toISOString(), metadata: { shop_domain: store, source: "client_credentials" } },
-        { onConflict: "provider" }
+        {
+          provider,
+          access_token,
+          expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+          metadata: { shop_domain: store, source: "client_credentials" },
+        },
+        { onConflict: "provider" },
       );
 
     return access_token;
@@ -145,8 +152,18 @@ const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null, until?: string |
 }`;
 
 // Aggregate all orders for a store using cursor pagination (max 40 pages = 10,000 orders)
-async function fetchShopifyAllOrders(store: string, token: string, since: string, maxPages = 40, until?: string | null) {
-  let revenue = 0, refunds = 0, discounts = 0, orderCount = 0, currency = "EUR";
+async function fetchShopifyAllOrders(
+  store: string,
+  token: string,
+  since: string,
+  maxPages = 40,
+  until?: string | null,
+) {
+  let revenue = 0,
+    refunds = 0,
+    discounts = 0,
+    orderCount = 0,
+    currency = "EUR";
   const customerIds = new Set<string>();
   const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
   let cursor: string | null = null;
@@ -161,33 +178,50 @@ async function fetchShopifyAllOrders(store: string, token: string, since: string
     });
     if (!res.ok) break;
     const json = await res.json();
-    if (json.errors) { console.error("Shopify GQL:", json.errors[0]?.message); break; }
+    if (json.errors) {
+      console.error("Shopify GQL:", json.errors[0]?.message);
+      break;
+    }
 
     const page_data = json.data?.orders ?? {};
     const edges: any[] = page_data.edges ?? [];
     hasNextPage = page_data.pageInfo?.hasNextPage ?? false;
-    cursor      = page_data.pageInfo?.endCursor ?? null;
+    cursor = page_data.pageInfo?.endCursor ?? null;
     page++;
 
     for (const { node: o } of edges) {
-      const r  = parseFloat(o.totalPriceSet.shopMoney.amount);
+      const r = parseFloat(o.totalPriceSet.shopMoney.amount);
       const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
       const dc = parseFloat(o.totalDiscountsSet.shopMoney.amount);
       // Shopify "Total sales" = orders − returns. Subtract refunds from revenue
       // so our number aligns with the figure shown in Shopify Analytics.
       const net = r - rf;
-      revenue   += net; refunds += rf; discounts += dc; orderCount++;
+      revenue += net;
+      refunds += rf;
+      discounts += dc;
+      orderCount++;
       currency = o.totalPriceSet.shopMoney.currencyCode;
       if (o.customer?.id) customerIds.add(o.customer.id);
-      const mk = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+      const mk = new Date(o.createdAt)
+        .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+        .replace(" ", " '");
       if (!monthlySums[mk]) monthlySums[mk] = { revenue: 0, orders: 0, refunds: 0 };
       monthlySums[mk].revenue += net;
       monthlySums[mk].refunds += rf;
-      monthlySums[mk].orders  += 1;
+      monthlySums[mk].orders += 1;
     }
   }
 
-  return { revenue, refunds, discounts, orderCount, currency, uniqueCustomers: customerIds.size, monthlySums, truncated: hasNextPage };
+  return {
+    revenue,
+    refunds,
+    discounts,
+    orderCount,
+    currency,
+    uniqueCustomers: customerIds.size,
+    monthlySums,
+    truncated: hasNextPage,
+  };
 }
 
 export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
@@ -206,26 +240,42 @@ export async function fetchShopifyMarkets(fromDate?: string, toDate?: string) {
       if (!token) return { code, flag, name, status: status ?? null, live: false };
 
       try {
-        const agg = await fetchShopifyAllOrders(store, token, since, 40, until);
-        const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } = agg;
+        const agg = await fetchShopifyAllOrders(store, token, since, 180, until);
+        const { revenue, refunds, discounts, orderCount, currency, uniqueCustomers, truncated } =
+          agg;
         const aov = orderCount > 0 ? revenue / orderCount : 0;
-        if (truncated) console.warn(`Shopify ${code}: revenue capped at 40 pages (10,000 orders)`);
+        if (truncated) console.warn(`Shopify ${code}: revenue capped at 180 pages (45,000 orders)`);
         // Convert to EUR for cross-store aggregation. Keep native values too.
-        const fxRate = await getEurRate(currency, since.slice(0, 10), (until ?? new Date().toISOString()).slice(0, 10));
+        const fxRate = await getEurRate(
+          currency,
+          since.slice(0, 10),
+          (until ?? new Date().toISOString()).slice(0, 10),
+        );
         const revenueEUR = +(revenue * fxRate).toFixed(2);
         const refundsEUR = +(refunds * fxRate).toFixed(2);
         return {
-          code, flag, name,
-          revenue: revenueEUR, refunds: refundsEUR, discounts,
-          revenueNative: revenue, refundsNative: refunds,
-          orders: orderCount, aov, currency, fxRate,
-          newCustomers: uniqueCustomers, truncated, status: status ?? null, live: true,
+          code,
+          flag,
+          name,
+          revenue: revenueEUR,
+          refunds: refundsEUR,
+          discounts,
+          revenueNative: revenue,
+          refundsNative: refunds,
+          orders: orderCount,
+          aov,
+          currency,
+          fxRate,
+          newCustomers: uniqueCustomers,
+          truncated,
+          status: status ?? null,
+          live: true,
         };
       } catch (err: any) {
         console.error(`Shopify ${code} fetch failed:`, err.message);
         return { code, flag, name, status: status ?? null, live: false, error: err.message };
       }
-    })
+    }),
   );
 
   const hasAnyLive = results.some((r: any) => r.live);
@@ -247,7 +297,9 @@ export async function fetchShopifyToday() {
       if (!token) return { code, flag, name, live: false };
 
       try {
-        let revenue = 0, refunds = 0, orders = 0;
+        let revenue = 0,
+          refunds = 0,
+          orders = 0;
         let currency = "EUR";
         const hourlyRev: number[] = Array(24).fill(0);
         const hourlyOrd: number[] = Array(24).fill(0);
@@ -272,11 +324,13 @@ export async function fetchShopifyToday() {
           page++;
 
           for (const { node: o } of edges) {
-            const r  = parseFloat(o.totalPriceSet.shopMoney.amount);
+            const r = parseFloat(o.totalPriceSet.shopMoney.amount);
             const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
             // Net of refunds — matches Shopify Analytics "Total sales".
             const net = r - rf;
-            revenue += net; refunds += rf; orders++;
+            revenue += net;
+            refunds += rf;
+            orders++;
             currency = o.totalPriceSet.shopMoney.currencyCode;
             // Amsterdam = UTC+2 (CEST, valid Apr-Oct)
             const hour = (new Date(o.createdAt).getUTCHours() + 2) % 24;
@@ -285,38 +339,107 @@ export async function fetchShopifyToday() {
           }
         }
 
-        const hourly = hourlyRev.map((rev, h) => ({ hour: h, revenue: +rev.toFixed(2), orders: hourlyOrd[h] }));
+        const hourly = hourlyRev.map((rev, h) => ({
+          hour: h,
+          revenue: +rev.toFixed(2),
+          orders: hourlyOrd[h],
+        }));
         const fxRate = await getEurRate(currency, today(), today());
         const revenueEUR = +(revenue * fxRate).toFixed(2);
         const refundsEUR = +(refunds * fxRate).toFixed(2);
-        return { code, flag, name, revenue: revenueEUR, refunds: refundsEUR, revenueNative: +revenue.toFixed(2), refundsNative: +refunds.toFixed(2), orders, aov: orders > 0 ? +(revenueEUR / orders).toFixed(2) : 0, currency, fxRate, hourly, live: true };
+        return {
+          code,
+          flag,
+          name,
+          revenue: revenueEUR,
+          refunds: refundsEUR,
+          revenueNative: +revenue.toFixed(2),
+          refundsNative: +refunds.toFixed(2),
+          orders,
+          aov: orders > 0 ? +(revenueEUR / orders).toFixed(2) : 0,
+          currency,
+          fxRate,
+          hourly,
+          live: true,
+        };
       } catch (err: any) {
         console.error(`Shopify today ${code}:`, err.message);
         return { code, flag, name, live: false };
       }
-    })
+    }),
   );
 
   return markets.some((m: any) => m.live) ? { markets, fetchedAt: new Date().toISOString() } : null;
 }
 
-// Last 6 months of order aggregates — NL store, fully paginated
+// Last 6 months of order aggregates — all Shopify stores, converted to EUR.
 export async function fetchShopifyMonthly() {
-  const store = process.env.SHOPIFY_NL_STORE;
-  if (!store) return null;
-
-  const token = await getShopifyToken(store);
-  if (!token) return null;
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
+  if (!clientId) return null;
 
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const since = `${sixMonthsAgo.toISOString().split("T")[0]}T00:00:00Z`;
+  const sinceDay = since.slice(0, 10);
 
   try {
-    const { monthlySums } = await fetchShopifyAllOrders(store, token, since, 80);
-    return Object.entries(monthlySums)
-      .sort(([a], [b]) => new Date("1 " + a.replace("'", "20")).getTime() - new Date("1 " + b.replace("'", "20")).getTime())
-      .map(([month, data]) => ({ month, ...data }));
+    const perStore = await Promise.all(
+      SHOPIFY_STORES.map(async ({ code, storeKey }: any) => {
+        const store = process.env[storeKey];
+        if (!store)
+          return {
+            code,
+            monthlySums: {} as Record<string, { revenue: number; orders: number; refunds: number }>,
+          };
+        const token = await getShopifyToken(store);
+        if (!token) return { code, monthlySums: {} };
+        const { monthlySums, truncated } = await fetchShopifyAllOrders(store, token, since, 240);
+        if (truncated) console.warn(`Shopify monthly ${code}: capped at 240 pages (60,000 orders)`);
+        return { code, monthlySums };
+      }),
+    );
+
+    const merged: Record<
+      string,
+      {
+        revenue: number;
+        orders: number;
+        refunds: number;
+        byMarket: Record<string, { revenue: number; orders: number; refunds: number }>;
+      }
+    > = {};
+    for (const storeRow of perStore) {
+      for (const [month, row] of Object.entries(
+        storeRow.monthlySums as Record<
+          string,
+          { revenue: number; orders: number; refunds: number }
+        >,
+      )) {
+        if (!merged[month]) merged[month] = { revenue: 0, orders: 0, refunds: 0, byMarket: {} };
+        const endDay = new Date(`1 ${month.replace("'", "20")}`);
+        endDay.setMonth(endDay.getMonth() + 1, 0);
+        const sourceCurrency = MARKET_CURRENCY[storeRow.code] ?? "EUR";
+        const fxRate = await getEurRate(
+          sourceCurrency,
+          sinceDay,
+          endDay.toISOString().split("T")[0],
+        );
+        const revenue = +(row.revenue * fxRate).toFixed(2);
+        const refunds = +(row.refunds * fxRate).toFixed(2);
+        merged[month].revenue += revenue;
+        merged[month].orders += row.orders;
+        merged[month].refunds += refunds;
+        merged[month].byMarket[storeRow.code] = { revenue, orders: row.orders, refunds };
+      }
+    }
+
+    return Object.entries(merged)
+      .sort(
+        ([a], [b]) =>
+          new Date("1 " + a.replace("'", "20")).getTime() -
+          new Date("1 " + b.replace("'", "20")).getTime(),
+      )
+      .map(([month, data]) => ({ month, ...data, calcVersion: 2 }));
   } catch {
     return null;
   }
@@ -380,7 +503,10 @@ async function getEurRate(currency: string, start: string, end: string): Promise
           .map((r: any) => toNumber(r?.EUR))
           .filter((n): n is number => typeof n === "number" && n > 0);
         if (series.length > 0) return series.reduce((a, b) => a + b, 0) / series.length;
-        console.warn(`FX ${currency}->EUR: no rates in response`, JSON.stringify(data).slice(0, 200));
+        console.warn(
+          `FX ${currency}->EUR: no rates in response`,
+          JSON.stringify(data).slice(0, 200),
+        );
       } else {
         console.warn(`FX ${currency}->EUR: HTTP ${res.status} from ${url}`);
       }
@@ -410,27 +536,24 @@ function tripleWhaleTodayHour(): number {
 // Returns 698 metrics for a given shopDomain + period.
 import { startProgress, markStore, finishProgress } from "./progress.server";
 
-export async function fetchTripleWhale(
-  fromDate?: string,
-  toDate?: string,
-  progressKey?: string
-) {
+export async function fetchTripleWhale(fromDate?: string, toDate?: string, progressKey?: string) {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
 
   const start = fromDate ?? startOfMonth();
-  const end   = toDate   ?? today();
+  const end = toDate ?? today();
 
   // Determine which stores will actually be fetched (have an env-mapped shop)
-  const planned = TW_SHOPS
-    .map(({ market, flag, envKeys }: any) => {
-      const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
-      return shop ? { market, flag, shop } : null;
-    })
-    .filter(Boolean) as Array<{ market: string; flag: string; shop: string }>;
+  const planned = TW_SHOPS.map(({ market, flag, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, flag, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; flag: string; shop: string }>;
 
   if (progressKey) {
-    startProgress(progressKey, planned.map(({ market, flag }) => ({ market, flag })));
+    startProgress(
+      progressKey,
+      planned.map(({ market, flag }) => ({ market, flag })),
+    );
   }
 
   const results = await Promise.all(
@@ -448,8 +571,16 @@ export async function fetchTripleWhale(
         try {
           return await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
             method: "POST",
-            headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
-            body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              shopDomain: shop,
+              period: { start, end },
+              todayHour: tripleWhaleTodayHour(),
+            }),
             signal: ctrl.signal,
           });
         } finally {
@@ -497,56 +628,61 @@ export async function fetchTripleWhale(
 
         // All IDs confirmed from live API (698 metrics) — April 2026
         const row = {
-          market, flag,
+          market,
+          flag,
           currency: "EUR",
           sourceCurrency,
           fxRate: eurRate,
-          revenue:         moneyMetric("grossSales", "sales"),  // Gross Sales
+          revenue: moneyMetric("grossSales", "sales"), // Gross Sales
           // Triple Whale API title for `netSales` is "Total Sales".
           // Formula: Gross Sales + Shipping + Taxes − Discounts − Refunded Sales − Refunded Shipping − Refunded Taxes.
-          netRevenue:      moneyMetric("netSales", "sales"),
-          newCustomerRev:  moneyMetric("newCustomerSales"),     // New Customer Revenue
-          adSpend:         moneyMetric("blendedAds"),                   // Total blended ad spend
-          facebookSpend:   moneyMetric("facebookAds"),                  // Facebook / Meta
-          googleSpend:     moneyMetric("googleAds"),                    // Google Ads
-          tiktokSpend:     moneyMetric("tiktokAds"),                    // TikTok Ads
-          snapchatSpend:   moneyMetric("snapchatAds"),                  // Snapchat Ads
-          pinterestSpend:  moneyMetric("pinterestAds"),                 // Pinterest Ads
-          bingSpend:       moneyMetric("bingAds", "microsoftAds"),      // Microsoft / Bing
-          klaviyoSpend:    moneyMetric("klaviyoCost"),                  // Klaviyo cost
-          appleSpend:      moneyMetric("appleSearchAds"),               // Apple Search Ads
-          amazonSpend:     moneyMetric("amazonAds"),                    // Amazon Ads
-          linkedinSpend:   moneyMetric("linkedinAds"),                  // LinkedIn Ads
-          twitterSpend:    moneyMetric("twitterAds", "xAds"),           // Twitter / X Ads
-          youtubeSpend:    moneyMetric("youtubeAds"),                   // YouTube Ads
-          redditSpend:     moneyMetric("redditAds"),                    // Reddit Ads
-          outbrainSpend:   moneyMetric("outbrainAds"),                  // Outbrain
-          taboolaSpend:    moneyMetric("taboolaAds"),                   // Taboola
-          criteoSpend:     moneyMetric("criteoAds"),                    // Criteo
+          netRevenue: moneyMetric("netSales", "sales"),
+          newCustomerRev: moneyMetric("newCustomerSales"), // New Customer Revenue
+          adSpend: moneyMetric("blendedAds"), // Total blended ad spend
+          facebookSpend: moneyMetric("facebookAds"), // Facebook / Meta
+          googleSpend: moneyMetric("googleAds"), // Google Ads
+          tiktokSpend: moneyMetric("tiktokAds"), // TikTok Ads
+          snapchatSpend: moneyMetric("snapchatAds"), // Snapchat Ads
+          pinterestSpend: moneyMetric("pinterestAds"), // Pinterest Ads
+          bingSpend: moneyMetric("bingAds", "microsoftAds"), // Microsoft / Bing
+          klaviyoSpend: moneyMetric("klaviyoCost"), // Klaviyo cost
+          appleSpend: moneyMetric("appleSearchAds"), // Apple Search Ads
+          amazonSpend: moneyMetric("amazonAds"), // Amazon Ads
+          linkedinSpend: moneyMetric("linkedinAds"), // LinkedIn Ads
+          twitterSpend: moneyMetric("twitterAds", "xAds"), // Twitter / X Ads
+          youtubeSpend: moneyMetric("youtubeAds"), // YouTube Ads
+          redditSpend: moneyMetric("redditAds"), // Reddit Ads
+          outbrainSpend: moneyMetric("outbrainAds"), // Outbrain
+          taboolaSpend: moneyMetric("taboolaAds"), // Taboola
+          criteoSpend: moneyMetric("criteoAds"), // Criteo
           influencerSpend: moneyMetric("influencerAds", "influencerCost"), // Influencer
-          customSpend:     moneyMetric("customAds", "otherAds"),        // Custom / other
-          roas:            twMetric(m, "roas"),                  // Blended ROAS
-          ncRoas:          twMetric(m, "newCustomersRoas"),     // New Customer ROAS
-          fbRoas:          twMetric(m, "facebookRoas"),         // Facebook ROAS
-          googleRoas:      twMetric(m, "googleRoas"),           // Google ROAS
-          mer:             twMetric(m, "mer"),                   // Marketing Efficiency Ratio
-          ncpa:            moneyMetric("newCustomersCpa"),      // New Customer CPA
-          ltvCpa:          twMetric(m, "ltvCpa"),                // LTV:CPA ratio
-          aov:             moneyMetric("shopifyAov"),            // True AOV
-          orders:          twMetric(m, "shopifyOrders"),         // Total orders
-          grossProfit:     moneyMetric("grossProfit"),           // Gross Profit
-          netProfit:       moneyMetric("totalNetProfit"),        // Net Profit (after all costs)
-          cogs:            moneyMetric("cogs"),                  // Cost of Goods Sold
-          newCustomersPct: twMetric(m, "newCustomersPercent"),  // % new customers
-          uniqueCustomers: twMetric(m, "uniqueCustomers"),      // Unique customers
+          customSpend: moneyMetric("customAds", "otherAds"), // Custom / other
+          roas: twMetric(m, "roas"), // Blended ROAS
+          ncRoas: twMetric(m, "newCustomersRoas"), // New Customer ROAS
+          fbRoas: twMetric(m, "facebookRoas"), // Facebook ROAS
+          googleRoas: twMetric(m, "googleRoas"), // Google ROAS
+          mer: twMetric(m, "mer"), // Marketing Efficiency Ratio
+          ncpa: moneyMetric("newCustomersCpa"), // New Customer CPA
+          ltvCpa: twMetric(m, "ltvCpa"), // LTV:CPA ratio
+          aov: moneyMetric("shopifyAov"), // True AOV
+          orders: twMetric(m, "shopifyOrders"), // Total orders
+          grossProfit: moneyMetric("grossProfit"), // Gross Profit
+          netProfit: moneyMetric("totalNetProfit"), // Net Profit (after all costs)
+          cogs: moneyMetric("cogs"), // Cost of Goods Sold
+          newCustomersPct: twMetric(m, "newCustomersPercent"), // % new customers
+          uniqueCustomers: twMetric(m, "uniqueCustomers"), // Unique customers
           // Subscription metrics
-          subRevenue:        moneyMetric("subscriptionSales", "recurringRevenue", "subscriptionRevenue"),
-          subOrders:         metric("subscriptionOrders"),
+          subRevenue: moneyMetric("subscriptionSales", "recurringRevenue", "subscriptionRevenue"),
+          subOrders: metric("subscriptionOrders"),
           activeSubscribers: metric("activeSubscribers", "subscriptionActive"),
-          newSubscribers:    metric("newSubscribers", "subscriptionStarted", "subscriptionNew"),
-          cancelledSubs:     metric("cancelledSubscribers", "subscriptionCancelled", "subscriptionChurned"),
-          mrr:               moneyMetric("mrr", "monthlyRecurringRevenue"),
-          churnRate:         metric("subscriptionChurnRate", "churnRate"),
+          newSubscribers: metric("newSubscribers", "subscriptionStarted", "subscriptionNew"),
+          cancelledSubs: metric(
+            "cancelledSubscribers",
+            "subscriptionCancelled",
+            "subscriptionChurned",
+          ),
+          mrr: moneyMetric("mrr", "monthlyRecurringRevenue"),
+          churnRate: metric("subscriptionChurnRate", "churnRate"),
         };
 
         const hasMetrics = Array.isArray(m) && m.length > 0;
@@ -559,7 +695,7 @@ export async function fetchTripleWhale(
         if (progressKey) markStore(progressKey, market, "error");
         return { market, flag, live: false };
       }
-    })
+    }),
   );
 
   if (progressKey) finishProgress(progressKey);
@@ -578,8 +714,16 @@ export async function fetchTripleWhaleCustomerEconomics() {
     const start = daysAgo(days);
     const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
       method: "POST",
-      headers: { "x-api-key": apiKey, "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        shopDomain: shop,
+        period: { start, end },
+        todayHour: tripleWhaleTodayHour(),
+      }),
     });
     if (!res.ok) throw new Error(`Triple Whale customer economics ${days}D: ${res.status}`);
     const data = await res.json();
@@ -650,7 +794,7 @@ export async function fetchShopifyDaily() {
         let cursor: string | null = null;
         let hasNextPage = true;
         let page = 0;
-        const maxPages = 80; // up to 20k orders / store / year
+        const maxPages = 240; // up to 60k orders / store / year
 
         while (hasNextPage && page < maxPages) {
           const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
@@ -696,13 +840,15 @@ export async function fetchShopifyDaily() {
         console.error(`Shopify daily ${code}:`, err?.message);
         return { code, daily: {} };
       }
-    })
+    }),
   );
 
   // Merge per-market into a single daily series
   const merged: Record<string, { revenue: number; orders: number }> = {};
   for (const { daily } of perStore) {
-    for (const [k, v] of Object.entries(daily as Record<string, { revenue: number; orders: number }>)) {
+    for (const [k, v] of Object.entries(
+      daily as Record<string, { revenue: number; orders: number }>,
+    )) {
       if (!merged[k]) merged[k] = { revenue: 0, orders: 0 };
       merged[k].revenue += v.revenue;
       merged[k].orders += v.orders;
@@ -715,6 +861,7 @@ export async function fetchShopifyDaily() {
   return {
     daily: merged,
     byMarket: Object.fromEntries(perStore.map((s) => [s.code, s.daily])),
+    calcVersion: 2,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -728,12 +875,10 @@ export async function fetchTripleWhaleDaily() {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
 
-  const planned = TW_SHOPS
-    .map(({ market, envKeys }: any) => {
-      const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
-      return shop ? { market, shop } : null;
-    })
-    .filter(Boolean) as Array<{ market: string; shop: string }>;
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
 
   if (planned.length === 0) return null;
 
@@ -757,8 +902,16 @@ export async function fetchTripleWhaleDaily() {
           const timer = setTimeout(() => ctrl.abort(), 15_000);
           const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
             method: "POST",
-            headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ shopDomain: shop, period: { start: day, end: day }, todayHour: tripleWhaleTodayHour() }),
+            headers: {
+              "x-api-key": apiKey,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              shopDomain: shop,
+              period: { start: day, end: day },
+              todayHour: tripleWhaleTodayHour(),
+            }),
             signal: ctrl.signal,
           }).finally(() => clearTimeout(timer));
           if (!res.ok) return;
@@ -809,10 +962,14 @@ export async function fetchTripleWhaleDaily() {
 function normalizeToMonthly(price: number, interval: string, intervalCount: number): number {
   const n = intervalCount || 1;
   switch (interval) {
-    case "day":   return (price / n) * 30;
-    case "week":  return (price / n) * 4.33;
-    case "year":  return price / (n * 12);
-    default:      return price / n; // month
+    case "day":
+      return (price / n) * 30;
+    case "week":
+      return (price / n) * 4.33;
+    case "year":
+      return price / (n * 12);
+    default:
+      return price / n; // month
   }
 }
 
@@ -824,7 +981,7 @@ async function _fetchJuo() {
   }
 
   const JUO_BASE = "https://api.juo.io";
-  const headers  = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
+  const headers = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
   const allSubs: any[] = [];
   const MAX_PAGES = 300;
   // Always build absolute URLs — Juo's Link header returns relative paths
@@ -840,10 +997,13 @@ async function _fetchJuo() {
 
       if (res.status === 429) {
         const reset = parseInt(res.headers.get("X-RateLimit-Reset") ?? "2", 10);
-        await new Promise(r => setTimeout(r, (reset || 2) * 1000));
+        await new Promise((r) => setTimeout(r, (reset || 2) * 1000));
         continue;
       }
-      if (!res.ok) { console.error(`Juo API ${res.status}`); break; }
+      if (!res.ok) {
+        console.error(`Juo API ${res.status}`);
+        break;
+      }
 
       const json = await res.json();
       const batch: any[] = json.data ?? json.subscriptions ?? (Array.isArray(json) ? json : []);
@@ -865,17 +1025,17 @@ async function _fetchJuo() {
 
     if (!allSubs.length) return null;
 
-    const now        = new Date();
+    const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const activeSubs   = allSubs.filter(s => s.status === "active");
-    const pausedSubs   = allSubs.filter(s => s.status === "paused");
-    const canceledSubs = allSubs.filter(s => s.status === "canceled");
+    const activeSubs = allSubs.filter((s) => s.status === "active");
+    const pausedSubs = allSubs.filter((s) => s.status === "paused");
+    const canceledSubs = allSubs.filter((s) => s.status === "canceled");
 
     // MRR = sum of each active subscription's items, normalised to monthly
     let mrr = 0;
     for (const sub of activeSubs) {
-      const interval      = sub.billingPolicy?.interval ?? "month";
+      const interval = sub.billingPolicy?.interval ?? "month";
       const intervalCount = sub.billingPolicy?.intervalCount ?? 1;
       for (const item of sub.items ?? []) {
         const price = parseFloat(item.price ?? item.unitPrice ?? "0");
@@ -887,22 +1047,39 @@ async function _fetchJuo() {
       }
     }
 
-    const newThisMonth     = allSubs.filter(s => s.createdAt && new Date(s.createdAt) >= monthStart).length;
-    const churnedThisMonth = canceledSubs.filter(s => s.canceledAt && new Date(s.canceledAt) >= monthStart).length;
-    const arpu             = activeSubs.length > 0 ? mrr / activeSubs.length : null;
-    const churnRate        = (activeSubs.length + churnedThisMonth) > 0
-      ? +((churnedThisMonth / (activeSubs.length + churnedThisMonth)) * 100).toFixed(1)
-      : null;
+    const newThisMonth = allSubs.filter(
+      (s) => s.createdAt && new Date(s.createdAt) >= monthStart,
+    ).length;
+    const churnedThisMonth = canceledSubs.filter(
+      (s) => s.canceledAt && new Date(s.canceledAt) >= monthStart,
+    ).length;
+    const arpu = activeSubs.length > 0 ? mrr / activeSubs.length : null;
+    const churnRate =
+      activeSubs.length + churnedThisMonth > 0
+        ? +((churnedThisMonth / (activeSubs.length + churnedThisMonth)) * 100).toFixed(1)
+        : null;
 
     const currency = activeSubs[0]?.currencyCode ?? "EUR";
 
-    return [{
-      market: "NL", flag: "🇳🇱", platform: "juo", live: true, calcVersion: 2,
-      mrr: +mrr.toFixed(2), activeSubs: activeSubs.length,
-      pausedSubs: pausedSubs.length, canceledSubs: canceledSubs.length,
-      totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
-      arpu: arpu != null ? +arpu.toFixed(2) : null, churnRate, currency,
-    }];
+    return [
+      {
+        market: "NL",
+        flag: "🇳🇱",
+        platform: "juo",
+        live: true,
+        calcVersion: 2,
+        mrr: +mrr.toFixed(2),
+        activeSubs: activeSubs.length,
+        pausedSubs: pausedSubs.length,
+        canceledSubs: canceledSubs.length,
+        totalFetched: allSubs.length,
+        newThisMonth,
+        churnedThisMonth,
+        arpu: arpu != null ? +arpu.toFixed(2) : null,
+        churnRate,
+        currency,
+      },
+    ];
   } catch (err: any) {
     console.error("Juo fetch error:", err.message);
     return null;
@@ -923,9 +1100,9 @@ const LOOP_STORES = [
 ] as const;
 
 async function fetchLoopStore(market: string, flag: string, key: string) {
-  const BASE    = "https://api.loopsubscriptions.com";
+  const BASE = "https://api.loopsubscriptions.com";
   const headers = { "X-Loop-Token": key, Accept: "application/json" };
-  const now        = new Date();
+  const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const allSubs: any[] = [];
   const MAX_PAGES = 500;
@@ -933,59 +1110,80 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   // Keeping the requested size aligned prevents bad hasNext fallbacks and makes
   // partial-page detection reliable.
   const PAGE_SIZE = 100;
-  let apiReached  = false; // true once we get at least one 200 response
+  let apiReached = false; // true once we get at least one 200 response
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     // Loop rate limit: ~1 req/s — wait between every page. Do not write a
     // partial subscription book as finance data; stale cache is safer than a
     // fabricated total.
-    if (page > 1) await new Promise(r => setTimeout(r, 1300));
+    if (page > 1) await new Promise((r) => setTimeout(r, 1300));
 
     const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
     let res: Response = await fetch(url, {
-      headers, cache: "no-store",
+      headers,
+      cache: "no-store",
     });
 
     // On 429: wait 15s and retry once — if still 429, abort this market so we
     // do not cache partial totals as accurate subscriber counts.
     if (res.status === 429) {
-      await new Promise(r => setTimeout(r, 15000));
+      await new Promise((r) => setTimeout(r, 15000));
       res = await fetch(url, { headers, cache: "no-store" });
     }
     if (res.status === 429) {
-      console.warn(`Loop ${market}: rate-limited at page ${page}; keeping previous cache instead of partial data`);
+      console.warn(
+        `Loop ${market}: rate-limited at page ${page}; keeping previous cache instead of partial data`,
+      );
       return null;
     }
 
-    if (!res.ok) { console.error(`Loop ${market} page ${page} → ${res.status}`); break; }
+    if (!res.ok) {
+      console.error(`Loop ${market} page ${page} → ${res.status}`);
+      break;
+    }
 
     apiReached = true;
-    const json   = await res.json();
+    const json = await res.json();
     const batch: any[] = json.data ?? [];
     allSubs.push(...batch);
-    const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
+    const hasNext =
+      json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
     if (!hasNext || batch.length === 0) break;
   }
 
   // Return null only if the API never responded (key invalid / network error)
   if (!apiReached) return null;
 
-  const currency         = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
-  const activeSubs       = allSubs.filter(s => (s.status ?? "").toUpperCase() === "ACTIVE");
+  const currency = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
+  const activeSubs = allSubs.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
   const canceledSubs: any[] = [];
-  const mrr              = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
-  const newThisMonth     = allSubs.filter(s => s.createdAt && new Date(s.createdAt) >= monthStart).length;
-  const churnedThisMonth = canceledSubs.filter(s => s.cancelledAt && new Date(s.cancelledAt) >= monthStart).length;
-  const arpu             = activeSubs.length > 0 ? mrr / activeSubs.length : null;
-  const churnRate        = (activeSubs.length + churnedThisMonth) > 0
-    ? +((churnedThisMonth / (activeSubs.length + churnedThisMonth)) * 100).toFixed(1)
-    : null;
+  const mrr = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
+  const newThisMonth = allSubs.filter(
+    (s) => s.createdAt && new Date(s.createdAt) >= monthStart,
+  ).length;
+  const churnedThisMonth = canceledSubs.filter(
+    (s) => s.cancelledAt && new Date(s.cancelledAt) >= monthStart,
+  ).length;
+  const arpu = activeSubs.length > 0 ? mrr / activeSubs.length : null;
+  const churnRate =
+    activeSubs.length + churnedThisMonth > 0
+      ? +((churnedThisMonth / (activeSubs.length + churnedThisMonth)) * 100).toFixed(1)
+      : null;
 
   return {
-    market, flag, platform: "loop", live: true, calcVersion: 3,
-    mrr: Math.round(mrr), activeSubs: activeSubs.length,
-    totalFetched: allSubs.length, newThisMonth, churnedThisMonth,
-    arpu: arpu != null ? +arpu.toFixed(2) : null, churnRate, currency,
+    market,
+    flag,
+    platform: "loop",
+    live: true,
+    calcVersion: 3,
+    mrr: Math.round(mrr),
+    activeSubs: activeSubs.length,
+    totalFetched: allSubs.length,
+    newThisMonth,
+    churnedThisMonth,
+    arpu: arpu != null ? +arpu.toFixed(2) : null,
+    churnRate,
+    currency,
   };
 }
 
@@ -996,19 +1194,17 @@ async function _fetchLoop() {
       const key = process.env[envKey];
       if (!key) return Promise.resolve(null);
       return fetchLoopStore(market, flag, key);
-    })
+    }),
   );
-  const results = settled
-    .map(r => (r.status === "fulfilled" ? r.value : null))
-    .filter(Boolean);
+  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean);
   return results.length > 0 ? results : null;
 }
 
 // Raw exports — called by /api/sync which writes results to Supabase data_cache
-export const fetchJuoRaw  = _fetchJuo;
+export const fetchJuoRaw = _fetchJuo;
 export const fetchLoopRaw = _fetchLoop;
 // Aliases for any legacy callers
-export const fetchJuo  = _fetchJuo;
+export const fetchJuo = _fetchJuo;
 export const fetchLoop = _fetchLoop;
 
 // ─── Xero ────────────────────────────────────────────────────────────────────
@@ -1020,7 +1216,7 @@ export const fetchLoop = _fetchLoop;
 // CONFIRMED WORKING: requires accounting.reports.read + accounting.transactions scopes
 
 async function getXeroToken(): Promise<string | null> {
-  const clientId     = process.env.XERO_CLIENT_ID;
+  const clientId = process.env.XERO_CLIENT_ID;
   const clientSecret = process.env.XERO_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
@@ -1033,7 +1229,9 @@ async function getXeroToken(): Promise<string | null> {
       .eq("provider", "xero")
       .single();
     row = data;
-  } catch { /* no row yet */ }
+  } catch {
+    /* no row yet */
+  }
 
   if (!row) {
     console.warn("Xero: no token stored — visit /api/auth/xero to connect");
@@ -1057,8 +1255,14 @@ async function getXeroToken(): Promise<string | null> {
     const creds = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
     const res = await fetch("https://identity.xero.com/connect/token", {
       method: "POST",
-      headers: { Authorization: `Basic ${creds}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }).toString(),
+      headers: {
+        Authorization: `Basic ${creds}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }).toString(),
       cache: "no-store",
     });
 
@@ -1072,17 +1276,19 @@ async function getXeroToken(): Promise<string | null> {
 
     const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
     // Always persist the new refresh_token (Xero rotates them)
-    await serviceClient().from("integrations").upsert(
-      {
-        provider: "xero",
-        access_token,
-        refresh_token: new_refresh ?? refreshToken,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-        metadata: { ...row.metadata, refresh_token: new_refresh ?? refreshToken },
-      },
-      { onConflict: "provider" }
-    );
+    await serviceClient()
+      .from("integrations")
+      .upsert(
+        {
+          provider: "xero",
+          access_token,
+          refresh_token: new_refresh ?? refreshToken,
+          expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+          metadata: { ...row.metadata, refresh_token: new_refresh ?? refreshToken },
+        },
+        { onConflict: "provider" },
+      );
     return access_token;
   } catch (err: any) {
     console.error("Xero token refresh error:", err.message);
@@ -1094,7 +1300,10 @@ async function getXeroTenantId(): Promise<string | null> {
   // tenantId is stored in metadata during the OAuth callback
   try {
     const { data } = await serviceClient()
-      .from("integrations").select("metadata").eq("provider", "xero").single();
+      .from("integrations")
+      .select("metadata")
+      .eq("provider", "xero")
+      .single();
     return (data?.metadata?.tenant_id as string) ?? null;
   } catch {
     return null;
@@ -1192,11 +1401,20 @@ export async function fetchXero() {
     return null;
   }
 
-  const h = { Authorization: `Bearer ${token}`, "Xero-tenant-id": tenantId, Accept: "application/json" };
+  const h = {
+    Authorization: `Bearer ${token}`,
+    "Xero-tenant-id": tenantId,
+    Accept: "application/json",
+  };
   const BASE = "https://api.xero.com/api.xro/2.0";
 
   // 12 months back, monthly breakdown
-  const fromDate = (() => { const d = new Date(); d.setMonth(d.getMonth() - 11); d.setDate(1); return d.toISOString().split("T")[0]; })();
+  const fromDate = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 11);
+    d.setDate(1);
+    return d.toISOString().split("T")[0];
+  })();
   const toDateStr = today();
   const monthStartStr = startOfMonth();
 
@@ -1234,23 +1452,52 @@ export async function fetchXero() {
 
   try {
     // Bank Transactions: last 90 days
-    const bankTxSince = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0]; })();
+    const bankTxSince = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 90);
+      return d.toISOString().split("T")[0];
+    })();
     const bankTxUrl = `${BASE}/BankTransactions?where=${encodeURIComponent(`Date>=DateTime(${bankTxSince.replaceAll("-", ",")})`)}`;
 
-    const [plS, balS, cashS, invS, accS, billS, draftS, contactsS, itemsS, bankTxS, journalsS, trackingS] = await Promise.allSettled([
+    const [
+      plS,
+      balS,
+      cashS,
+      invS,
+      accS,
+      billS,
+      draftS,
+      contactsS,
+      itemsS,
+      bankTxS,
+      journalsS,
+      trackingS,
+    ] = await Promise.allSettled([
       // P&L: omit periods/timeframe — fromDate→toDate alone yields a single column
       // total for the range; with timeframe=MONTH Xero auto-derives the period count.
-      xeroFetch("P&L", `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`),
+      xeroFetch(
+        "P&L",
+        `${BASE}/Reports/ProfitAndLoss?fromDate=${fromDate}&toDate=${toDateStr}&timeframe=MONTH&periods=11`,
+      ),
       xeroFetch("BalanceSheet", `${BASE}/Reports/BalanceSheet?date=${toDateStr}`),
-      xeroFetch("BankSummary", `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`),
-      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      xeroFetch(
+        "BankSummary",
+        `${BASE}/Reports/BankSummary?fromDate=${monthStartStr}&toDate=${toDateStr}`,
+      ),
+      xeroFetchAllInvoicePages(
+        `${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCREC"')}`,
+      ),
       // Full Chart of Accounts filtered to BANK type — gives every bank account
       // with its native CurrencyCode, even when balance is zero.
       xeroFetch("Accounts", `${BASE}/Accounts?where=${encodeURIComponent('Type=="BANK"')}`),
       // Bills to pay (ACCPAY)
-      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCPAY"')}`),
+      xeroFetchAllInvoicePages(
+        `${BASE}/Invoices?Statuses=AUTHORISED,SUBMITTED&where=${encodeURIComponent('Type=="ACCPAY"')}`,
+      ),
       // Draft invoices owed to you
-      xeroFetchAllInvoicePages(`${BASE}/Invoices?Statuses=DRAFT&where=${encodeURIComponent('Type=="ACCREC"')}`),
+      xeroFetchAllInvoicePages(
+        `${BASE}/Invoices?Statuses=DRAFT&where=${encodeURIComponent('Type=="ACCREC"')}`,
+      ),
       // Contacts (customers + suppliers)
       xeroFetch("Contacts", `${BASE}/Contacts?summaryOnly=true&page=1`),
       // Items / Products
@@ -1263,11 +1510,11 @@ export async function fetchXero() {
       xeroFetch("TrackingCategories", `${BASE}/TrackingCategories`),
     ]);
 
-    const plData  = plS.status  === "fulfilled" ? plS.value  : null;
+    const plData = plS.status === "fulfilled" ? plS.value : null;
     const balData = balS.status === "fulfilled" ? balS.value : null;
     const cashData = cashS.status === "fulfilled" ? cashS.value : null;
-    const invData  = invS.status === "fulfilled" ? invS.value  : null;
-    const accData  = accS.status === "fulfilled" ? accS.value  : null;
+    const invData = invS.status === "fulfilled" ? invS.value : null;
+    const accData = accS.status === "fulfilled" ? accS.value : null;
     const billData = billS.status === "fulfilled" ? billS.value : null;
     const draftData = draftS.status === "fulfilled" ? draftS.value : null;
     const contactsData = contactsS.status === "fulfilled" ? contactsS.value : null;
@@ -1277,10 +1524,10 @@ export async function fetchXero() {
     const trackingData = trackingS.status === "fulfilled" ? trackingS.value : null;
 
     // ── Parse P&L report ─────────────────────────────────────────────────────
-    const revenueByMonth:     Record<string, number> = {};
-    const expensesByMonth:    Record<string, number> = {};
+    const revenueByMonth: Record<string, number> = {};
+    const expensesByMonth: Record<string, number> = {};
     const grossProfitByMonth: Record<string, number> = {};
-    const netProfitByMonth:   Record<string, number> = {};
+    const netProfitByMonth: Record<string, number> = {};
     let ytdRevenue: number | null = null;
     let ytdExpenses: number | null = null;
     let ytdNetProfit: number | null = null;
@@ -1298,7 +1545,10 @@ export async function fetchXero() {
         let ytd = 0;
         cells.forEach((cell: any, i: number) => {
           if (i === 0) return;
-          if (i === ytdCol) { ytd = xNum(cell); return; }
+          if (i === ytdCol) {
+            ytd = xNum(cell);
+            return;
+          }
           const label = colLabels[i];
           if (label) byMonth[label] = xNum(cell);
         });
@@ -1326,28 +1576,45 @@ export async function fetchXero() {
             const { byMonth, ytd } = extractCols(summaryRow.Cells ?? []);
 
             const isRevenue =
-              title.includes("income") || title.includes("revenue") || title.includes("turnover") || title.includes("sales");
+              title.includes("income") ||
+              title.includes("revenue") ||
+              title.includes("turnover") ||
+              title.includes("sales");
             const isCogs =
-              title.includes("cost of sales") || title.includes("cost of goods") || title.includes("cogs");
+              title.includes("cost of sales") ||
+              title.includes("cost of goods") ||
+              title.includes("cogs");
             const isGross = title.includes("gross profit") || title.includes("gross margin");
             const isExpense =
-              title.includes("operating expense") || title.includes("less operating") ||
-              title.includes("overhead") || title.includes("administrative") ||
+              title.includes("operating expense") ||
+              title.includes("less operating") ||
+              title.includes("overhead") ||
+              title.includes("administrative") ||
               (title.includes("expense") && !title.includes("non-operating"));
             const isNet =
-              title.includes("net profit") || title.includes("net loss") ||
-              title.includes("profit for") || title.includes("net income");
+              title.includes("net profit") ||
+              title.includes("net loss") ||
+              title.includes("profit for") ||
+              title.includes("net income");
 
             if (isRevenue && !isGross && !isNet) {
-              Object.entries(byMonth).forEach(([m, v]) => { revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v; });
+              Object.entries(byMonth).forEach(([m, v]) => {
+                revenueByMonth[m] = (revenueByMonth[m] ?? 0) + v;
+              });
               ytdRevenue = (ytdRevenue ?? 0) + ytd;
             } else if (isGross) {
-              Object.entries(byMonth).forEach(([m, v]) => { grossProfitByMonth[m] = v; });
+              Object.entries(byMonth).forEach(([m, v]) => {
+                grossProfitByMonth[m] = v;
+              });
             } else if (isCogs || isExpense) {
-              Object.entries(byMonth).forEach(([m, v]) => { expensesByMonth[m] = (expensesByMonth[m] ?? 0) + v; });
+              Object.entries(byMonth).forEach(([m, v]) => {
+                expensesByMonth[m] = (expensesByMonth[m] ?? 0) + v;
+              });
               ytdExpenses = (ytdExpenses ?? 0) + ytd;
             } else if (isNet) {
-              Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
+              Object.entries(byMonth).forEach(([m, v]) => {
+                netProfitByMonth[m] = v;
+              });
               ytdNetProfit = ytd;
             }
           }
@@ -1363,7 +1630,9 @@ export async function fetchXero() {
             const label = String(r.Cells[0]?.Value ?? "").toLowerCase();
             if (label.includes("net profit") || label.includes("net income")) {
               const { byMonth, ytd } = extractCols(r.Cells);
-              Object.entries(byMonth).forEach(([m, v]) => { netProfitByMonth[m] = v; });
+              Object.entries(byMonth).forEach(([m, v]) => {
+                netProfitByMonth[m] = v;
+              });
               if (ytdNetProfit === null) ytdNetProfit = ytd;
             }
           }
@@ -1383,7 +1652,9 @@ export async function fetchXero() {
               const label = String(r.Cells[0]?.Value ?? "").toLowerCase();
               const looksRevenue =
                 /(income|revenue|turnover|sales|fees)/i.test(label) &&
-                !/(cost of sales|cost of goods|cogs|expense|gross|net|liabilit|asset|equity)/i.test(label);
+                !/(cost of sales|cost of goods|cogs|expense|gross|net|liabilit|asset|equity)/i.test(
+                  label,
+                );
               if (looksRevenue) {
                 const isTotal = r.RowType === "SummaryRow" || /^total\b/i.test(label);
                 (isTotal ? revenueTotals : revenueDetails).push(r.Cells);
@@ -1394,9 +1665,8 @@ export async function fetchXero() {
         };
         scanRevenueRows(rows);
 
-        const candidates = revenueTotals.length > 0
-          ? [revenueTotals[revenueTotals.length - 1]]
-          : revenueDetails;
+        const candidates =
+          revenueTotals.length > 0 ? [revenueTotals[revenueTotals.length - 1]] : revenueDetails;
         for (const cells of candidates) {
           const { byMonth, ytd } = extractCols(cells);
           Object.entries(byMonth).forEach(([m, v]) => {
@@ -1416,7 +1686,9 @@ export async function fetchXero() {
           ...Object.keys(netProfitByMonth),
         ]);
         if (plMonths.size > 0) {
-          plMonths.forEach((m) => { revenueByMonth[m] = 0; });
+          plMonths.forEach((m) => {
+            revenueByMonth[m] = 0;
+          });
           if (ytdRevenue === null) ytdRevenue = 0;
         }
       }
@@ -1457,7 +1729,13 @@ export async function fetchXero() {
     collectLabels(balRows, bsLabels);
     // Track every lookup attempt for diagnostics: which label/section we tried,
     // and whether Xero returned a match. The UI can show this verbatim.
-    const bsLookups: { field: string; query: string; type: "row" | "section"; matched: boolean; value: number | null }[] = [];
+    const bsLookups: {
+      field: string;
+      query: string;
+      type: "row" | "section";
+      matched: boolean;
+      value: number | null;
+    }[] = [];
     const tryRow = (field: string, q: string) => {
       const v = xRowByLabel(balRows, q);
       bsLookups.push({ field, query: q, type: "row", matched: v !== null, value: v });
@@ -1469,8 +1747,7 @@ export async function fetchXero() {
       return v;
     };
     const totalAssets =
-      tryRow("Total Assets", "total assets") ??
-      trySection("Total Assets", "assets");
+      tryRow("Total Assets", "total assets") ?? trySection("Total Assets", "assets");
     const currentAssets =
       trySection("Current Assets", "current assets") ??
       tryRow("Current Assets", "total current assets") ??
@@ -1501,10 +1778,13 @@ export async function fetchXero() {
       trySection("Equity", "equity") ??
       trySection("Equity", "capital") ??
       trySection("Equity", "net assets");
-    const arBalanceRows = xRowsByLabels(balRows, ["accounts receivable", "trade debtors", "debtors"]);
-    const arBalance = arBalanceRows.length > 0
-      ? arBalanceRows[arBalanceRows.length - 1].value
-      : null;
+    const arBalanceRows = xRowsByLabels(balRows, [
+      "accounts receivable",
+      "trade debtors",
+      "debtors",
+    ]);
+    const arBalance =
+      arBalanceRows.length > 0 ? arBalanceRows[arBalanceRows.length - 1].value : null;
 
     // Detect whether Xero returned ANY liabilities section/row at all.
     // If Assets and Equity are present but liabilities are entirely absent,
@@ -1513,18 +1793,21 @@ export async function fetchXero() {
       bsLabels.sections.some((s) => /liabilit/i.test(s)) ||
       bsLabels.rows.some((r) => /liabilit/i.test(r));
 
-    const derivedCurrentAssets = currentAssets ??
+    const derivedCurrentAssets =
+      currentAssets ??
       (totalAssets !== null && fixedAssets !== null ? totalAssets - fixedAssets : null);
-    const derivedFixedAssets = fixedAssets ??
+    const derivedFixedAssets =
+      fixedAssets ??
       (totalAssets !== null && currentAssets !== null ? totalAssets - currentAssets : null);
-    const totalLiabilities = parsedTotalLiabilities ??
+    const totalLiabilities =
+      parsedTotalLiabilities ??
       (totalAssets !== null && parsedEquity !== null ? totalAssets - parsedEquity : null) ??
       (!hasLiabilitiesSection && (totalAssets !== null || parsedEquity !== null) ? 0 : null);
-    const equity = parsedEquity ??
+    const equity =
+      parsedEquity ??
       (totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
-    const derivedCurrentLiabilities = currentLiabilities ??
-      (totalLiabilities !== null ? totalLiabilities : null);
-
+    const derivedCurrentLiabilities =
+      currentLiabilities ?? (totalLiabilities !== null ? totalLiabilities : null);
 
     // ── Parse Bank Summary + full Accounts list ──────────────────────────────
     // 1) Build a base list from /Accounts (every BANK account, with currency,
@@ -1563,7 +1846,7 @@ export async function fetchXero() {
         for (const row of section.Rows ?? []) {
           if (row.RowType !== "Row" || !row.Cells?.length) continue;
           const name = String(row.Cells[0]?.Value ?? "").trim();
-          const bal  = xNum(row.Cells[row.Cells.length - 1]);
+          const bal = xNum(row.Cells[row.Cells.length - 1]);
           if (!name || name === "Account") continue;
           const key = name.toLowerCase();
           const existing = bankAccountsMap.get(key);
@@ -1576,25 +1859,26 @@ export async function fetchXero() {
         }
       }
     }
-    const bankAccounts: BankAcct[] = Array.from(bankAccountsMap.values())
-      .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    const bankAccounts: BankAcct[] = Array.from(bankAccountsMap.values()).sort(
+      (a, b) => Math.abs(b.balance) - Math.abs(a.balance),
+    );
 
     // ── Parse Invoices (Accounts Receivable) ─────────────────────────────────
     const invoices: any[] = invData?.Invoices ?? [];
     const invoiceAccountsReceivable = invoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
-    const overdueInvoices     = invoices.filter(inv => inv.IsOverdue);
-    const overdueAmount       = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
+    const overdueInvoices = invoices.filter((inv) => inv.IsOverdue);
+    const overdueAmount = overdueInvoices.reduce((s, inv) => s + (inv.AmountDue ?? 0), 0);
     const accountsReceivable = invoiceAccountsReceivable || arBalance || 0;
 
     // ── Parse Bills (Accounts Payable / ACCPAY) ──────────────────────────────
     const bills: any[] = billData?.Invoices ?? [];
     const billsAwaitingAmount = bills.reduce((s, b) => s + (b.AmountDue ?? 0), 0);
-    const overdueBills        = bills.filter((b) => b.IsOverdue);
-    const overdueBillsAmount  = overdueBills.reduce((s, b) => s + (b.AmountDue ?? 0), 0);
+    const overdueBills = bills.filter((b) => b.IsOverdue);
+    const overdueBillsAmount = overdueBills.reduce((s, b) => s + (b.AmountDue ?? 0), 0);
 
     // ── Parse Drafts (ACCREC) ────────────────────────────────────────────────
     const drafts: any[] = draftData?.Invoices ?? [];
-    const draftsAmount  = drafts.reduce((s, d) => s + (d.Total ?? d.AmountDue ?? 0), 0);
+    const draftsAmount = drafts.reduce((s, d) => s + (d.Total ?? d.AmountDue ?? 0), 0);
 
     // ── Parse Contacts ──────────────────────────────────────────────────────
     const contactsList: any[] = contactsData?.Contacts ?? [];
@@ -1657,10 +1941,9 @@ export async function fetchXero() {
         narration: String(j.Narration ?? ""),
         status: j.Status ?? "",
         lineCount: (j.JournalLines ?? []).length,
-        total: (j.JournalLines ?? []).reduce(
-          (s: number, l: any) => s + Math.abs(l.LineAmount ?? 0),
-          0,
-        ) / 2,
+        total:
+          (j.JournalLines ?? []).reduce((s: number, l: any) => s + Math.abs(l.LineAmount ?? 0), 0) /
+          2,
       }))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)))
       .slice(0, 50);
@@ -1678,7 +1961,8 @@ export async function fetchXero() {
       })),
     }));
 
-    const live = Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
+    const live =
+      Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
     return {
       live,
@@ -1687,29 +1971,30 @@ export async function fetchXero() {
       expensesByMonth,
       grossProfitByMonth,
       netProfitByMonth,
-      ytdRevenue:   ytdRevenue  !== null ? Math.round(ytdRevenue)  : null,
-      ytdExpenses:  ytdExpenses !== null ? Math.round(ytdExpenses) : null,
+      ytdRevenue: ytdRevenue !== null ? Math.round(ytdRevenue) : null,
+      ytdExpenses: ytdExpenses !== null ? Math.round(ytdExpenses) : null,
       ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,
-      totalAssets:        totalAssets        !== null ? Math.round(totalAssets)        : null,
-      currentAssets:      derivedCurrentAssets !== null ? Math.round(derivedCurrentAssets) : null,
-      fixedAssets:        derivedFixedAssets   !== null ? Math.round(derivedFixedAssets)   : null,
-      totalLiabilities:   totalLiabilities   !== null ? Math.round(totalLiabilities)   : null,
-      currentLiabilities: derivedCurrentLiabilities !== null ? Math.round(derivedCurrentLiabilities) : null,
-      equity:             equity             !== null ? Math.round(equity)             : null,
-      cashBalance:          cashBalance          !== null ? Math.round(cashBalance)          : null,
+      totalAssets: totalAssets !== null ? Math.round(totalAssets) : null,
+      currentAssets: derivedCurrentAssets !== null ? Math.round(derivedCurrentAssets) : null,
+      fixedAssets: derivedFixedAssets !== null ? Math.round(derivedFixedAssets) : null,
+      totalLiabilities: totalLiabilities !== null ? Math.round(totalLiabilities) : null,
+      currentLiabilities:
+        derivedCurrentLiabilities !== null ? Math.round(derivedCurrentLiabilities) : null,
+      equity: equity !== null ? Math.round(equity) : null,
+      cashBalance: cashBalance !== null ? Math.round(cashBalance) : null,
       bankAccounts,
-      accountsReceivable:   accountsReceivable   > 0 ? Math.round(accountsReceivable)   : null,
-      unpaidInvoiceCount:   invoices.length,
-      overdueAmount:        overdueAmount        > 0 ? Math.round(overdueAmount)        : null,
-      overdueInvoiceCount:  overdueInvoices.length,
+      accountsReceivable: accountsReceivable > 0 ? Math.round(accountsReceivable) : null,
+      unpaidInvoiceCount: invoices.length,
+      overdueAmount: overdueAmount > 0 ? Math.round(overdueAmount) : null,
+      overdueInvoiceCount: overdueInvoices.length,
       // Bills (ACCPAY)
-      billsAwaitingAmount:  billsAwaitingAmount  > 0 ? Math.round(billsAwaitingAmount)  : null,
-      billsAwaitingCount:   bills.length,
-      overdueBillsAmount:   overdueBillsAmount   > 0 ? Math.round(overdueBillsAmount)   : null,
-      overdueBillsCount:    overdueBills.length,
+      billsAwaitingAmount: billsAwaitingAmount > 0 ? Math.round(billsAwaitingAmount) : null,
+      billsAwaitingCount: bills.length,
+      overdueBillsAmount: overdueBillsAmount > 0 ? Math.round(overdueBillsAmount) : null,
+      overdueBillsCount: overdueBills.length,
       // Drafts (ACCREC)
-      draftsAmount:         draftsAmount         > 0 ? Math.round(draftsAmount)         : null,
-      draftsCount:          drafts.length,
+      draftsAmount: draftsAmount > 0 ? Math.round(draftsAmount) : null,
+      draftsCount: drafts.length,
       // Extended Xero data
       customers,
       suppliers,
@@ -1754,7 +2039,6 @@ export async function fetchXero() {
   }
 }
 
-
 // ─── Jortt ───────────────────────────────────────────────────────────────────
 //
 // Full-scope Jortt integration — uses ALL scopes the OAuth client has access to.
@@ -1787,16 +2071,43 @@ const JORTT_ALL_SCOPES = [
 // OpEx categorisation — used to roll real Jortt expense descriptions / ledger
 // account names into the 5 categories the dashboard renders.
 const JORTT_CATEGORY_MAP: Record<string, string> = {
-  personeel: "team", salaris: "team", loon: "team", freelance: "team",
-  "management fee": "team", managementfee: "team", klantenservice: "team", nodots: "team",
-  agency: "agencies", bureaukosten: "agencies", argento: "agencies",
-  eightx: "agencies", fractional: "agencies",
-  content: "content", creator: "content", influencer: "content", samenwerking: "content",
-  "thor magis": "content", haec: "content", zadero: "content", remy: "content",
-  software: "software", saas: "software", klaviyo: "software",
-  "triple whale": "software", monday: "software", notion: "software",
-  huur: "rent", rent: "rent", utility: "rent", utilities: "rent", energie: "rent",
-  electricity: "rent", gas: "rent", water: "rent", internet: "rent", kantoor: "rent",
+  personeel: "team",
+  salaris: "team",
+  loon: "team",
+  freelance: "team",
+  "management fee": "team",
+  managementfee: "team",
+  klantenservice: "team",
+  nodots: "team",
+  agency: "agencies",
+  bureaukosten: "agencies",
+  argento: "agencies",
+  eightx: "agencies",
+  fractional: "agencies",
+  content: "content",
+  creator: "content",
+  influencer: "content",
+  samenwerking: "content",
+  "thor magis": "content",
+  haec: "content",
+  zadero: "content",
+  remy: "content",
+  software: "software",
+  saas: "software",
+  klaviyo: "software",
+  "triple whale": "software",
+  monday: "software",
+  notion: "software",
+  huur: "rent",
+  rent: "rent",
+  utility: "rent",
+  utilities: "rent",
+  energie: "rent",
+  electricity: "rent",
+  gas: "rent",
+  water: "rent",
+  internet: "rent",
+  kantoor: "rent",
 };
 
 function categorise(name: string): "team" | "agencies" | "content" | "software" | "rent" | "other" {
@@ -1821,7 +2132,7 @@ function monthIsoKey(dateStr: string): string {
 
 // Get an access_token for ONE scope (Jortt requires one scope per token).
 async function getJorttTokenForScope(scope: string): Promise<string | null> {
-  const clientId     = process.env.JORTT_CLIENT_ID;
+  const clientId = process.env.JORTT_CLIENT_ID;
   const clientSecret = process.env.JORTT_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
 
@@ -1915,7 +2226,10 @@ export async function fetchJortt() {
   );
   const grantedScopes = scopeResults.filter((s) => s.token).map((s) => s.scope);
 
-  console.log(`[Jortt] granted scopes (${grantedScopes.length}/${JORTT_ALL_SCOPES.length}):`, grantedScopes.join(", ") || "(none)");
+  console.log(
+    `[Jortt] granted scopes (${grantedScopes.length}/${JORTT_ALL_SCOPES.length}):`,
+    grantedScopes.join(", ") || "(none)",
+  );
 
   if (grantedScopes.length === 0) return null;
 
@@ -1924,7 +2238,7 @@ export async function fetchJortt() {
   let unpaidInvoices: any[] = [];
   if (tokens["invoices:read"]) {
     const t = tokens["invoices:read"]!;
-    invoices       = await jorttPaginate(t, "/v1/invoices?invoice_status=sent", 10);
+    invoices = await jorttPaginate(t, "/v1/invoices?invoice_status=sent", 10);
     unpaidInvoices = await jorttPaginate(t, "/v1/invoices?invoice_status=unpaid", 5);
   }
 
@@ -1935,13 +2249,17 @@ export async function fetchJortt() {
   }
 
   // 4. Reports — reports:read
-  let plRes: any = null, cashRes: any = null, balanceRes: any = null, btwRes: any = null, dashInvRes: any = null;
+  let plRes: any = null,
+    cashRes: any = null,
+    balanceRes: any = null,
+    btwRes: any = null,
+    dashInvRes: any = null;
   if (tokens["reports:read"]) {
     const t = tokens["reports:read"]!;
-    plRes      = await jorttGet(t, "/v1/reports/summaries/profit_and_loss");
-    cashRes    = await jorttGet(t, "/v1/reports/summaries/cash_and_bank");
+    plRes = await jorttGet(t, "/v1/reports/summaries/profit_and_loss");
+    cashRes = await jorttGet(t, "/v1/reports/summaries/cash_and_bank");
     balanceRes = await jorttGet(t, "/v1/reports/summaries/balance");
-    btwRes     = await jorttGet(t, "/v1/reports/summaries/btw");
+    btwRes = await jorttGet(t, "/v1/reports/summaries/btw");
     dashInvRes = await jorttGet(t, "/v1/reports/summaries/invoices");
   }
 
@@ -1953,7 +2271,7 @@ export async function fetchJortt() {
 
   // 6. Bank accounts + transactions — financing:read (v3)
   let bankAccounts: any[] = [];
-  let bankTransactions: any[] = [];
+  const bankTransactions: any[] = [];
   if (tokens["financing:read"]) {
     const t = tokens["financing:read"]!;
     bankAccounts = await jorttPaginate(t, "/v3/bank_accounts", 5);
@@ -1973,10 +2291,10 @@ export async function fetchJortt() {
   let labels: any[] = [];
   if (tokens["organizations:read"]) {
     const t = tokens["organizations:read"]!;
-    organization   = await jorttGet(t, "/v1/organizations");
-    tradenames     = await jorttPaginate(t, "/v1/tradenames", 3);
+    organization = await jorttGet(t, "/v1/organizations");
+    tradenames = await jorttPaginate(t, "/v1/tradenames", 3);
     ledgerAccounts = await jorttPaginate(t, "/v1/ledger_accounts/invoices", 5);
-    labels         = await jorttPaginate(t, "/v1/labels", 3);
+    labels = await jorttPaginate(t, "/v1/labels", 3);
   }
 
   // 8. Payroll — payroll:read
@@ -1998,11 +2316,7 @@ export async function fetchJortt() {
   for (const inv of invoices) {
     const mk = monthKey(inv.invoice_date ?? inv.created_at ?? "");
     if (!mk) continue;
-    const total = parseFloat(
-      inv.invoice_total_incl_vat?.value ??
-      inv.invoice_total?.value ??
-      "0"
-    );
+    const total = parseFloat(inv.invoice_total_incl_vat?.value ?? inv.invoice_total?.value ?? "0");
     if (!Number.isFinite(total) || total <= 0) continue;
     revenueByMonth[mk] = (revenueByMonth[mk] ?? 0) + total;
   }
@@ -2010,10 +2324,26 @@ export async function fetchJortt() {
   // Expenses by month + OpEx breakdown from real expenses
   const expensesByMonth: Record<string, number> = {};
   // monthKey -> { team, agencies, content, software, other }
-  const opexBuckets: Record<string, { ym: string; team: number; agencies: number; content: number; software: number; rent: number; other: number }> = {};
+  const opexBuckets: Record<
+    string,
+    {
+      ym: string;
+      team: number;
+      agencies: number;
+      content: number;
+      software: number;
+      rent: number;
+      other: number;
+    }
+  > = {};
   // category -> name -> amount  (rolled-up detail items)
   const opexDetailMap: Record<string, Record<string, number>> = {
-    team: {}, agencies: {}, content: {}, software: {}, rent: {}, other: {},
+    team: {},
+    agencies: {},
+    content: {},
+    software: {},
+    rent: {},
+    other: {},
   };
 
   for (const ex of expenses) {
@@ -2038,11 +2368,15 @@ export async function fetchJortt() {
     expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
 
     // category from description / ledger account name
-    const ledgerName = ex.ledger_account_name ?? ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ?? "";
+    const ledgerName =
+      ex.ledger_account_name ??
+      ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ??
+      "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
     const cat = categorise(`${desc} ${ledgerName}`);
 
-    if (!opexBuckets[mk]) opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+    if (!opexBuckets[mk])
+      opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
     opexBuckets[mk][cat] += amount;
 
     const itemName = (desc || "Unknown").trim().slice(0, 80);
@@ -2062,9 +2396,17 @@ export async function fetchJortt() {
   });
 
   // opexDetail in shape consumed by OpExBreakdownSection
-  const opexDetail: Record<string, { label: string; items: Array<{ name: string; amount: number }> }> = {};
+  const opexDetail: Record<
+    string,
+    { label: string; items: Array<{ name: string; amount: number }> }
+  > = {};
   const catLabels: Record<string, string> = {
-    team: "Team", agencies: "Agencies", content: "Content samenwerkingen", software: "Software", rent: "Rent & utilities", other: "Other costs",
+    team: "Team",
+    agencies: "Agencies",
+    content: "Content samenwerkingen",
+    software: "Software",
+    rent: "Rent & utilities",
+    other: "Other costs",
   };
   for (const cat of Object.keys(opexDetailMap)) {
     const items = Object.entries(opexDetailMap[cat])
@@ -2091,7 +2433,9 @@ export async function fetchJortt() {
     // Fall back to summing live bank account balances
     if (bankAccounts.length > 0) {
       const sum = bankAccounts.reduce((s: number, a: any) => {
-        const v = parseFloat(String(a?.current_balance?.value ?? a?.balance?.value ?? a?.balance ?? "0"));
+        const v = parseFloat(
+          String(a?.current_balance?.value ?? a?.balance?.value ?? a?.balance ?? "0"),
+        );
         return s + (Number.isFinite(v) ? v : 0);
       }, 0);
       return sum > 0 ? sum : null;
@@ -2099,18 +2443,32 @@ export async function fetchJortt() {
     return null;
   })();
 
-  const plSummary = plRes ? {
-    revenue:     parseFloat(plRes?.revenue?.value      ?? plRes?.turnover?.value     ?? "0"),
-    costs:       parseFloat(plRes?.costs?.value        ?? plRes?.expenses?.value     ?? "0"),
-    grossProfit: parseFloat(plRes?.gross_profit?.value ?? plRes?.net_result?.value   ?? "0"),
-  } : null;
+  const plSummary = plRes
+    ? {
+        revenue: parseFloat(plRes?.revenue?.value ?? plRes?.turnover?.value ?? "0"),
+        costs: parseFloat(plRes?.costs?.value ?? plRes?.expenses?.value ?? "0"),
+        grossProfit: parseFloat(plRes?.gross_profit?.value ?? plRes?.net_result?.value ?? "0"),
+      }
+    : null;
 
   const expenseCount = expenses.filter((e: any) => {
-    const v = Math.abs(parseFloat(String(e.raw_total_amount?.value ?? e.raw_total_amount?.amount ?? e.total_amount_incl_vat?.value ?? e.total_amount_incl_vat?.amount ?? e.total_amount?.value ?? e.total_amount?.amount ?? "0")));
+    const v = Math.abs(
+      parseFloat(
+        String(
+          e.raw_total_amount?.value ??
+            e.raw_total_amount?.amount ??
+            e.total_amount_incl_vat?.value ??
+            e.total_amount_incl_vat?.amount ??
+            e.total_amount?.value ??
+            e.total_amount?.amount ??
+            "0",
+        ),
+      ),
+    );
     return String(e.expense_type ?? "").toLowerCase() === "cost" && Number.isFinite(v) && v > 0;
   }).length;
-  const invoiceCount = invoices.filter((i: any) =>
-    parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0
+  const invoiceCount = invoices.filter(
+    (i: any) => parseFloat(i.invoice_total_incl_vat?.value ?? i.invoice_total?.value ?? "0") > 0,
   ).length;
 
   const live =
@@ -2241,7 +2599,8 @@ export async function fetchShopifyRepeatFunnel() {
   // with real, auditable Shopify customer history.
   const monthLabel = (d: Date) =>
     d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
-  const monthKeyFromDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const monthKeyFromDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const monthStartFromKey = (key: string) => {
     const [y, m] = key.split("-").map(Number);
     return new Date(y, (m ?? 1) - 1, 1);
@@ -2293,9 +2652,11 @@ export async function fetchShopifyRepeatFunnel() {
   const funnel = reachedN.map((c, i) => ({
     order: i + 1,
     customers: c,
-    rate: cohortSize > 0 && (i === 0 || (i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured))
-      ? +((c / cohortSize) * 100).toFixed(1)
-      : null,
+    rate:
+      cohortSize > 0 &&
+      (i === 0 || (i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured))
+        ? +((c / cohortSize) * 100).toFixed(1)
+        : null,
     maturing: i > 0 && !((i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured)),
   }));
 
@@ -2328,12 +2689,20 @@ export async function fetchShopifyRepeatFunnel() {
     if (size === 0) {
       monthlyCohorts.push({
         month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
-        size: 0, second: null, third: null, fourth: null, avgOrders: null, maturing,
+        size: 0,
+        second: null,
+        third: null,
+        fourth: null,
+        avgOrders: null,
+        maturing,
       });
       continue;
     }
 
-    let s2 = 0, s3 = 0, s4 = 0, totalOrders = 0;
+    let s2 = 0,
+      s3 = 0,
+      s4 = 0,
+      totalOrders = 0;
     for (const orders of cohort) {
       if (orders.length >= 2) s2++;
       if (orders.length >= 3) s3++;
@@ -2344,7 +2713,7 @@ export async function fetchShopifyRepeatFunnel() {
       month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
       size,
       second: secondMatured ? +((s2 / size) * 100).toFixed(1) : null,
-      third:  deepMatured ? +((s3 / size) * 100).toFixed(1) : null,
+      third: deepMatured ? +((s3 / size) * 100).toFixed(1) : null,
       fourth: deepMatured ? +((s4 / size) * 100).toFixed(1) : null,
       avgOrders: secondMatured ? +(totalOrders / size).toFixed(2) : null,
       maturing,
@@ -2358,7 +2727,9 @@ export async function fetchShopifyRepeatFunnel() {
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
     cohortMatureForSecond: selectedSecondMatured,
     cohortMatureForThird: selectedDeepMatured,
-    cohortStartedDaysAgo: selectedCohort ? Math.floor((now - selectedCohort.start.getTime()) / DAY) : 0,
+    cohortStartedDaysAgo: selectedCohort
+      ? Math.floor((now - selectedCohort.start.getTime()) / DAY)
+      : 0,
     cohortEndedDaysAgo: selectedCohort ? selectedCohort.daysSinceEnd : 0,
     funnel,
     monthlyCohorts,
