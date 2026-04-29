@@ -439,7 +439,7 @@ function GrowthPlan2026() {
     US: [{ k: "Repeat customer AOV", v: "€70" }, { k: "New customer AOV", v: "€80" }, { k: "aMER target", v: "1.43×" }, { k: "nCAC", v: "€50" }, { k: "Gross margin", v: "75%" }, { k: "Launch", v: "Q2 2026" }],
   };
 
-  void metric;
+  
 
   return (
     <>
