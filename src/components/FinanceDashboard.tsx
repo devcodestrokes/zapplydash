@@ -471,6 +471,7 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
 
 export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
+  const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
 
   // When a custom-range sync has returned data, use it in place of the live props
@@ -558,6 +559,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const liveLoop        = subData.find(s => s.market === "UK") ?? null;
   const liveJuo         = subData.find(s => s.market === "NL") ?? null;
   const liveMRR         = subData.length > 0 ? subData.reduce((s, m) => s + (m.mrr ?? 0), 0) : null;
+  const revenueBreakdownMarkets = effectiveMarkets?.filter(m => m.live) ?? [];
   return (<>
     <div className="flex items-end justify-between">
       <div>
@@ -583,16 +585,22 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             <div className="mt-3 flex items-baseline gap-4">
               {rangeRevenue !== null ? (
                 <>
-                  <div className="group relative inline-block">
-                    <span className="text-[44px] font-semibold tracking-tight tabular-nums leading-none cursor-help border-b border-dashed border-neutral-300">
+                  <div
+                    className="relative inline-block"
+                    onMouseEnter={() => setShowRevenueBreakdown(true)}
+                    onMouseLeave={() => setShowRevenueBreakdown(false)}
+                    onFocus={() => setShowRevenueBreakdown(true)}
+                    onBlur={() => setShowRevenueBreakdown(false)}
+                  >
+                    <span tabIndex={0} className="text-[44px] font-semibold tracking-tight tabular-nums leading-none cursor-help border-b border-dashed border-neutral-300 outline-none">
                       €{Math.round(rangeRevenue).toLocaleString()}
                     </span>
                     {/* Hover breakdown */}
-                    {effectiveMarkets && effectiveMarkets.filter(m => m.live).length > 0 && (
-                      <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl group-hover:block">
+                    {revenueBreakdownMarkets.length > 0 && showRevenueBreakdown && (
+                      <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl">
                         <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Revenue breakdown</div>
                         <div className="space-y-1.5">
-                          {effectiveMarkets.filter(m => m.live).map(m => {
+                          {revenueBreakdownMarkets.map(m => {
                             const sym = m.currency === "GBP" ? "£" : m.currency === "USD" ? "$" : "€";
                             const native = m.revenueNative ?? m.revenue ?? 0;
                             const eur = m.revenue ?? 0;
