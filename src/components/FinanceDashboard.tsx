@@ -295,7 +295,10 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
   }, []);
 
   const PRESETS = [
-    { label: "This month",    from: drStartOfMonth(),  to: drToday() },
+    { label: "Last 7 days",   from: drDaysAgo(7),       to: drToday() },
+    { label: "Last 30 days",  from: drDaysAgo(30),      to: drToday() },
+    { label: "Last 90 days",  from: drDaysAgo(90),      to: drToday() },
+    { label: "This month",    from: drStartOfMonth(),   to: drToday() },
     { label: "Last month",    from: drLastMonthStart(), to: drLastMonthEnd() },
     { label: "Last 3 months", from: drMonthsAgo(3),     to: drToday() },
     { label: "Last 6 months", from: drMonthsAgo(6),     to: drToday() },
