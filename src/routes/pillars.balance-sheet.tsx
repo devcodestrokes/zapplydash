@@ -378,7 +378,7 @@ function BalanceSheetPage() {
       ytdResult,
       totalEquity,
       totalLiabEquity,
-      outstandingTotal: (outstandingSum > 0 ? outstandingSum : null) as number | null,
+      outstandingTotal: outstandingSum > 0 ? outstandingSum : null,
       outstandingBreakdown,
       currentRatio,
       quickRatio,
