@@ -72,11 +72,13 @@ function OverviewPage() {
       ) : (
         <div className="p-6 bg-neutral-50 min-h-full" style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}>
           <OverviewView
-            range={range}
-            setRange={setRange}
+            dateRange={range}
+            onDateChange={setRange}
             liveMarkets={liveMarkets}
             twData={twData}
-            loopData={loopData}
+            subData={loopData}
+            shopifyMonthly={Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : null}
+            jorttData={data?.jortt && !data.jortt.__empty && !data.jortt.__error ? data.jortt : null}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {data?.syncedAt ? `Synced · ${new Date(data.syncedAt).toLocaleString()}` : "No live sources connected"}
