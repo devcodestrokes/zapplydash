@@ -24,6 +24,11 @@ function startOfMonthStr(d = new Date()) {
 function todayStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+function daysAgoStr(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return todayStr(d);
+}
 
 function SkeletonBox({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-neutral-200/70 ${className}`} />;
