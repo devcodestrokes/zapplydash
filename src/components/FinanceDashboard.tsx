@@ -345,8 +345,8 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
    SMALL UI COMPONENTS
    ========================================================================= */
 
-const Card = ({ children, className = "" }) => (
-  <div className={`rounded-xl border border-neutral-200/70 bg-white ${className}`}>
+const Card = ({ children, className = "", ...props }) => (
+  <div {...props} className={`rounded-xl border border-neutral-200/70 bg-white ${className}`}>
     {children}
   </div>
 );
@@ -574,7 +574,13 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
 
     {/* Revenue hero */}
     <section className="mt-3">
-      <Card className="group relative p-6 transition hover:border-neutral-300">
+      <Card
+        className="relative p-6 transition hover:border-neutral-300"
+        onMouseEnter={() => setShowRevenueBreakdown(true)}
+        onMouseLeave={() => setShowRevenueBreakdown(false)}
+        onFocus={() => setShowRevenueBreakdown(true)}
+        onBlur={() => setShowRevenueBreakdown(false)}
+      >
         <div className="flex items-start justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
@@ -597,7 +603,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                     </span>
                     {/* Hover breakdown */}
                     {revenueBreakdownMarkets.length > 0 && (
-                      <div className={`pointer-events-none absolute left-0 top-full z-30 mt-2 w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl ${showRevenueBreakdown ? "block" : "hidden group-hover:block"}`}>
+                      <div className={`pointer-events-none absolute left-0 top-full z-30 mt-2 w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl ${showRevenueBreakdown ? "block" : "hidden"}`}>
                         <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Revenue breakdown</div>
                         <div className="space-y-1.5">
                           {revenueBreakdownMarkets.map(m => {
