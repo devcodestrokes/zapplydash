@@ -1,246 +1,255 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { GitMerge, AlertCircle, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
+import { Plus, Info, AlertTriangle } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getDashboardData, getSyncStatus } from "@/server/dashboard.functions";
+import { getDashboardData } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/operations/reconciliation")({
-  head: () => ({ meta: [{ title: "Reconciliation — Zapply" }] }),
+  head: () => ({ meta: [{ title: "Reconciliation — Profit Variance — Zapply" }] }),
   component: ReconciliationPage,
 });
 
-function fmtMoney(n: number | null | undefined) {
+function fmtMoney(n: number | null | undefined, opts: { signed?: boolean } = {}) {
   if (n == null || !isFinite(n)) return "—";
-  const sign = n < 0 ? "-" : "";
-  return `${sign}€${Math.abs(Math.round(n)).toLocaleString("en-GB")}`;
+  const v = Math.round(n);
+  if (opts.signed && v < 0) return `-€${Math.abs(v).toLocaleString("en-GB")}`;
+  if (opts.signed && v > 0) return `+€${v.toLocaleString("en-GB")}`;
+  if (v < 0) return `-€${Math.abs(v).toLocaleString("en-GB")}`;
+  return `€${v.toLocaleString("en-GB")}`;
 }
 
-type Issue = {
-  id: string;
-  severity: "high" | "medium" | "low";
-  source: string;
-  title: string;
-  detail: string;
-  delta?: number | null;
-  action?: string;
-};
+const SOURCE_META = {
+  Shopify:       { cls: "text-amber-700" },
+  Jortt:         { cls: "text-violet-700" },
+  "Triple Whale":{ cls: "text-sky-700" },
+  Calculated:    { cls: "text-neutral-500" },
+  Xero:          { cls: "text-emerald-700" },
+} as const;
+
+type Source = keyof typeof SOURCE_META;
+type Row = { label: string; source: Source; value: number | null; tone: "pos" | "neg" | "neutral" };
 
 function ReconciliationPage() {
   const { user } = useDashboardSession();
   const [data, setData] = useState<any>(null);
-  const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = async () => {
-    setRefreshing(true);
-    try {
-      const [d, s] = await Promise.all([getDashboardData(), getSyncStatus()]);
-      setData(d);
-      setStatus(s);
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    load();
+    let alive = true;
+    getDashboardData()
+      .then((d) => alive && setData(d))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
   }, []);
 
-  const issues = useMemo<Issue[]>(() => {
-    if (!data) return [];
-    const out: Issue[] = [];
-
-    // 1. Failing data sources surfaced from sync status
-    for (const s of (status?.sources ?? []) as any[]) {
-      if (s.status === "error" || s.status === "disconnected") {
-        out.push({
-          id: `src-${s.provider}-${s.key}`,
-          severity: "high",
-          source: s.label,
-          title: s.status === "disconnected" ? "Source not connected" : "Source not returning data",
-          detail: s.error ?? "Health check failed — values shown on dashboards may be incomplete.",
-          action: "Open Sync status",
-        });
-      } else if (s.status === "degraded") {
-        out.push({
-          id: `stale-${s.provider}-${s.key}`,
-          severity: "low",
-          source: s.label,
-          title: "Stale data",
-          detail: `Last sync ${s.ageMinutes != null ? Math.round(s.ageMinutes) + "m ago" : "unknown"} — refresh recommended.`,
-          action: "Refresh",
-        });
-      }
-    }
-
-    // 2. Shopify revenue vs Xero income comparison (most recent month)
+  const computed = useMemo(() => {
     const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
-    const xeroMonthly: any[] = Array.isArray(data?.xero?.netProfitByMonth) ? data.xero.netProfitByMonth : [];
-    if (shopifyMonthly.length && xeroMonthly.length) {
-      const sLast = shopifyMonthly[shopifyMonthly.length - 1];
-      const xLast = xeroMonthly[xeroMonthly.length - 1];
-      const sRev = Number(sLast?.revenue ?? 0);
-      const xInc = Number(xLast?.income ?? xLast?.revenue ?? 0);
-      if (sRev > 0 && xInc > 0) {
-        const delta = sRev - xInc;
-        const pct = Math.abs(delta) / Math.max(sRev, xInc);
-        if (pct > 0.1) {
-          out.push({
-            id: "shopify-xero-rev",
-            severity: pct > 0.25 ? "high" : "medium",
-            source: "Shopify ↔ Xero",
-            title: `Revenue mismatch (${(pct * 100).toFixed(1)}%)`,
-            detail: `Shopify reports ${fmtMoney(sRev)} vs Xero ${fmtMoney(xInc)} for the latest month.`,
-            delta,
-            action: "Investigate",
-          });
-        }
+    const lastMonth = shopifyMonthly[shopifyMonthly.length - 1] ?? null;
+    const grossRev   = lastMonth ? Number(lastMonth.revenue ?? 0) : null;
+    const refunds    = lastMonth?.refunds   != null ? -Math.abs(Number(lastMonth.refunds))   : null;
+    const discounts  = lastMonth?.discounts != null ? -Math.abs(Number(lastMonth.discounts)) : null;
+
+    // Shopify payment processing: estimate ~2.9% of net (rev - refunds - discounts) when not provided.
+    const netSales = grossRev != null
+      ? grossRev + (refunds ?? 0) + (discounts ?? 0)
+      : null;
+    const paymentFees = lastMonth?.paymentFees != null
+      ? -Math.abs(Number(lastMonth.paymentFees))
+      : (netSales != null && netSales > 0 ? -Math.round(netSales * 0.029) : null);
+
+    // Jortt expense breakdown
+    const opexDetail = data?.jortt?.opexDetail ?? null;
+    const pickFromDetail = (re: RegExp): number | null => {
+      if (!opexDetail || typeof opexDetail !== "object") return null;
+      let sum = 0; let found = false;
+      for (const [k, v] of Object.entries(opexDetail)) {
+        if (re.test(k)) { sum += Math.abs(Number(v ?? 0)); found = true; }
       }
-    }
+      return found ? -sum : null;
+    };
+    const cogs     = pickFromDetail(/cost of goods|inkoop|cogs|directe kosten/i);
+    const shipping = pickFromDetail(/ship|verzend|transport/i);
+    const opex     = pickFromDetail(/operating|operationeel|kantoor|huur|salaris|loon|software|abonnement|verzekering/i)
+                  ?? (data?.jortt?.plSummary?.costs != null
+                      ? -Math.abs(Number(data.jortt.plSummary.costs)) - (cogs ?? 0) - (shipping ?? 0)
+                      : null);
 
-    // 3. Outstanding Jortt invoices not yet matched in Xero
-    const outstanding = Array.isArray(data?.jortt?.outstanding)
-      ? data.jortt.outstanding.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0)
-      : Number(data?.jortt?.totalOutstanding ?? 0);
-    if (outstanding > 0) {
-      out.push({
-        id: "jortt-outstanding",
-        severity: outstanding > 10_000 ? "medium" : "low",
-        source: "Jortt → Xero",
-        title: "Outstanding invoices",
-        detail: `${fmtMoney(outstanding)} in unpaid invoices awaiting reconciliation.`,
-        delta: outstanding,
-        action: "Review invoices",
-      });
-    }
-
-    // 4. Triple Whale ad spend vs Xero marketing expense
+    // Triple Whale ad spend
     const tw = data?.tripleWhale;
-    const adSpend = Number(tw?.totalSpend ?? tw?.spend ?? 0);
-    const xeroMarketing = Number(data?.xero?.marketingSpend ?? data?.xero?.marketing ?? 0);
-    if (adSpend > 0 && xeroMarketing > 0) {
-      const delta = adSpend - xeroMarketing;
-      const pct = Math.abs(delta) / Math.max(adSpend, xeroMarketing);
-      if (pct > 0.15) {
-        out.push({
-          id: "tw-xero-spend",
-          severity: "medium",
-          source: "Triple Whale ↔ Xero",
-          title: `Ad spend mismatch (${(pct * 100).toFixed(1)}%)`,
-          detail: `Triple Whale ${fmtMoney(adSpend)} vs Xero marketing ${fmtMoney(xeroMarketing)}.`,
-          delta,
-          action: "Investigate",
-        });
-      }
-    }
+    const adSpendVal =
+      Number(tw?.totalSpend ?? tw?.spend ?? tw?.summary?.spend ?? 0) ||
+      (Array.isArray(tw?.markets) ? tw.markets.reduce((s: number, r: any) => s + Number(r.spend ?? 0), 0) : 0);
+    const adSpend = adSpendVal > 0 ? -adSpendVal : null;
 
-    return out;
-  }, [data, status]);
+    const rows: Row[] = [
+      { label: "Shopify gross revenue",   source: "Shopify",      value: grossRev,    tone: "pos" },
+      { label: "Refunds & returns",       source: "Shopify",      value: refunds,     tone: "neg" },
+      { label: "Discounts applied",       source: "Shopify",      value: discounts,   tone: "neg" },
+      { label: "Cost of Goods Sold",      source: "Jortt",        value: cogs,        tone: "neg" },
+      { label: "Payment processing fees", source: "Shopify",      value: paymentFees, tone: "neg" },
+      { label: "Shipping costs",          source: "Jortt",        value: shipping,    tone: "neg" },
+      { label: "Ad spend",                source: "Triple Whale", value: adSpend,     tone: "neg" },
+      { label: "Operational expenses",    source: "Jortt",        value: opex,        tone: "neg" },
+    ];
 
-  const counts = {
-    high: issues.filter((i) => i.severity === "high").length,
-    medium: issues.filter((i) => i.severity === "medium").length,
-    low: issues.filter((i) => i.severity === "low").length,
-  };
+    const calculatedNet = rows.reduce((s, r) => s + (r.value ?? 0), 0);
+    const reportedNet = data?.jortt?.plSummary?.grossProfit != null
+      ? Number(data.jortt.plSummary.grossProfit)
+      : null;
+    const variance = reportedNet != null ? calculatedNet - reportedNet : null;
 
-  const sevMeta = {
-    high:   { cls: "bg-rose-50 text-rose-700 ring-rose-200",     dot: "bg-rose-500",    label: "High" },
-    medium: { cls: "bg-amber-50 text-amber-700 ring-amber-200",  dot: "bg-amber-500",   label: "Medium" },
-    low:    { cls: "bg-sky-50 text-sky-700 ring-sky-200",        dot: "bg-sky-500",     label: "Low" },
-  } as const;
+    const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value ?? 0)), Math.abs(calculatedNet), Math.abs(reportedNet ?? 0));
+
+    return { rows, calculatedNet, reportedNet, variance, maxAbs, lineCount: rows.filter((r) => r.value != null).length };
+  }, [data]);
+
+  const xeroConnected = !!data?.connections?.xero;
 
   return (
     <DashboardShell user={user} title="Reconciliation">
-      <div className="px-6 py-6 space-y-5">
+      <div className="px-6 py-6 space-y-4 max-w-[1240px]">
+        {/* Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Reconciliation queue</h1>
-            <p className="text-[13px] text-neutral-500 mt-1">
-              Discrepancies and missing data detected across Shopify, Triple Whale, Jortt and Xero.
-            </p>
+            <div className="text-[12px] text-neutral-500">Reconciliation</div>
+            <h1 className="text-[22px] font-semibold tracking-tight mt-0.5">Profit Variance</h1>
+            <p className="text-[13px] text-neutral-500 mt-1">Shopify-calculated profit cross-checked against Jortt totals.</p>
           </div>
-          <button
-            onClick={load}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
+          <button className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[13px] font-medium hover:bg-neutral-50">
+            <Plus className="h-3.5 w-3.5" />
+            Manual journal entry
           </button>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Open issues</div>
-            <div className="mt-2 text-[26px] font-semibold tabular-nums">{issues.length}</div>
-          </div>
-          {(["high","medium","low"] as const).map((k) => (
-            <div key={k} className="rounded-xl border border-neutral-200 bg-white p-4">
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${sevMeta[k].dot}`} />
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{sevMeta[k].label}</span>
+        {/* Bridge mode banner */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="flex items-start gap-3">
+            <Info className="h-4 w-4 text-neutral-500 mt-0.5 shrink-0" />
+            <div className="text-[13px]">
+              <div className="font-semibold text-neutral-900">
+                Bridge mode {xeroConnected ? "— Xero connected" : "— Xero migration in progress"}
               </div>
-              <div className="mt-2 text-[26px] font-semibold tabular-nums">{counts[k]}</div>
+              <div className="text-neutral-500 mt-0.5">
+                Reconciliation runs against Jortt aggregate totals.{" "}
+                {xeroConnected
+                  ? "Per-journal-entry drilldown is now available for items tagged with a Xero dot."
+                  : "Per-journal-entry drilldown activates automatically once Xero is connected (est. within 1 month). Items tagged below with a Xero dot will become fully traceable."}
+              </div>
             </div>
-          ))}
+          </div>
         </div>
 
-        {/* Issues list */}
-        <div className="rounded-xl border border-neutral-200 bg-white">
-          <div className="px-4 py-3 border-b border-neutral-100 flex items-center gap-2">
-            <GitMerge className="h-4 w-4 text-neutral-500" />
-            <div className="text-[14px] font-semibold">Items to reconcile</div>
-          </div>
-          {loading ? (
-            <div className="py-10 text-center text-neutral-400 text-[13px]">Loading…</div>
-          ) : issues.length === 0 ? (
-            <div className="py-10 text-center">
-              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
-              <div className="mt-2 text-[14px] font-medium text-neutral-800">All sources reconciled</div>
-              <div className="text-[12px] text-neutral-500">No discrepancies detected across your data sources.</div>
+        {/* Variance alert */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-start gap-3">
+              <div className="grid h-9 w-9 place-items-center rounded-md bg-amber-50 ring-1 ring-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-[14px] font-semibold text-neutral-900">
+                  {computed.variance == null
+                    ? "Variance unavailable — Jortt P&L not loaded"
+                    : computed.variance > 0
+                      ? `Overstated profit of ${fmtMoney(computed.variance)}`
+                      : computed.variance < 0
+                        ? `Understated profit of ${fmtMoney(Math.abs(computed.variance))}`
+                        : "No variance — books reconcile"}
+                </div>
+                <div className="text-[12px] text-neutral-500 mt-0.5">
+                  Shopify calculated {fmtMoney(computed.calculatedNet)} · Jortt reported {fmtMoney(computed.reportedNet)} · {computed.lineCount} line items explain the gap
+                </div>
+              </div>
             </div>
-          ) : (
-            <ul className="divide-y divide-neutral-100">
-              {issues.map((i) => {
-                const m = sevMeta[i.severity];
+            <button className="inline-flex items-center rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[13px] font-medium hover:bg-neutral-50">
+              Drill down
+            </button>
+          </div>
+        </div>
+
+        {/* Profit waterfall */}
+        <div className="rounded-xl border border-neutral-200 bg-white">
+          <div className="px-5 pt-5 pb-3">
+            <div className="text-[14px] font-semibold">Profit waterfall</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">Every dollar from gross revenue to net profit, traced to source system.</div>
+          </div>
+
+          <div className="divide-y divide-neutral-100">
+            {loading ? (
+              <div className="py-10 text-center text-[13px] text-neutral-400">Loading…</div>
+            ) : (
+              computed.rows.map((r) => {
+                const meta = SOURCE_META[r.source];
+                const pct = r.value != null ? (Math.abs(r.value) / computed.maxAbs) * 100 : 0;
+                const isPos = r.tone === "pos";
+                const barColor = isPos ? "bg-neutral-900" : "bg-rose-300/80";
+                const valColor = r.value == null ? "text-neutral-400" : isPos ? "text-neutral-900" : "text-rose-600";
                 return (
-                  <li key={i.id} className="px-4 py-4 hover:bg-neutral-50/60">
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 grid h-8 w-8 place-items-center rounded-md ring-1 ring-inset ${m.cls}`}>
-                        <AlertCircle className="h-4 w-4" />
+                  <div key={r.label} className="grid grid-cols-12 items-center gap-3 px-5 py-3">
+                    <div className="col-span-3 text-[13px] text-neutral-800">{r.label}</div>
+                    <div className={`col-span-2 text-[12px] ${meta.cls}`}>{r.source}</div>
+                    <div className="col-span-5">
+                      <div className="h-1.5 w-full rounded-full bg-neutral-100/70 overflow-hidden">
+                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[13px] font-semibold text-neutral-900">{i.title}</span>
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${m.cls}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
-                            {m.label}
-                          </span>
-                          <span className="text-[11px] text-neutral-500">· {i.source}</span>
-                        </div>
-                        <div className="text-[12px] text-neutral-600 mt-1">{i.detail}</div>
-                        {i.delta != null && (
-                          <div className="text-[11px] text-neutral-500 mt-1 tabular-nums">
-                            Δ {fmtMoney(i.delta)}
-                          </div>
-                        )}
-                      </div>
-                      {i.action && (
-                        <button className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-[12px] font-medium text-neutral-700 hover:bg-neutral-50">
-                          {i.action}
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
-                      )}
                     </div>
-                  </li>
+                    <div className={`col-span-2 text-right text-[13px] tabular-nums ${valColor}`}>
+                      {r.value == null ? "—" : fmtMoney(r.value, { signed: !isPos })}
+                    </div>
+                  </div>
                 );
-              })}
-            </ul>
-          )}
+              })
+            )}
+
+            {/* Calculated net */}
+            <div className="grid grid-cols-12 items-center gap-3 px-5 py-3 bg-neutral-50/70">
+              <div className="col-span-3 text-[13px] font-semibold text-neutral-900 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
+                Net profit (calculated)
+              </div>
+              <div className="col-span-2 text-[12px] text-neutral-500">Calculated</div>
+              <div className="col-span-5">
+                <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-neutral-900" style={{ width: `${(Math.abs(computed.calculatedNet) / computed.maxAbs) * 100}%` }} />
+                </div>
+              </div>
+              <div className="col-span-2 text-right text-[13px] font-semibold tabular-nums text-neutral-900">
+                {fmtMoney(computed.calculatedNet)}
+              </div>
+            </div>
+
+            {/* Jortt reported */}
+            <div className="grid grid-cols-12 items-center gap-3 px-5 py-3 bg-emerald-50/40">
+              <div className="col-span-3 text-[13px] font-semibold text-neutral-900">Jortt reported profit</div>
+              <div className="col-span-2 text-[12px] text-violet-700">Jortt</div>
+              <div className="col-span-5">
+                <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${computed.reportedNet != null ? (Math.abs(computed.reportedNet) / computed.maxAbs) * 100 : 0}%` }} />
+                </div>
+              </div>
+              <div className="col-span-2 text-right text-[13px] font-semibold tabular-nums text-neutral-900">
+                {fmtMoney(computed.reportedNet)}
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-between px-5 py-3 border-t border-neutral-100 text-[12px]">
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-amber-700">Shopify</span>
+              <span className="text-sky-700">Triple Whale</span>
+              <span className="text-violet-700">Jortt</span>
+              <span className="text-neutral-500 inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />Calculated</span>
+            </div>
+            <span className={xeroConnected ? "text-emerald-700" : "text-neutral-400"}>
+              {xeroConnected ? "● Xero connected" : "Xero (incoming)"}
+            </span>
+          </div>
+        </div>
+
+        <div className="text-center text-[11px] text-neutral-400 pt-2">
+          Synced · {data?.syncedAt ? new Date(data.syncedAt).toLocaleString() : "—"} · Live data with calculated bridge values
         </div>
       </div>
     </DashboardShell>
