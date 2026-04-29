@@ -1270,7 +1270,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             {(() => {
               const f: any = shopifyRepeatFunnel;
               const thirdRow = f?.funnel?.[2];
-              const rate: number | null = thirdRow?.rate ?? null;
+              const rate: number | null = (f?.cohortSize ?? 0) > 0 ? (thirdRow?.rate ?? null) : null;
               // Compute delta vs prior mature cohort (first non-maturing cohort that is not the latest mature one)
               const mature = (f?.monthlyCohorts ?? []).filter((c: any) => !c.maturing && c.third !== null);
               const latest = mature[0];
