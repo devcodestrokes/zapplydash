@@ -1,6 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
-  
   LayoutDashboard,
   LogOut,
   RefreshCw,
@@ -9,8 +8,15 @@ import {
   CalendarDays,
   Scale,
   LineChart,
+  GitMerge,
+  Activity,
+  ShoppingBag,
+  Waves,
+  FileText,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getSyncStatus } from "@/server/dashboard.functions";
 import {
   Sidebar,
   SidebarContent,
@@ -27,7 +33,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number };
 
 const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -42,10 +48,45 @@ const pillarItems: NavItem[] = [
   { to: "/pillars/forecast", label: "Forecast", icon: LineChart },
 ];
 
+const operationsItems: NavItem[] = [
+  { to: "/operations/reconciliation", label: "Reconciliation", icon: GitMerge },
+  { to: "/operations/sync-status", label: "Sync status", icon: Activity },
+];
+
+const dataSourceMeta: { providerKeys: string[]; label: string; icon: typeof LayoutDashboard; suffix?: string }[] = [
+  { providerKeys: ["shopify"], label: "Shopify Plus", icon: ShoppingBag },
+  { providerKeys: ["triplewhale"], label: "Triple Whale", icon: Waves },
+  { providerKeys: ["jortt", "xero"], label: "Jortt", icon: FileText, suffix: "→ Xero" },
+];
+
 function AppSidebar({ user }: { user: { name: string; email: string; avatar: string | null } | null }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const [status, setStatus] = useState<any>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => getSyncStatus().then((s) => alive && setStatus(s)).catch(() => {});
+    load();
+    const id = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  const reconCount = status?.failing?.length ?? 0;
+  const sourceStatus = (keys: string[]): "healthy" | "degraded" | "error" | "disconnected" | "loading" => {
+    if (!status) return "loading";
+    const matches = (status.sources ?? []).filter((s: any) => keys.includes(s.provider));
+    if (matches.length === 0) return "disconnected";
+    if (matches.some((s: any) => s.status === "error" || s.status === "disconnected")) return "error";
+    if (matches.some((s: any) => s.status === "degraded")) return "degraded";
+    return "healthy";
+  };
+  const dotClass = (s: string) =>
+    s === "healthy" ? "bg-emerald-500" :
+    s === "degraded" ? "bg-amber-500" :
+    s === "error" ? "bg-rose-500" :
+    s === "disconnected" ? "bg-neutral-400" : "bg-neutral-300 animate-pulse";
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
@@ -107,6 +148,62 @@ function AppSidebar({ user }: { user: { name: string; email: string; avatar: str
                       <Link to={item.to as any}>
                         <Icon className="h-4 w-4" />
                         <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Operations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {operationsItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to, item.exact);
+                const badge = item.to === "/operations/reconciliation" && reconCount > 0 ? reconCount : null;
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <Link to={item.to as any}>
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1">{item.label}</span>
+                        {!collapsed && badge != null && (
+                          <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">
+                            {badge}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Data sources</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {dataSourceMeta.map((src) => {
+                const Icon = src.icon;
+                const s = sourceStatus(src.providerKeys);
+                return (
+                  <SidebarMenuItem key={src.label}>
+                    <SidebarMenuButton asChild tooltip={`${src.label} · ${s}`}>
+                      <Link to={"/operations/sync-status" as any}>
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1 truncate">
+                          {src.label}
+                          {src.suffix && !collapsed && (
+                            <span className="ml-1 text-[11px] text-muted-foreground">{src.suffix}</span>
+                          )}
+                        </span>
+                        <span className={`ml-auto h-2 w-2 rounded-full ${dotClass(s)}`} aria-label={s} />
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
