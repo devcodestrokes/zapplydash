@@ -132,7 +132,7 @@ async function getShopifyToken(store: string): Promise<string | null> {
 
 // Paginated GQL — one page, with optional cursor for subsequent pages
 const SHOPIFY_GQL_PAGE = (since: string, cursor: string | null, until?: string | null) => `{
-  orders(first:250, ${cursor ? `after:"${cursor}",` : ""}query:"created_at:>=${since}${until ? ` created_at:<=${until}` : ""} financial_status:paid") {
+  orders(first:250, sortKey:CREATED_AT, reverse:false, ${cursor ? `after:"${cursor}",` : ""}query:"created_at:>=${since}${until ? ` created_at:<=${until}` : ""} financial_status:paid") {
     pageInfo { hasNextPage endCursor }
     edges { node {
       totalPriceSet    { shopMoney { amount currencyCode } }
@@ -2188,7 +2188,7 @@ export async function fetchShopifyRepeatFunnel() {
     let cursor: string | null = null;
     let hasNextPage = true;
     let page = 0;
-    const maxPages = 120; // ~30k orders per store over 540d
+    const maxPages = 600; // up to ~150k orders per store over 540d (sorted oldest-first so partial fetches still cover early cohorts)
 
     try {
       while (hasNextPage && page < maxPages) {
@@ -2338,7 +2338,7 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
-    calcVersion: 2,
+    calcVersion: 3,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
