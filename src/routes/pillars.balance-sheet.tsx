@@ -243,41 +243,75 @@ function BalanceSheetPage() {
       ? inventoryItems.reduce((s, i) => s + i.value, 0)
       : null;
 
-    // ── Receivables / payables / equity (Xero only) ──
-    const receivables = xero?.accountsReceivable ?? null;
-    const prepaidExpenses: number | null = null; // not exposed by current fetcher
-    const currentAssets = xero?.currentAssets ?? null;
-    const fixedAssetsNet = xero?.fixedAssets ?? null;
+    // ── Receivables / payables / equity (Xero + Jortt fallbacks) ──
+    // AR: Xero balance row, else sum of customers' outstanding, else Jortt unpaid invoices
+    const customers: any[] = Array.isArray(xero?.customers) ? xero.customers : [];
+    const customersOutstanding = customers.reduce(
+      (s, c) => s + Number(c?.outstanding ?? 0),
+      0,
+    );
+    const jorttUnpaid = Number(jortt?.unpaidAmount ?? jortt?.openInvoicesAmount ?? 0);
+    const receivables =
+      xero?.accountsReceivable ??
+      (customersOutstanding > 0 ? customersOutstanding : null) ??
+      (jorttUnpaid > 0 ? jorttUnpaid : null);
+
+    const prepaidExpenses: number | null = null;
+    const totalAssets = xero?.totalAssets ?? null;
+
+    // Current assets: use Xero value, else sum bank balances + receivables + inventory
+    const cashLikeFallback =
+      cashTotal != null || (receivables != null) || (inventoryTotal != null)
+        ? (cashTotal ?? 0) + (receivables ?? 0) + (inventoryTotal ?? 0)
+        : null;
+    const currentAssets = xero?.currentAssets ?? cashLikeFallback;
+
+    // Fixed assets: Xero value, else derive (totalAssets - currentAssets)
+    const fixedAssetsNet =
+      xero?.fixedAssets ??
+      (totalAssets != null && currentAssets != null ? totalAssets - currentAssets : null);
     const fixedAssetsCost: number | null = null;
     const accumDepreciation: number | null = null;
-    const totalAssets = xero?.totalAssets ?? null;
 
     // ── Outstanding payments (suppliers + bills awaiting) ──
     const suppliers: any[] = Array.isArray(xero?.suppliers) ? xero.suppliers : [];
     const apSupplierList = suppliers
-      .filter((s) => /supplier|leverancier|supply/i.test(s.name ?? "") || (s.outstanding ?? 0) > 0)
-      .filter((s) => !/(meta|facebook|google|tiktok)/i.test(s.name ?? ""));
+      .filter((s) => (s.outstanding ?? 0) > 0)
+      .filter((s) => !/(meta|facebook|google|tiktok|ads)/i.test(s.name ?? ""));
+    const apMetaList = suppliers.filter(
+      (s) => /(meta|facebook|google|tiktok|ads)/i.test(s.name ?? "") && (s.outstanding ?? 0) > 0,
+    );
+
+    // Supplier AP: prefer summed list, fall back to Xero bills awaiting + overdue
+    const billsAwaiting = Number(xero?.billsAwaitingAmount ?? 0);
+    const billsOverdue = Number(xero?.overdueBillsAmount ?? 0);
     const apSupplier = apSupplierList.length
       ? apSupplierList.reduce((s, x) => s + (x.outstanding ?? 0), 0)
-      : xero?.billsAwaitingAmount ?? null;
-    const apMetaList = suppliers.filter((s) => /(meta|facebook|google|tiktok|ads)/i.test(s.name ?? ""));
+      : billsAwaiting + billsOverdue > 0
+        ? billsAwaiting + billsOverdue
+        : null;
     const apMeta = apMetaList.length
       ? apMetaList.reduce((s, x) => s + (x.outstanding ?? 0), 0)
       : null;
 
-    // VAT / other payables — try to read from Xero diagnostics; otherwise null
-    const vatPayable: number | null = null;
+    const totalCurrentLiabilities =
+      xero?.currentLiabilities ?? xero?.totalLiabilities ?? null;
+
+    // VAT / other payables — derive remainder of liabilities not allocated
+    const knownAp = (apSupplier ?? 0) + (apMeta ?? 0);
+    const vatPayable =
+      totalCurrentLiabilities != null && Math.abs(totalCurrentLiabilities) > knownAp
+        ? Math.abs(totalCurrentLiabilities) - knownAp
+        : null;
     const otherPayables: number | null = null;
     const accruedExpenses: number | null = null;
 
-    const totalCurrentLiabilities =
-      xero?.currentLiabilities ??
-      (xero?.totalLiabilities ?? null);
-
     const equity = xero?.equity ?? null;
-    const shareCapital: number | null = null;
-    const retainedEarnings: number | null = null;
     const ytdResult = xero?.ytdNetProfit ?? null;
+    // Retained earnings = total equity - current YTD result (when both known)
+    const retainedEarnings =
+      equity != null && ytdResult != null ? equity - ytdResult : null;
+    const shareCapital: number | null = null;
     const totalEquity = equity;
     const totalLiabEquity =
       totalCurrentLiabilities != null && totalEquity != null
@@ -285,7 +319,7 @@ function BalanceSheetPage() {
         : null;
 
     // ── Outstanding breakdown ──
-    const outstandingTotal =
+    const outstandingSum =
       (apSupplier ?? 0) + (apMeta ?? 0) + (vatPayable ?? 0) + (otherPayables ?? 0);
     const breakdownRaw = [
       { key: "supplier", label: "Supplier (supplier invoices)", color: "bg-orange-500", val: apSupplier },
@@ -293,21 +327,18 @@ function BalanceSheetPage() {
       { key: "vat", label: "VAT & corporate tax", color: "bg-amber-500", val: vatPayable },
       { key: "other", label: "Affiliates & partners", color: "bg-neutral-400", val: otherPayables },
     ];
-    const totalForPct = outstandingTotal > 0 ? outstandingTotal : null;
+    const totalForPct = outstandingSum > 0 ? outstandingSum : null;
     const outstandingBreakdown = breakdownRaw.map((b) => {
       const pct = totalForPct && b.val != null ? (b.val / totalForPct) * 100 : null;
       return { ...b, pct };
     });
 
-    // ── Ratios ──
-    const currentRatio =
-      currentAssets != null && totalCurrentLiabilities && totalCurrentLiabilities !== 0
-        ? currentAssets / totalCurrentLiabilities
-        : null;
+    // ── Ratios (use absolute values to avoid Xero's sign convention skew) ──
+    const ca = currentAssets != null ? Math.abs(currentAssets) : null;
+    const cl = totalCurrentLiabilities != null ? Math.abs(totalCurrentLiabilities) : null;
+    const currentRatio = ca != null && cl && cl !== 0 ? ca / cl : null;
     const quickRatio =
-      currentAssets != null && totalCurrentLiabilities && totalCurrentLiabilities !== 0
-        ? (currentAssets - (inventoryTotal ?? 0)) / totalCurrentLiabilities
-        : null;
+      ca != null && cl && cl !== 0 ? (ca - (inventoryTotal ?? 0)) / cl : null;
 
     // ── Supplier invoice line items (use Xero bills if exposed, else show top suppliers) ──
     const suppliersInvoices = apSupplierList
