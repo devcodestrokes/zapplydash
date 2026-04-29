@@ -105,6 +105,60 @@ function getConnections(): Record<string, string> {
   return connections;
 }
 
+function describePayload(payload: any): { ok: boolean; reason: string | null; rows: number | null } {
+  if (payload == null) return { ok: false, reason: "No data cached yet", rows: null };
+  if (typeof payload === "object") {
+    if (payload.__error) return { ok: false, reason: String(payload.message ?? payload.__error).slice(0, 200), rows: null };
+    if (payload.__empty) return { ok: false, reason: "Provider returned empty payload", rows: 0 };
+  }
+  const rows = Array.isArray(payload)
+    ? payload.length
+    : Array.isArray(payload?.rows)
+      ? payload.rows.length
+      : Array.isArray(payload?.funnel)
+        ? payload.funnel.length
+        : null;
+  return { ok: true, reason: null, rows };
+}
+
+function buildSourceStatus(cache: Awaited<ReturnType<typeof readCacheKeys>>) {
+  const conns = getConnections();
+  const get = (p: string, k: string) => cache[`${p}/${k}`] ?? null;
+  function entry(provider: string, key: string, label: string, expected: string, maxAge = 60) {
+    const c = get(provider, key);
+    const d = describePayload(c?.payload);
+    const connected = !!conns[provider];
+    let status: "healthy" | "degraded" | "error" | "disconnected";
+    if (!connected) status = "disconnected";
+    else if (!c || !d.ok) status = "error";
+    else if (ageMinutes(c.fetchedAt) > maxAge) status = "degraded";
+    else status = "healthy";
+    return { provider, key, label, expected, connected, status, lastSyncedAt: c?.fetchedAt ?? null, ageMinutes: c?.fetchedAt ? ageMinutes(c.fetchedAt) : null, rowCount: d.rows, error: d.reason };
+  }
+
+  const sources = [
+    entry("shopify", "markets", "Shopify Plus · Markets", "Per-market revenue, orders, AOV and FX", 30),
+    entry("shopify", "monthly", "Shopify Plus · Monthly", "Historical revenue and orders by month", 120),
+    entry("shopify", "today", "Shopify Plus · Today", "Today orders and revenue", 15),
+    entry("shopify", "daily", "Shopify Plus · Daily", "Daily revenue for profit math", 720),
+    entry("shopify", "repeat_funnel", "Shopify Plus · Repeat funnel", "Customer order-history cohorts", 720),
+    entry("triplewhale", "summary", "Triple Whale · Summary", "Ad spend, ROAS, MER and gross profit", 30),
+    entry("triplewhale", "customer_economics", "Triple Whale · Customer economics", "NCPA, 90D LTV and 365D LTV", 720),
+    entry("triplewhale", "daily", "Triple Whale · Daily", "Daily ad spend for profit math", 720),
+    entry("juo", "subscriptions", "Juo · Subscriptions (NL)", "Active subs, churn and MRR", 60),
+    entry("loop", "subscriptions", "Loop · Subscriptions (UK/US/EU)", "Active subs, churn and MRR", 60),
+    entry("jortt", "invoices", "Jortt · Invoices", "Invoices, OpEx and accounting bridge", 120),
+    entry("xero", "accounting", "Xero · Accounting", "P&L, cash and balance sheet", 120),
+  ];
+  return {
+    sources,
+    failing: sources.filter((s) => s.status === "error" || s.status === "disconnected"),
+    degraded: sources.filter((s) => s.status === "degraded"),
+    healthy: sources.filter((s) => s.status === "healthy"),
+    checkedAt: Date.now(),
+  };
+}
+
 export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
   const cache = await readCacheKeys([
     ["shopify", "markets"],
@@ -175,6 +229,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     jortt: jorttCache?.payload ?? null,
     xero: xeroCache?.payload ?? null,
     connections: getConnections(),
+    sourceStatus: buildSourceStatus(cache),
     syncedAt: oldestSyncedAt,
     dataIsStale,
     hasAnyData,
