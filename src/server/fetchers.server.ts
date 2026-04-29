@@ -2219,19 +2219,42 @@ export async function fetchShopifyRepeatFunnel() {
   // are almost certainly older customers with prior orders we can't see.
   const datasetEdgeTs = now - (lookbackDays - 10) * DAY;
 
-  // ── 60-day cohort funnel ────────────────────────────────────────────
-  // Customers whose first order is in [120d, 60d] ago — a 60-day cohort
-  // that has had at least 60 days to repeat.
-  const cohortStart = now - 120 * DAY;
-  const cohortEnd = now - 60 * DAY;
-  let cohortSize = 0;
-  // reachedN[i] = number of cohort customers who reached at least (i+1) orders
-  const reachedN = [0, 0, 0, 0, 0, 0, 0];
+  // Bucket by TRUE first-order month. The fixed 120–90 day cohort can be empty
+  // when Shopify only has recent first-time buyers; picking the latest non-empty
+  // cohort with at least 30 days of observation keeps the dashboard populated
+  // with real, auditable Shopify customer history.
+  const monthLabel = (d: Date) =>
+    d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
+  const monthKeyFromDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const monthStartFromKey = (key: string) => {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, (m ?? 1) - 1, 1);
+  };
+
+  const cohortBuckets = new Map<string, string[][]>(); // monthKey → array of customer order arrays
   for (const orders of customerOrders.values()) {
-    const firstTs = new Date(orders[0]).getTime();
-    if (firstTs < cohortStart || firstTs > cohortEnd) continue;
-    if (firstTs <= datasetEdgeTs) continue; // skip boundary-edge customers
-    cohortSize++;
+    const first = new Date(orders[0]);
+    if (first.getTime() <= datasetEdgeTs) continue;
+    const key = monthKeyFromDate(first);
+    if (!cohortBuckets.has(key)) cohortBuckets.set(key, []);
+    cohortBuckets.get(key)!.push(orders);
+  }
+
+  // ── Repeat funnel from the newest non-empty cohort with ≥30 days to repeat ──
+  const cohortCandidates = Array.from(cohortBuckets.entries())
+    .map(([key, orders]) => {
+      const start = monthStartFromKey(key);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+      return { key, orders, start, end, daysSinceEnd: Math.floor((now - end.getTime()) / DAY) };
+    })
+    .filter((c) => c.orders.length > 0 && c.daysSinceEnd >= 30)
+    .sort((a, b) => b.start.getTime() - a.start.getTime());
+
+  const selectedCohort = cohortCandidates[0] ?? null;
+  const cohortOrders = selectedCohort?.orders ?? [];
+  const cohortSize = cohortOrders.length;
+  const reachedN = [0, 0, 0, 0, 0, 0, 0];
+  for (const orders of cohortOrders) {
     const reached = Math.min(orders.length, 7);
     for (let i = 0; i < reached; i++) reachedN[i]++;
   }
@@ -2243,8 +2266,6 @@ export async function fetchShopifyRepeatFunnel() {
   }));
 
   // ── Monthly cohort table — last 4 calendar months ───────────────────
-  const monthLabel = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
   const monthlyCohorts: Array<{
     month: string;
     size: number;
@@ -2255,19 +2276,11 @@ export async function fetchShopifyRepeatFunnel() {
     maturing: boolean;
   }> = [];
 
-  const cohortBuckets = new Map<string, string[][]>(); // monthKey → array of customer order arrays
-  for (const orders of customerOrders.values()) {
-    const first = new Date(orders[0]);
-    const key = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, "0")}`;
-    if (!cohortBuckets.has(key)) cohortBuckets.set(key, []);
-    cohortBuckets.get(key)!.push(orders);
-  }
-
   // last 4 calendar months including current
   const now2 = new Date();
   for (let i = 3; i >= 0; i--) {
     const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const key = monthKeyFromDate(d);
     const cohort = cohortBuckets.get(key) ?? [];
     const size = cohort.length;
     const monthAge = i; // months ago (0 = current)
@@ -2294,9 +2307,9 @@ export async function fetchShopifyRepeatFunnel() {
     monthlyCohorts.push({
       month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
       size,
-      second: maturing ? null : +((s2 / size) * 100).toFixed(1),
-      third:  maturing ? null : +((s3 / size) * 100).toFixed(1),
-      fourth: maturing ? null : +((s4 / size) * 100).toFixed(1),
+      second: +((s2 / size) * 100).toFixed(1),
+      third:  +((s3 / size) * 100).toFixed(1),
+      fourth: +((s4 / size) * 100).toFixed(1),
       avgOrders: +(totalOrders / size).toFixed(2),
       maturing,
     });
@@ -2304,9 +2317,10 @@ export async function fetchShopifyRepeatFunnel() {
 
   return {
     cohortSize,
-    cohortWindowDays: 30,
-    cohortStartedDaysAgo: 120,
-    cohortEndedDaysAgo: 90,
+    cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
+    cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
+    cohortStartedDaysAgo: selectedCohort ? Math.floor((now - selectedCohort.start.getTime()) / DAY) : 0,
+    cohortEndedDaysAgo: selectedCohort ? selectedCohort.daysSinceEnd : 0,
     funnel,
     monthlyCohorts,
     totalCustomersAnalyzed: customerOrders.size,

@@ -133,6 +133,7 @@ function OverviewPage() {
             shopifyDaily={data?.shopifyDaily ?? null}
             tripleWhaleCustomerEconomics={data?.tripleWhaleCustomerEconomics ?? null}
             tripleWhaleDaily={data?.tripleWhaleDaily ?? null}
+            shopifyRepeatFunnel={data?.shopifyRepeatFunnel ?? null}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {data?.syncedAt ? `Synced · ${new Date(data.syncedAt).toLocaleString()}` : "No live sources connected"}
