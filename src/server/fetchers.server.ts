@@ -2242,7 +2242,13 @@ export async function fetchShopifyRepeatFunnel() {
   };
 
   const cohortBuckets = new Map<string, string[][]>(); // monthKey → array of customer order arrays
-  for (const orders of customerOrders.values()) {
+  for (const entry of customerOrders.values()) {
+    const orders = entry.dates;
+    if (orders.length === 0) continue;
+    // If Shopify says the customer has more lifetime orders than we fetched in
+    // the lookback, their first order is outside this dataset, so exclude them
+    // from first-time-buyer cohorts instead of inflating recent cohort sizes.
+    if (entry.lifetimeOrders > orders.length) continue;
     const first = new Date(orders[0]);
     if (first.getTime() <= datasetEdgeTs) continue;
     const key = monthKeyFromDate(first);
