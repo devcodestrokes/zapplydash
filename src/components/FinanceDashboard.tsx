@@ -2477,10 +2477,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
       {/* KPI strip — live Triple Whale data */}
       <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "NCPA", value: nlTW?.ncpa != null ? `€${nlTW.ncpa.toFixed(0)}` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "LTV:CPA", value: nlTW?.ltvCpa != null ? `${nlTW.ltvCpa.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "MER", value: nlTW?.mer != null ? `${nlTW.mer.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "Blended ROAS", value: nlTW?.roas != null ? `${nlTW.roas.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
+          { label: "NCPA", value: aggNCPA != null ? `€${aggNCPA.toFixed(0)}` : "—", sub: twSub },
+          { label: "LTV:CPA", value: ltvCpaWeighted != null ? `${ltvCpaWeighted.toFixed(2)}×` : "—", sub: twSub },
+          { label: "MER", value: aggMER != null ? `${aggMER.toFixed(2)}×` : "—", sub: twSub },
+          { label: "Repeat rate", value: repeatRate != null ? `${repeatRate.toFixed(1)}%` : "—", sub: shopifyRepeatFunnel ? "Shopify · 2nd order cohort" : "Shopify cohort not loaded" },
         ].map(kpi => (
           <Card key={kpi.label} className="p-4">
             <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{kpi.label}</div>
