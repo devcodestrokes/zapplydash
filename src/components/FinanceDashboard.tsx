@@ -510,6 +510,99 @@ const BrandIcon = ({ brand, size = 14, className = "" }) => {
 };
 
 /* =========================================================================
+   COMPONENT: Today's Profit (est.) card — sits above the Revenue hero
+   ========================================================================= */
+
+const fmtEur0 = (n: number | null | undefined) =>
+  n == null ? "—" : `€${Math.round(n).toLocaleString()}`;
+
+const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
+  const { today, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily } = metrics;
+  const trendPositive = (todayVsYesterdayPct ?? 0) >= 0;
+  return (
+    <section className="mt-3">
+      <div
+        className="rounded-2xl border border-neutral-200 bg-white p-6"
+        style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}
+      >
+        <div className="flex items-start justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+              <span>Today's profit (est.)</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-50 px-2 py-0.5 text-[10px] font-medium text-neutral-500 normal-case tracking-normal border border-neutral-200">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-900" />
+                Shopify + TW
+                {avg30 != null && <span className="text-neutral-400">· Jortt T-1</span>}
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-3">
+              <div className="text-[28px] font-semibold tabular-nums">{fmtEur0(today)}</div>
+              {todayVsYesterdayPct != null && (
+                <span className={`text-[13px] font-medium tabular-nums ${trendPositive ? "text-emerald-600" : "text-rose-600"}`}>
+                  {trendPositive ? "+" : ""}{todayVsYesterdayPct.toFixed(1)}%
+                </span>
+              )}
+            </div>
+            <div className="mt-1 text-[12px] text-neutral-400">
+              vs. yesterday {fmtEur0(metrics.yesterday)} · 30-day avg {fmtEur0(avg30)}
+            </div>
+          </div>
+        </div>
+
+        {/* Period grid */}
+        <div className="mt-6 grid grid-cols-3 gap-6 border-t border-neutral-100 pt-4">
+          <div>
+            <div className="text-[11px] font-medium text-neutral-400">This week</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">{fmtEur0(week)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-neutral-400">MTD</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">{fmtEur0(mtd)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] font-medium text-neutral-400">YTD</div>
+            <div className="mt-1 text-[18px] font-semibold tabular-nums">{fmtEur0(ytd)}</div>
+          </div>
+        </div>
+
+        {/* 30-day rolling sparkline */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between text-[11px] text-neutral-400">
+            <span>30-day rolling profit</span>
+            <span>Daily</span>
+          </div>
+          <div className="mt-2 h-[60px] w-full">
+            {chartsReady && hasAnyDaily ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={series} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0a0a0a" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="#0a0a0a" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Tooltip
+                    cursor={{ stroke: "#e5e5e5", strokeWidth: 1 }}
+                    contentStyle={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e5e5" }}
+                    formatter={(v: any) => [fmtEur0(Number(v)), "Profit"]}
+                    labelFormatter={(l: any) => l}
+                  />
+                  <Area type="monotone" dataKey="profit" stroke="#0a0a0a" strokeWidth={1.5} fill="url(#profitFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-[11px] text-neutral-400">
+                {hasAnyDaily ? "" : "Daily data syncing — refresh in a minute"}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+/* =========================================================================
    VIEW: OVERVIEW
    ========================================================================= */
 
