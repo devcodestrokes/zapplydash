@@ -2342,8 +2342,45 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [] }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
+  // Aggregate KPIs across ALL live markets (not just NL).
+  const liveTWAll = (twData ?? []).filter((t: any) => t?.live);
+  const sum = (key: string) => liveTWAll.reduce((s: number, t: any) => s + (typeof t?.[key] === "number" ? t[key] : 0), 0);
+  const totalRevenue = sum("revenue");
+  const totalAdSpend = sum("adSpend");
+  // Derive new customers per market from adSpend / NCPA, then sum.
+  const totalNewCustomers = liveTWAll.reduce((s: number, t: any) => {
+    if (typeof t?.adSpend === "number" && typeof t?.ncpa === "number" && t.ncpa > 0) {
+      return s + t.adSpend / t.ncpa;
+    }
+    return s;
+  }, 0);
+  const aggNCPA = totalNewCustomers > 0 ? totalAdSpend / totalNewCustomers : null;
+  const aggMER  = totalAdSpend > 0 ? totalRevenue / totalAdSpend : null;
+  // LTV:CPA — weight each market's ratio by its share of new customers.
+  const ltvCpaWeighted = (() => {
+    let num = 0, den = 0;
+    for (const t of liveTWAll) {
+      if (typeof t?.ltvCpa === "number" && typeof t?.adSpend === "number" && typeof t?.ncpa === "number" && t.ncpa > 0) {
+        const w = t.adSpend / t.ncpa;
+        num += t.ltvCpa * w;
+        den += w;
+      }
+    }
+    return den > 0 ? num / den : null;
+  })();
+  // Repeat rate = % of cohort that placed a 2nd order (from Shopify repeat funnel).
+  const repeatRate = (() => {
+    const f: any = shopifyRepeatFunnel;
+    if (!f) return null;
+    const second = f?.funnel?.find?.((r: any) => r.order === 2)?.rate;
+    if (typeof second === "number") return second;
+    const fallback = (f?.monthlyCohorts ?? []).find((c: any) => (c?.size ?? 0) > 0 && typeof c?.second === "number");
+    return fallback?.second ?? null;
+  })();
+  const marketCount = liveTWAll.length;
+  const twSub = marketCount > 0 ? `Triple Whale · ${marketCount} market${marketCount !== 1 ? "s" : ""}` : "TW not connected";
   const activeMonths = useMemo(() => {
     if (!shopifyMonthly?.length) return [];
     return shopifyMonthly.map(({ month, revenue, refunds = 0 }) => {
@@ -2440,10 +2477,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
       {/* KPI strip — live Triple Whale data */}
       <section className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "NCPA", value: nlTW?.ncpa != null ? `€${nlTW.ncpa.toFixed(0)}` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "LTV:CPA", value: nlTW?.ltvCpa != null ? `${nlTW.ltvCpa.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "MER", value: nlTW?.mer != null ? `${nlTW.mer.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
-          { label: "Blended ROAS", value: nlTW?.roas != null ? `${nlTW.roas.toFixed(2)}×` : "—", sub: nlTW ? "Triple Whale · NL" : "TW not connected" },
+          { label: "NCPA", value: aggNCPA != null ? `€${aggNCPA.toFixed(0)}` : "—", sub: twSub },
+          { label: "LTV:CPA", value: ltvCpaWeighted != null ? `${ltvCpaWeighted.toFixed(2)}×` : "—", sub: twSub },
+          { label: "MER", value: aggMER != null ? `${aggMER.toFixed(2)}×` : "—", sub: twSub },
+          { label: "Repeat rate", value: repeatRate != null ? `${repeatRate.toFixed(1)}%` : "—", sub: shopifyRepeatFunnel ? "Shopify · 2nd order cohort" : "Shopify cohort not loaded" },
         ].map(kpi => (
           <Card key={kpi.label} className="p-4">
             <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{kpi.label}</div>
@@ -3319,7 +3356,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} shopifyRepeatFunnel={safeRepeatFunnel} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
           {view === "balance" && <BalanceView jorttData={jorttObj} xeroData={xeroObj} shopifyMarkets={activeMarkets} twData={twData} />}
           {view === "forecast" && <ForecastView jorttData={jorttObj} xeroData={xeroObj} shopifyMonthly={safeShopifyMonthly} />}
           {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}
