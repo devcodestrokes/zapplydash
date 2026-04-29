@@ -102,8 +102,8 @@ function OverviewPage() {
   const shopifyMarketsArr = asArr(data?.shopifyMarkets);
   const liveMarkets = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
   const twData = asArr(data?.tripleWhale).filter((m: any) => m?.live);
-  const juoArr = asArr(data?.juo);
-  const loopArr = asArr(data?.loop);
+  const juoArr = asArr(data?.juo).filter((m: any) => m?.calcVersion === 2);
+  const loopArr = asArr(data?.loop).filter((m: any) => m?.calcVersion === 3);
   const allSubData = [...juoArr, ...loopArr].filter((m: any) => m?.live);
   const shopifyMonthly = asArr(data?.shopifyMonthly);
   const jorttObj =
