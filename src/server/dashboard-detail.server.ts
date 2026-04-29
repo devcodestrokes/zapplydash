@@ -268,17 +268,19 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
   const toMs = new Date(`${toDate}T23:59:59Z`).getTime();
   const allSubs: any[] = [];
   const MAX_PAGES = 500;
-  const PAGE_SIZE = 200;
+  const PAGE_SIZE = 100;
   let apiReached = false;
 
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
+      if (page > 1) await new Promise((r) => setTimeout(r, 1300));
       const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
       let res: Response = await fetch(url, { headers, cache: "no-store" });
       if (res.status === 429) {
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 15000));
         res = await fetch(url, { headers, cache: "no-store" });
       }
+      if (res.status === 429) return { live: false, error: "Loop API rate-limited; kept previous complete data", market: marketCode, subscriptions: [], totals: {} };
       if (!res.ok) break;
       apiReached = true;
       const json = await res.json();
