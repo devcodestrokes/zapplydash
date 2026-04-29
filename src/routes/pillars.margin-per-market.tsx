@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
-import { MarketsView } from "@/components/FinanceDashboard";
+import { MarketsView } from "@/components/FinanceDashboard.tsx";
 
 export const Route = createFileRoute("/pillars/margin-per-market")({
   head: () => ({ meta: [{ title: "Margin per Market — Zapply" }] }),

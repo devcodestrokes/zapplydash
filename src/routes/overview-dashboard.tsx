@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
-import { OverviewView } from "@/components/FinanceDashboard";
+import { OverviewView } from "@/components/FinanceDashboard.tsx";
 
 export const Route = createFileRoute("/overview-dashboard")({
   // Accept any incoming search params (legacy preset/from/to) without erroring
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/overview-dashboard")({
   component: OverviewPage,
 });
 
-// Match drStartOfMonth() / drToday() in FinanceDashboard.jsx (YYYY-MM-DD strings)
+// Match drStartOfMonth() / drToday() in FinanceDashboard.tsx (YYYY-MM-DD strings)
 function startOfMonthStr(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
