@@ -815,56 +815,6 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     {/* Today's Profit (est.) */}
     <TodaysProfitCard metrics={profitMetrics} chartsReady={chartsReady} />
 
-    {dashboardDiagnostics.apiRows.length > 0 && (
-      <Card className="mt-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[13px] font-semibold">Dashboard data completeness</div>
-            <div className="mt-0.5 text-[12px] text-neutral-500">
-              {dashboardDiagnostics.apiRows.length} API feeds checked · {dashboardDiagnostics.refused.length} refused/missing expected data · {dashboardDiagnostics.delayed.length} stale/delayed · {dashboardDiagnostics.mathWidgets.length} widgets can render from cached API data and calculations
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            {dashboardDiagnostics.refused.slice(0, 3).map((s: any) => (
-              <span key={`${s.provider}-${s.key}`} className="rounded-full bg-rose-50 px-2 py-1 font-medium text-rose-700">{s.label}: {s.error ?? s.status}</span>
-            ))}
-            {dashboardDiagnostics.delayed.slice(0, 3).map((s: any) => (
-              <span key={`${s.provider}-${s.key}`} className="rounded-full bg-amber-50 px-2 py-1 font-medium text-amber-700">{s.label}: stale</span>
-            ))}
-            {dashboardDiagnostics.refused.length === 0 && dashboardDiagnostics.delayed.length === 0 && (
-              <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">All expected cached APIs are returning usable data</span>
-            )}
-          </div>
-        </div>
-        <div className="mt-3 overflow-hidden rounded-lg border border-neutral-100">
-          <table className="w-full text-[11px]">
-            <thead>
-              <tr className="bg-neutral-50 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-                <th className="px-3 py-2 text-left">API feed</th>
-                <th className="px-3 py-2 text-left">Expected data</th>
-                <th className="px-3 py-2 text-right">Rows</th>
-                <th className="px-3 py-2 text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboardDiagnostics.apiRows.map((s: any) => (
-                <tr key={`${s.provider}-${s.key}`} className="border-t border-neutral-100">
-                  <td className="px-3 py-2 font-medium text-neutral-700">{s.label}</td>
-                  <td className="px-3 py-2 text-neutral-500">{s.error ?? s.expected}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-neutral-500">{s.rowCount ?? "—"}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={`rounded-full px-2 py-0.5 font-medium ${s.status === "healthy" ? "bg-emerald-50 text-emerald-700" : s.status === "degraded" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>
-                      {s.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    )}
-
     {/* Revenue hero */}
     <section className="mt-3">
       <Card
