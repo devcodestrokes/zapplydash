@@ -167,12 +167,15 @@ async function fetchShopifyAllOrders(store: string, token: string, since: string
       const r  = parseFloat(o.totalPriceSet.shopMoney.amount);
       const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
       const dc = parseFloat(o.totalDiscountsSet.shopMoney.amount);
-      revenue   += r; refunds += rf; discounts += dc; orderCount++;
+      // Shopify "Total sales" = orders − returns. Subtract refunds from revenue
+      // so our number aligns with the figure shown in Shopify Analytics.
+      const net = r - rf;
+      revenue   += net; refunds += rf; discounts += dc; orderCount++;
       currency = o.totalPriceSet.shopMoney.currencyCode;
       if (o.customer?.id) customerIds.add(o.customer.id);
       const mk = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", year: "2-digit" }).replace(" ", " '");
       if (!monthlySums[mk]) monthlySums[mk] = { revenue: 0, orders: 0, refunds: 0 };
-      monthlySums[mk].revenue += r;
+      monthlySums[mk].revenue += net;
       monthlySums[mk].refunds += rf;
       monthlySums[mk].orders  += 1;
     }
