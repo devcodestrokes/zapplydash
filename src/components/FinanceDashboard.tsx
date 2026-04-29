@@ -574,7 +574,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
 
     {/* Revenue hero */}
     <section className="mt-3">
-      <Card className="p-6 transition hover:border-neutral-300">
+      <Card className="group relative p-6 transition hover:border-neutral-300">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-[13px] font-medium text-neutral-500">
@@ -596,8 +596,8 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                       €{Math.round(rangeRevenue).toLocaleString()}
                     </span>
                     {/* Hover breakdown */}
-                    {revenueBreakdownMarkets.length > 0 && showRevenueBreakdown && (
-                      <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl">
+                    {revenueBreakdownMarkets.length > 0 && (
+                      <div className={`pointer-events-none absolute left-0 top-full z-30 mt-2 w-[340px] rounded-lg border border-neutral-200 bg-white p-4 shadow-xl ${showRevenueBreakdown ? "block" : "hidden group-hover:block"}`}>
                         <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Revenue breakdown</div>
                         <div className="space-y-1.5">
                           {revenueBreakdownMarkets.map(m => {
