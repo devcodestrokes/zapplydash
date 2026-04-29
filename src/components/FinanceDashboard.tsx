@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "@tanstack/react-router";
 import SyncView from "./SyncView";
-import shopifyGlyph from "@/assets/shopify-glyph.png";
+import shopifyGlyph from "@/assets/shopify-glyph.svg";
 import {
   AreaChart,
   Area,
