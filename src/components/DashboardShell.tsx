@@ -1,6 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import {
-  
   LayoutDashboard,
   LogOut,
   RefreshCw,
@@ -9,8 +8,15 @@ import {
   CalendarDays,
   Scale,
   LineChart,
+  GitMerge,
+  Activity,
+  ShoppingBag,
+  Waves,
+  FileText,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getSyncStatus } from "@/server/dashboard.functions";
 import {
   Sidebar,
   SidebarContent,
@@ -27,7 +33,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean };
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number };
 
 const navItems: NavItem[] = [
   { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -40,6 +46,17 @@ const pillarItems: NavItem[] = [
   { to: "/pillars/monthly-overview", label: "Monthly overview", icon: CalendarDays },
   { to: "/pillars/balance-sheet", label: "Balance sheet", icon: Scale },
   { to: "/pillars/forecast", label: "Forecast", icon: LineChart },
+];
+
+const operationsItems: NavItem[] = [
+  { to: "/operations/reconciliation", label: "Reconciliation", icon: GitMerge },
+  { to: "/operations/sync-status", label: "Sync status", icon: Activity },
+];
+
+const dataSourceMeta: { providerKeys: string[]; label: string; icon: typeof LayoutDashboard; suffix?: string }[] = [
+  { providerKeys: ["shopify"], label: "Shopify Plus", icon: ShoppingBag },
+  { providerKeys: ["triplewhale"], label: "Triple Whale", icon: Waves },
+  { providerKeys: ["jortt", "xero"], label: "Jortt", icon: FileText, suffix: "→ Xero" },
 ];
 
 function AppSidebar({ user }: { user: { name: string; email: string; avatar: string | null } | null }) {
