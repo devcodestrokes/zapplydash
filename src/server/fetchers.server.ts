@@ -2262,14 +2262,17 @@ export async function fetchShopifyRepeatFunnel() {
     cohortBuckets.get(key)!.push(orders);
   }
 
-  // ── Repeat funnel from the newest non-empty cohort with ≥30 days to repeat ──
+  // ── Repeat funnel from the newest fully mature cohort ─────────────────────
+  // The dashboard headline is "Repeat to 3rd order", so a cohort needs a real
+  // 3rd-order observation window. Showing a 30/60-day cohort here makes the
+  // number look precise while it is still materially incomplete.
   const cohortCandidates = Array.from(cohortBuckets.entries())
     .map(([key, orders]) => {
       const start = monthStartFromKey(key);
       const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
       return { key, orders, start, end, daysSinceEnd: Math.floor((now - end.getTime()) / DAY) };
     })
-    .filter((c) => c.orders.length > 0 && c.daysSinceEnd >= 30)
+    .filter((c) => c.orders.length > 0 && c.daysSinceEnd >= 90)
     .sort((a, b) => b.start.getTime() - a.start.getTime());
 
   const selectedCohort = cohortCandidates[0] ?? null;
@@ -2306,10 +2309,12 @@ export async function fetchShopifyRepeatFunnel() {
     const cohort = cohortBuckets.get(key) ?? [];
     const size = cohort.length;
     const monthAge = i; // months ago (0 = current)
-    // Need at least 90 days to mature for 3rd/4th order data
+    // Need at least 30 days for 2nd-order and 90 days for 3rd/4th-order data.
     const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).getTime();
     const daysSinceCohortEnd = (now - monthEnd) / DAY;
-    const maturing = daysSinceCohortEnd < 90;
+    const secondMatured = daysSinceCohortEnd >= 30;
+    const deepMatured = daysSinceCohortEnd >= 90;
+    const maturing = !deepMatured;
 
     if (size === 0) {
       monthlyCohorts.push({
@@ -2329,16 +2334,16 @@ export async function fetchShopifyRepeatFunnel() {
     monthlyCohorts.push({
       month: monthLabel(d) + (monthAge === 0 ? " (MTD)" : ""),
       size,
-      second: +((s2 / size) * 100).toFixed(1),
-      third:  +((s3 / size) * 100).toFixed(1),
-      fourth: +((s4 / size) * 100).toFixed(1),
-      avgOrders: +(totalOrders / size).toFixed(2),
+      second: secondMatured ? +((s2 / size) * 100).toFixed(1) : null,
+      third:  deepMatured ? +((s3 / size) * 100).toFixed(1) : null,
+      fourth: deepMatured ? +((s4 / size) * 100).toFixed(1) : null,
+      avgOrders: secondMatured ? +(totalOrders / size).toFixed(2) : null,
       maturing,
     });
   }
 
   return {
-    calcVersion: 3,
+    calcVersion: 4,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
