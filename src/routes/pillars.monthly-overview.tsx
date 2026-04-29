@@ -71,6 +71,7 @@ function MonthlyOverviewPage() {
             shopifyMonthly={shopifyMonthly}
             twData={twData}
             jortt={jorttObj}
+            shopifyRepeatFunnel={shopifyRepeatFunnel}
           />
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800">
