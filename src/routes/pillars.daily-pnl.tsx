@@ -76,10 +76,6 @@ function fmtIso(d: Date) {
 }
 
 
-function fmtIso(d: Date) {
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
 function yesterdayIso() {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 1);
