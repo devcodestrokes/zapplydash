@@ -328,7 +328,7 @@ const QuickRangePills = ({ from, to, onApply, disabled = false }) => {
   );
 };
 
-const DateRangePicker = ({ from, to, onApply, loading = false }) => {
+export const DateRangePicker = ({ from, to, onApply, loading = false }) => {
   const [open, setOpen]           = useState(false);
   const [pendingFrom, setPendingFrom] = useState(from);
   const [pendingTo,   setPendingTo]   = useState(to);
