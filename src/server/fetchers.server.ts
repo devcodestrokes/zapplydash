@@ -2737,3 +2737,67 @@ export async function fetchShopifyRepeatFunnel() {
     fetchedAt: new Date().toISOString(),
   };
 }
+
+// ─── Shopify Payments — pending payouts per market ─────────────────────────
+// Returns one row per store with the live pending balance + scheduled/in-transit
+// payouts. Stores without Shopify Payments simply return live:false.
+export async function fetchShopifyPayouts() {
+  const results = await Promise.all(
+    SHOPIFY_STORES.map(async (s) => {
+      const store = process.env[s.storeKey];
+      if (!store) return { market: s.code, name: s.name, live: false, reason: "store env not set" };
+      const token = await getShopifyToken(store);
+      if (!token) return { market: s.code, name: s.name, live: false, reason: "no token" };
+
+      const headers = { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
+      const base = `https://${store}/admin/api/2025-01/shopify_payments`;
+
+      try {
+        const [balRes, payRes] = await Promise.all([
+          fetch(`${base}/balance.json`, { headers }),
+          fetch(`${base}/payouts.json?status=scheduled&limit=50`, { headers }),
+        ]);
+
+        // 404 => store not on Shopify Payments
+        if (balRes.status === 404) {
+          return { market: s.code, name: s.name, live: false, reason: "Shopify Payments not enabled" };
+        }
+        if (!balRes.ok) {
+          return { market: s.code, name: s.name, live: false, reason: `balance HTTP ${balRes.status}` };
+        }
+
+        const balJson: any = await balRes.json();
+        const balances: Array<{ amount: string; currency: string }> = balJson?.balance ?? [];
+        const pending = balances.reduce((s, b) => s + Number(b.amount || 0), 0);
+        const currency = balances[0]?.currency ?? (s.code === "US" ? "USD" : s.code === "UK" ? "GBP" : "EUR");
+
+        let scheduledTotal = 0;
+        let nextPayoutDate: string | null = null;
+        if (payRes.ok) {
+          const pj: any = await payRes.json();
+          const payouts: any[] = pj?.payouts ?? [];
+          scheduledTotal = payouts.reduce((s, p) => s + Number(p.amount || 0), 0);
+          const upcoming = payouts
+            .map((p) => p.date)
+            .filter(Boolean)
+            .sort();
+          nextPayoutDate = upcoming[0] ?? null;
+        }
+
+        return {
+          market: s.code,
+          name: `Shopify Payments ${s.code}`,
+          live: true,
+          currency,
+          pendingBalance: pending,
+          scheduledPayouts: scheduledTotal,
+          nextPayoutDate,
+        };
+      } catch (err: any) {
+        return { market: s.code, name: s.name, live: false, reason: err?.message ?? "fetch failed" };
+      }
+    }),
+  );
+
+  return { calcVersion: 1, fetchedAt: new Date().toISOString(), markets: results };
+}
