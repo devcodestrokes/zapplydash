@@ -255,6 +255,37 @@ function DailyPnlPage() {
     };
   }, [today, twRange, twBase, isToday]);
 
+  // ---- Daily revenue series for the strip chart (selected vs previous period) ----
+  const revenueSeries = useMemo(() => {
+    const daily: Record<string, { revenue?: number } | number> =
+      (shopifyDaily?.daily ?? {}) as any;
+    const dayRev = (k: string): number => {
+      const v: any = daily[k];
+      if (v == null) return 0;
+      if (typeof v === "number") return v;
+      return Number(v.revenue ?? 0) || 0;
+    };
+    const len = daysInRange(dateRange.from, dateRange.to);
+    const base = baselineRange(dateRange.from, dateRange.to);
+    const start = new Date(dateRange.from + "T00:00:00Z");
+    const baseStart = new Date(base.from + "T00:00:00Z");
+    const points: { label: string; selected: number; previous: number }[] = [];
+    for (let i = 0; i < len; i++) {
+      const d = new Date(start); d.setUTCDate(d.getUTCDate() + i);
+      const b = new Date(baseStart); b.setUTCDate(b.getUTCDate() + i);
+      const dKey = fmtIso(d);
+      const bKey = fmtIso(b);
+      const label = len <= 1
+        ? dKey.slice(5)
+        : len <= 31
+        ? dKey.slice(5)
+        : `${dKey.slice(5)}`;
+      points.push({ label, selected: dayRev(dKey), previous: dayRev(bKey) });
+    }
+    const hasAny = points.some((p) => p.selected > 0 || p.previous > 0);
+    return { points, hasAny, len };
+  }, [shopifyDaily, dateRange.from, dateRange.to]);
+
   // ---- Full P&L breakdown rows (sourced from existing data) ----
   const pnlBreakdown = useMemo(() => {
     const sumTw = (k: "revenue" | "adSpend" | "grossProfit") =>
