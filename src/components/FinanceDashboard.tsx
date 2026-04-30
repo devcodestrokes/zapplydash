@@ -1995,7 +1995,7 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
