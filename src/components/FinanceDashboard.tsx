@@ -639,6 +639,16 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   }, [jorttData, dateRange]);
 
   const rangeJorttExpenses = useMemo(() => {
+    // True OPEX = Team + Software + Agencies + Content samenwerkingen ONLY.
+    // Use opexByMonth when available (categorised), fall back to expensesByMonth (totals).
+    const opexByMonth = (jorttData as any)?.opexByMonth;
+    if (Array.isArray(opexByMonth) && opexByMonth.length) {
+      const total = opexByMonth
+        .filter((m: any) => monthInRange(m.month, dateRange.from, dateRange.to))
+        .reduce((s: number, m: any) =>
+          s + (m.team || 0) + (m.software || 0) + (m.agencies || 0) + (m.content || 0), 0);
+      if (total > 0) return total;
+    }
     if (!jorttData?.expensesByMonth) return null;
     const total = Object.entries(jorttData.expensesByMonth)
       .filter(([mk]) => monthInRange(mk, dateRange.from, dateRange.to))
