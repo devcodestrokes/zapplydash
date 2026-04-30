@@ -2226,7 +2226,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       <div className="grid grid-cols-1 gap-4 border-t border-neutral-100 p-5 lg:grid-cols-5">
         {/* Donut */}
         <div className="lg:col-span-2">
-          <div className="text-[12px] font-medium text-neutral-500">Cost mix — April '26</div>
+          <div className="text-[12px] font-medium text-neutral-500">Cost mix — {monthLabel}</div>
           <div className="relative mt-2 h-[220px]">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <PieChart>
