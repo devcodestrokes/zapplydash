@@ -974,7 +974,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
           icon: Wallet,
           label: "OpEx",
           value: opex != null ? `€${Math.round(opex).toLocaleString()}` : "—",
-          sub: opex != null ? "Team, software, agencies, other" : "Connect Jortt",
+          sub: opex != null ? "Team + Software + Agencies + Content" : "Connect Jortt",
           delta: prevDeltas.opex,
           deltaInverse: true, // higher OpEx = bad
         },
