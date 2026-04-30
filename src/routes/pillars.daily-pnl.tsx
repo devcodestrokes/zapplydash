@@ -9,6 +9,16 @@ import {
   ArrowDownRight,
   type LucideIcon,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData, getTripleWhaleRange } from "@/server/dashboard.functions";
@@ -132,6 +142,7 @@ function DailyPnlPage() {
     opexByMonth?: any[];
     opexDetail?: Record<string, any>;
   } | null>(null);
+  const [shopifyDaily, setShopifyDaily] = useState<{ daily?: Record<string, { revenue?: number }> } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -147,6 +158,7 @@ function DailyPnlPage() {
           : [];
         setToday(todayArr.filter((r) => r && r.code));
         setJorttData(d?.jortt ?? null);
+        setShopifyDaily(d?.shopifyDaily ?? null);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
@@ -242,6 +254,37 @@ function DailyPnlPage() {
       revenueLabel: baseRevenueLabel,
     };
   }, [today, twRange, twBase, isToday]);
+
+  // ---- Daily revenue series for the strip chart (selected vs previous period) ----
+  const revenueSeries = useMemo(() => {
+    const daily: Record<string, { revenue?: number } | number> =
+      (shopifyDaily?.daily ?? {}) as any;
+    const dayRev = (k: string): number => {
+      const v: any = daily[k];
+      if (v == null) return 0;
+      if (typeof v === "number") return v;
+      return Number(v.revenue ?? 0) || 0;
+    };
+    const len = daysInRange(dateRange.from, dateRange.to);
+    const base = baselineRange(dateRange.from, dateRange.to);
+    const start = new Date(dateRange.from + "T00:00:00Z");
+    const baseStart = new Date(base.from + "T00:00:00Z");
+    const points: { label: string; selected: number; previous: number }[] = [];
+    for (let i = 0; i < len; i++) {
+      const d = new Date(start); d.setUTCDate(d.getUTCDate() + i);
+      const b = new Date(baseStart); b.setUTCDate(b.getUTCDate() + i);
+      const dKey = fmtIso(d);
+      const bKey = fmtIso(b);
+      const label = len <= 1
+        ? dKey.slice(5)
+        : len <= 31
+        ? dKey.slice(5)
+        : `${dKey.slice(5)}`;
+      points.push({ label, selected: dayRev(dKey), previous: dayRev(bKey) });
+    }
+    const hasAny = points.some((p) => p.selected > 0 || p.previous > 0);
+    return { points, hasAny, len };
+  }, [shopifyDaily, dateRange.from, dateRange.to]);
 
   // ---- Full P&L breakdown rows (sourced from existing data) ----
   const pnlBreakdown = useMemo(() => {
@@ -430,6 +473,67 @@ function DailyPnlPage() {
                   Previous period
                 </span>
               </div>
+            </div>
+
+            {/* Selected vs previous-period revenue chart */}
+            <div className="mt-4 h-[220px] w-full">
+              {revenueSeries.hasAny ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={revenueSeries.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={16}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={56}
+                      tickFormatter={(v: any) => {
+                        const n = Number(v) || 0;
+                        if (n >= 1000) return `€${Math.round(n / 1000)}k`;
+                        return `€${Math.round(n)}`;
+                      }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: 11,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--card))",
+                      }}
+                      formatter={(v: any, name: any) => [fmtMoney(Number(v), "EUR"), name]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="selected"
+                      name="Selected"
+                      stroke="hsl(var(--foreground))"
+                      strokeWidth={2}
+                      dot={revenueSeries.len <= 14 ? { r: 2.5 } : false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="previous"
+                      name="Previous period"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                  Daily data syncing — refresh in a minute
+                </div>
+              )}
             </div>
           </div>
 
