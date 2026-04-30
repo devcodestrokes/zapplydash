@@ -2110,6 +2110,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
 
 const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false } = {}) => {
   const [activeCategory, setActiveCategory] = useState("team");
+  // selected month index within `data` (defaults to latest)
+  const [monthIdx, setMonthIdx] = useState<number | null>(null);
   if (!data || data.length === 0) {
     return (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
@@ -2117,29 +2119,32 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       </div>
     );
   }
-  const current = data[data.length - 1];
-  const prev = data[data.length - 2] ?? data[data.length - 1];
-  const totalCurrent = current.team + current.agencies + current.content + current.software + current.other;
-  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + prev.other;
-  const totalDelta = ((totalCurrent - totalPrev) / totalPrev * 100);
+  const idx = monthIdx == null ? data.length - 1 : Math.min(Math.max(monthIdx, 0), data.length - 1);
+  const current = data[idx];
+  const prev = data[Math.max(0, idx - 1)] ?? current;
+  // OPEX = Team + Software + Agencies + Content samenwerkingen ONLY (exclude "other costs")
+  const opexSum = (m: any) => (m.team || 0) + (m.agencies || 0) + (m.content || 0) + (m.software || 0);
+  const totalCurrent = opexSum(current);
+  const totalPrev = opexSum(prev);
+  const totalDelta = totalPrev > 0 ? ((totalCurrent - totalPrev) / totalPrev * 100) : 0;
 
   const categories = [
     { key: "team", label: "Team", color: "#171717" },
     { key: "agencies", label: "Agencies", color: "#6366f1" },
     { key: "content", label: "Content samenwerkingen", color: "#f59e0b" },
     { key: "software", label: "Software", color: "#10b981" },
-    { key: "other", label: "Other costs", color: "#6b7280" },
   ];
 
   const donutData = categories.map(c => ({
     name: c.label,
-    value: current[c.key],
+    value: current[c.key] || 0,
     color: c.color,
     key: c.key,
   }));
 
-  const activeDetail = detail[activeCategory] ?? { label: activeCategory, items: [] };
-  const activeTotal = (activeDetail.items ?? []).reduce((s, i) => s + i.amount, 0);
+  const activeDetail = (detail && detail[activeCategory]) ?? { label: activeCategory, items: [] };
+  const activeTotal = (activeDetail.items ?? []).reduce((s: number, i: any) => s + i.amount, 0);
+  const monthLabel = current?.month ?? "";
 
   return (
     <Card className="mt-3 overflow-hidden">
