@@ -2023,15 +2023,18 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
 
   return (
     <>
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="text-[12px] font-medium text-neutral-400">Pillar 2</div>
           <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Margin per Market</h1>
           <p className="mt-1 text-[13px] text-neutral-500">
-            Geographic breakdown following Shopify Markets · last 30 days
+            Geographic breakdown following Shopify Markets
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {dateRange && onDateChange && (
+            <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
+          )}
           <select
             value={allocation}
             onChange={(e) => setAllocation(e.target.value)}
