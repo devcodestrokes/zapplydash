@@ -71,16 +71,10 @@ function todayIso() {
   ).padStart(2, "0")}`;
 }
 
-function monthStartIso() {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
-}
-
-function isoNDaysAgo(n: number) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
+function fmtIso(d: Date) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
+
 
 function fmtIso(d: Date) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
