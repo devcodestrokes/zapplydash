@@ -142,6 +142,7 @@ function DailyPnlPage() {
     opexByMonth?: any[];
     opexDetail?: Record<string, any>;
   } | null>(null);
+  const [shopifyDaily, setShopifyDaily] = useState<{ daily?: Record<string, { revenue?: number }> } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -157,6 +158,7 @@ function DailyPnlPage() {
           : [];
         setToday(todayArr.filter((r) => r && r.code));
         setJorttData(d?.jortt ?? null);
+        setShopifyDaily(d?.shopifyDaily ?? null);
         setSyncedAt(d?.syncedAt ?? null);
       })
       .finally(() => alive && setLoading(false));
