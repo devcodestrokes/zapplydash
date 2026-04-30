@@ -129,7 +129,7 @@ function BalanceSheetPage() {
     };
   }, []);
 
-  const { xero, jortt, syncedAt } = useMemo(() => {
+  const { xero, jortt, shopifyPayouts, syncedAt } = useMemo(() => {
     const xero =
       data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
         ? data.xero
@@ -138,7 +138,14 @@ function BalanceSheetPage() {
       data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error
         ? data.jortt
         : null;
-    return { xero, jortt, syncedAt: data?.syncedAt ?? null };
+    const sp =
+      (data as any)?.shopifyPayouts &&
+      typeof (data as any).shopifyPayouts === "object" &&
+      !(data as any).shopifyPayouts.__empty &&
+      !(data as any).shopifyPayouts.__error
+        ? (data as any).shopifyPayouts
+        : null;
+    return { xero, jortt, shopifyPayouts: sp, syncedAt: data?.syncedAt ?? null };
   }, [data]);
 
   // ── derive figures (real data only, "—" otherwise) ──
