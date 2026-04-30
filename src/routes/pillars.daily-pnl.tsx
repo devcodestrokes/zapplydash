@@ -352,43 +352,28 @@ function DailyPnlPage() {
     <DashboardShell user={user} title="Daily P&L">
       <div className="bg-muted/20 min-h-full p-6 md:p-8">
         <div className="mx-auto max-w-6xl space-y-5">
-          {/* Header — title left, period toggle right (matches mockup) */}
+          {/* Header — title left, date range picker right */}
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Pillar 1</div>
               <h2 className="mt-1 text-2xl font-bold tracking-tight">Daily P&L Tracker</h2>
               <div className="mt-1 text-sm text-muted-foreground">
-                Live intraday revenue with full profit & loss breakdown.
+                Live revenue with full profit & loss breakdown — pick any range.
               </div>
             </div>
-            <div className="inline-flex rounded-lg border bg-card p-0.5 text-xs shadow-sm">
-              {([
-                ["today", "Today"],
-                ["wtd", "WTD"],
-                ["mtd", "MTD"],
-              ] as [Period, string][]).map(([k, label]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setPeriod(k)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 font-medium transition-colors",
-                    period === k
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <DateRangePicker
+              from={dateRange.from}
+              to={dateRange.to}
+              onApply={(from: string, to: string) => setDateRange({ from, to })}
+              loading={rangeSyncing}
+            />
           </div>
 
           {/* KPI tiles (stacked, full width — matches mockup) */}
           <div className="space-y-3">
             <KpiTile
               icon={DollarSign}
-              label={period === "today" ? "Revenue today" : period === "wtd" ? "Revenue WTD" : "Revenue MTD"}
+              label={`Revenue ${rangeLabel(dateRange.from, dateRange.to)}`}
               value={fmtMoney(periodKpis.revenue, "EUR")}
               subtitle={periodKpis.revenueLabel}
               deltaPct={periodKpis.revenuePct}
@@ -396,7 +381,7 @@ function DailyPnlPage() {
             />
             <KpiTile
               icon={TrendingUp}
-              label={period === "today" ? "Profit today" : period === "wtd" ? "Profit WTD" : "Profit MTD"}
+              label={`Profit ${rangeLabel(dateRange.from, dateRange.to)}`}
               value={periodKpis.profitIsLive ? fmtMoney(periodKpis.profit, "EUR") : "—"}
               subtitle="Triple Whale net profit (after COGS & ad spend)"
               deltaPct={periodKpis.profitPct}
@@ -404,7 +389,7 @@ function DailyPnlPage() {
             />
             <KpiTile
               icon={Wallet}
-              label={period === "today" ? "Ad spend today" : period === "wtd" ? "Ad spend WTD" : "Ad spend MTD"}
+              label={`Ad spend ${rangeLabel(dateRange.from, dateRange.to)}`}
               value={fmtMoney(periodKpis.adSpend, "EUR")}
               subtitle="1h lag"
               deltaPct={periodKpis.adPct}
@@ -424,16 +409,12 @@ function DailyPnlPage() {
             />
           </div>
 
-          {/* Intraday revenue strip */}
+          {/* Range revenue strip */}
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-[12px] text-muted-foreground">
-                  {period === "today"
-                    ? "Intraday revenue — today vs yesterday"
-                    : period === "wtd"
-                    ? "Week-to-date revenue — vs previous week"
-                    : "Month-to-date revenue — vs previous month"}
+                  Revenue for {rangeLabel(dateRange.from, dateRange.to)} — vs previous {daysInRange(dateRange.from, dateRange.to)}-day window
                 </div>
                 <div className="mt-1 flex items-baseline gap-3">
                   <div className="text-2xl font-bold">{fmtMoney(periodKpis.revenue, "EUR")}</div>
@@ -452,18 +433,19 @@ function DailyPnlPage() {
               </div>
               <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> {period === "today" ? "Today" : period.toUpperCase()}
+                  <span className="inline-block h-2 w-2 rounded-full bg-foreground" /> Selected
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/50" />
-                  {period === "today" ? "Yesterday" : period === "wtd" ? "Prev week" : "Prev month"}
+                  Previous period
                 </span>
               </div>
             </div>
           </div>
 
           {/* Full P&L breakdown — line-by-line, traced to source */}
-          <PnlBreakdown period={period} data={pnlBreakdown} />
+          <PnlBreakdown periodLabel={rangeLabel(dateRange.from, dateRange.to)} data={pnlBreakdown} />
+
 
           {/* Per-market tiles, hourly chart, UK/NL strips and store table hidden per request */}
           <div className="pt-2 text-center text-[11px] text-muted-foreground">
