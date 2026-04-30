@@ -371,10 +371,10 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-10 z-50 w-[268px] rounded-xl border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-200/60">
+        <div className="absolute right-0 top-10 z-50 w-[300px] rounded-xl border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-200/60">
           {/* Presets */}
           <div className="mb-1 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Quick select</div>
-          <div className="mb-3 grid grid-cols-2 gap-1">
+          <div className="mb-3 grid max-h-[180px] grid-cols-2 gap-1 overflow-y-auto pr-1">
             {PRESETS.map(p => (
               <button
                 key={p.label}
