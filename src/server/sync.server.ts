@@ -65,6 +65,13 @@ const ALL_JOBS: Job[] = [
     maxAgeMin: 720,
   },
   {
+    name: "shopify_payouts",
+    provider: "shopify",
+    key: "payouts",
+    fn: fetchShopifyPayouts,
+    maxAgeMin: 30,
+  },
+  {
     name: "triplewhale",
     provider: "triplewhale",
     key: "summary",
