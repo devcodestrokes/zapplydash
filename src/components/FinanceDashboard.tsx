@@ -817,7 +817,6 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <QuickRangePills from={dateRange.from} to={dateRange.to} onApply={onDateChange} disabled={rangeSyncing} />
         <DateRangePicker from={dateRange.from} to={dateRange.to} onApply={onDateChange} loading={rangeSyncing} />
       </div>
     </div>
