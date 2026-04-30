@@ -639,6 +639,16 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   }, [jorttData, dateRange]);
 
   const rangeJorttExpenses = useMemo(() => {
+    // True OPEX = Team + Software + Agencies + Content samenwerkingen ONLY.
+    // Use opexByMonth when available (categorised), fall back to expensesByMonth (totals).
+    const opexByMonth = (jorttData as any)?.opexByMonth;
+    if (Array.isArray(opexByMonth) && opexByMonth.length) {
+      const total = opexByMonth
+        .filter((m: any) => monthInRange(m.month, dateRange.from, dateRange.to))
+        .reduce((s: number, m: any) =>
+          s + (m.team || 0) + (m.software || 0) + (m.agencies || 0) + (m.content || 0), 0);
+      if (total > 0) return total;
+    }
     if (!jorttData?.expensesByMonth) return null;
     const total = Object.entries(jorttData.expensesByMonth)
       .filter(([mk]) => monthInRange(mk, dateRange.from, dateRange.to))
@@ -974,7 +984,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
           icon: Wallet,
           label: "OpEx",
           value: opex != null ? `€${Math.round(opex).toLocaleString()}` : "—",
-          sub: opex != null ? "Team, software, agencies, other" : "Connect Jortt",
+          sub: opex != null ? "Team + Software + Agencies + Content" : "Connect Jortt",
           delta: prevDeltas.opex,
           deltaInverse: true, // higher OpEx = bad
         },
@@ -1173,7 +1183,18 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       const blendedARPU = totalActive > 0 ? liveMRR / totalActive : null;
       const blendedChurn = totalActive > 0 ? (totalChurned / totalActive) * 100 : null;
       const totalRev = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? 0;
-      const subShare = totalRev > 0 ? (liveMRR / totalRev) * 100 : null;
+      // Subscription share = MRR (monthly recurring) compared to revenue at a comparable cadence.
+      // We scale MRR to the selected range length so e.g. a 7-day window doesn't blow up to 311%.
+      const rangeDays = (() => {
+        const f = new Date(dateRange.from + "T00:00:00").getTime();
+        const t = new Date(dateRange.to + "T23:59:59").getTime();
+        const d = Math.max(1, Math.round((t - f) / 86400000));
+        return d;
+      })();
+      const mrrForRange = liveMRR * (rangeDays / 30);
+      const subShareRaw = totalRev > 0 ? (mrrForRange / totalRev) * 100 : null;
+      // Cap display at 100% (revenue source can lag vs subs MRR; >100% always means apples-to-oranges)
+      const subShare = subShareRaw !== null ? Math.min(100, Math.max(0, subShareRaw)) : null;
       const sourcesLabel = subData.map(m => m.platform === "juo" ? `Juo (${m.market})` : `Loop (${m.market})`).join(" + ");
       return (
         <Card className="mt-3 p-5">
@@ -2110,6 +2131,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [] }: any = {}) => {
 
 const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = null, jorttLive = false } = {}) => {
   const [activeCategory, setActiveCategory] = useState("team");
+  // selected month index within `data` (defaults to latest)
+  const [monthIdx, setMonthIdx] = useState<number | null>(null);
   if (!data || data.length === 0) {
     return (
       <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 text-center text-[13px] text-neutral-500">
@@ -2117,44 +2140,66 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       </div>
     );
   }
-  const current = data[data.length - 1];
-  const prev = data[data.length - 2] ?? data[data.length - 1];
-  const totalCurrent = current.team + current.agencies + current.content + current.software + current.other;
-  const totalPrev = prev.team + prev.agencies + prev.content + prev.software + prev.other;
-  const totalDelta = ((totalCurrent - totalPrev) / totalPrev * 100);
+  const idx = monthIdx == null ? data.length - 1 : Math.min(Math.max(monthIdx, 0), data.length - 1);
+  const current = data[idx];
+  const prev = data[Math.max(0, idx - 1)] ?? current;
+  // OPEX = Team + Software + Agencies + Content samenwerkingen ONLY (exclude "other costs")
+  const opexSum = (m: any) => (m.team || 0) + (m.agencies || 0) + (m.content || 0) + (m.software || 0);
+  const totalCurrent = opexSum(current);
+  const totalPrev = opexSum(prev);
+  const totalDelta = totalPrev > 0 ? ((totalCurrent - totalPrev) / totalPrev * 100) : 0;
 
   const categories = [
     { key: "team", label: "Team", color: "#171717" },
     { key: "agencies", label: "Agencies", color: "#6366f1" },
     { key: "content", label: "Content samenwerkingen", color: "#f59e0b" },
     { key: "software", label: "Software", color: "#10b981" },
-    { key: "other", label: "Other costs", color: "#6b7280" },
   ];
 
   const donutData = categories.map(c => ({
     name: c.label,
-    value: current[c.key],
+    value: current[c.key] || 0,
     color: c.color,
     key: c.key,
   }));
 
-  const activeDetail = detail[activeCategory] ?? { label: activeCategory, items: [] };
-  const activeTotal = (activeDetail.items ?? []).reduce((s, i) => s + i.amount, 0);
+  const activeDetail = (detail && detail[activeCategory]) ?? { label: activeCategory, items: [] };
+  const activeTotal = (activeDetail.items ?? []).reduce((s: number, i: any) => s + i.amount, 0);
+  const monthLabel = current?.month ?? "";
 
   return (
     <Card className="mt-3 overflow-hidden">
       {/* Header */}
       <div className="border-b border-neutral-100 p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-[13px] font-semibold">OpEx breakdown — April '26</div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">OpEx breakdown — {monthLabel}</div>
             <div className="mt-0.5 text-[12px] text-neutral-400">
-              Indirect costs by category · source: Jortt OPEX overview
+              Team + Software + Agencies + Content · source: Jortt OPEX overview
+            </div>
+            {/* Month switcher */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {data.map((m: any, i: number) => {
+                const isActive = i === idx;
+                return (
+                  <button
+                    key={`${m.month}-${i}`}
+                    onClick={() => setMonthIdx(i)}
+                    className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                      isActive
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {m.month}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Total OpEx</div>
-            <div className="mt-0.5 text-[22px] font-semibold tabular-nums">€{totalCurrent.toLocaleString()}</div>
+            <div className="mt-0.5 text-[22px] font-semibold tabular-nums">€{Math.round(totalCurrent).toLocaleString()}</div>
             <div className={`text-[11px] font-medium ${totalDelta >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
               {totalDelta >= 0 ? "+" : ""}{totalDelta.toFixed(1)}% MoM
             </div>
@@ -2163,12 +2208,12 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       </div>
 
       {/* Category cards */}
-      <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-4">
         {categories.map(cat => {
-          const value = current[cat.key];
-          const prevValue = prev[cat.key];
-          const delta = ((value - prevValue) / prevValue * 100);
-          const share = (value / totalCurrent * 100);
+          const value = current[cat.key] || 0;
+          const prevValue = prev[cat.key] || 0;
+          const delta = prevValue > 0 ? ((value - prevValue) / prevValue * 100) : 0;
+          const share = totalCurrent > 0 ? (value / totalCurrent * 100) : 0;
           const isActive = activeCategory === cat.key;
           return (
             <button
@@ -2202,7 +2247,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       <div className="grid grid-cols-1 gap-4 border-t border-neutral-100 p-5 lg:grid-cols-5">
         {/* Donut */}
         <div className="lg:col-span-2">
-          <div className="text-[12px] font-medium text-neutral-500">Cost mix — April '26</div>
+          <div className="text-[12px] font-medium text-neutral-500">Cost mix — {monthLabel}</div>
           <div className="relative mt-2 h-[220px]">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <PieChart>
@@ -2374,10 +2419,22 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
   const repeatRate = (() => {
     const f: any = shopifyRepeatFunnel;
     if (!f) return null;
+    // 1) Prefer the global funnel 2nd-order rate (matured)
     const second = f?.funnel?.find?.((r: any) => r.order === 2)?.rate;
-    if (typeof second === "number") return second;
-    const fallback = (f?.monthlyCohorts ?? []).find((c: any) => (c?.size ?? 0) > 0 && typeof c?.second === "number");
-    return fallback?.second ?? null;
+    if (typeof second === "number" && second > 0) return second;
+    // 2) Else: latest monthly cohort with a real (non-null, non-zero) 2nd-order rate
+    const cohorts = Array.isArray(f?.monthlyCohorts) ? f.monthlyCohorts : [];
+    for (let i = cohorts.length - 1; i >= 0; i--) {
+      const c = cohorts[i];
+      if (typeof c?.second === "number" && c.second > 0) return c.second;
+    }
+    // 3) Else: derive from raw counts if available (customers placing 2nd order / cohort size)
+    const f2 = f?.funnel?.find?.((r: any) => r.order === 2);
+    const f1 = f?.funnel?.find?.((r: any) => r.order === 1);
+    if (f2?.customers && f1?.customers) {
+      return +(100 * f2.customers / f1.customers).toFixed(1);
+    }
+    return null;
   })();
   const marketCount = liveTWAll.length;
   const twSub = marketCount > 0 ? `Triple Whale · ${marketCount} market${marketCount !== 1 ? "s" : ""}` : "TW not connected";
