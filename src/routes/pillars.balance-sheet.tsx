@@ -212,6 +212,21 @@ function BalanceSheetPage() {
     const bankAccountsBank = bankAccountsAll.filter((b) => !isPlatform(b.name));
     const platformPending = bankAccountsAll.filter((b) => isPlatform(b.name));
 
+    // Augment with live Shopify Payments pending balances per market
+    const spMarkets: any[] = Array.isArray(shopifyPayouts?.markets)
+      ? shopifyPayouts.markets
+      : [];
+    for (const m of spMarkets) {
+      if (!m?.live) continue;
+      const pending = Number(m.pendingBalance ?? 0) + Number(m.scheduledPayouts ?? 0);
+      if (!pending) continue;
+      platformPending.push({
+        name: m.name ?? `Shopify Payments ${m.market}`,
+        balance: pending,
+        currency: String(m.currency ?? "EUR"),
+      });
+    }
+
     const cashBank = bankAccountsBank.length
       ? bankAccountsBank.reduce((s, b) => s + (b.balance ?? 0), 0)
       : null;
