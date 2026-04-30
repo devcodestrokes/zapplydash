@@ -5,6 +5,7 @@ import {
   fetchShopifyToday,
   fetchShopifyDaily,
   fetchShopifyRepeatFunnel,
+  fetchShopifyPayouts,
   fetchTripleWhale,
   fetchTripleWhaleCustomerEconomics,
   fetchTripleWhaleDaily,
@@ -62,6 +63,13 @@ const ALL_JOBS: Job[] = [
     key: "repeat_funnel",
     fn: fetchShopifyRepeatFunnel,
     maxAgeMin: 720,
+  },
+  {
+    name: "shopify_payouts",
+    provider: "shopify",
+    key: "payouts",
+    fn: fetchShopifyPayouts,
+    maxAgeMin: 30,
   },
   {
     name: "triplewhale",

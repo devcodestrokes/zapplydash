@@ -129,7 +129,7 @@ function BalanceSheetPage() {
     };
   }, []);
 
-  const { xero, jortt, syncedAt } = useMemo(() => {
+  const { xero, jortt, shopifyPayouts, syncedAt } = useMemo(() => {
     const xero =
       data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
         ? data.xero
@@ -138,7 +138,14 @@ function BalanceSheetPage() {
       data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error
         ? data.jortt
         : null;
-    return { xero, jortt, syncedAt: data?.syncedAt ?? null };
+    const sp =
+      (data as any)?.shopifyPayouts &&
+      typeof (data as any).shopifyPayouts === "object" &&
+      !(data as any).shopifyPayouts.__empty &&
+      !(data as any).shopifyPayouts.__error
+        ? (data as any).shopifyPayouts
+        : null;
+    return { xero, jortt, shopifyPayouts: sp, syncedAt: data?.syncedAt ?? null };
   }, [data]);
 
   // ── derive figures (real data only, "—" otherwise) ──
@@ -204,6 +211,21 @@ function BalanceSheetPage() {
       /(mollie|shopify|paypal|stripe|adyen|klarna|amazon)/i.test(n);
     const bankAccountsBank = bankAccountsAll.filter((b) => !isPlatform(b.name));
     const platformPending = bankAccountsAll.filter((b) => isPlatform(b.name));
+
+    // Augment with live Shopify Payments pending balances per market
+    const spMarkets: any[] = Array.isArray(shopifyPayouts?.markets)
+      ? shopifyPayouts.markets
+      : [];
+    for (const m of spMarkets) {
+      if (!m?.live) continue;
+      const pending = Number(m.pendingBalance ?? 0) + Number(m.scheduledPayouts ?? 0);
+      if (!pending) continue;
+      platformPending.push({
+        name: m.name ?? `Shopify Payments ${m.market}`,
+        balance: pending,
+        currency: String(m.currency ?? "EUR"),
+      });
+    }
 
     const cashBank = bankAccountsBank.length
       ? bankAccountsBank.reduce((s, b) => s + (b.balance ?? 0), 0)
@@ -384,7 +406,7 @@ function BalanceSheetPage() {
       quickRatio,
       suppliersInvoices,
     };
-  }, [xero, jortt, syncedAt]);
+  }, [xero, jortt, shopifyPayouts, syncedAt]);
 
   // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
   type WeekRow = {
