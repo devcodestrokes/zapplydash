@@ -2408,10 +2408,22 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
   const repeatRate = (() => {
     const f: any = shopifyRepeatFunnel;
     if (!f) return null;
+    // 1) Prefer the global funnel 2nd-order rate (matured)
     const second = f?.funnel?.find?.((r: any) => r.order === 2)?.rate;
-    if (typeof second === "number") return second;
-    const fallback = (f?.monthlyCohorts ?? []).find((c: any) => (c?.size ?? 0) > 0 && typeof c?.second === "number");
-    return fallback?.second ?? null;
+    if (typeof second === "number" && second > 0) return second;
+    // 2) Else: latest monthly cohort with a real (non-null, non-zero) 2nd-order rate
+    const cohorts = Array.isArray(f?.monthlyCohorts) ? f.monthlyCohorts : [];
+    for (let i = cohorts.length - 1; i >= 0; i--) {
+      const c = cohorts[i];
+      if (typeof c?.second === "number" && c.second > 0) return c.second;
+    }
+    // 3) Else: derive from raw counts if available (customers placing 2nd order / cohort size)
+    const f2 = f?.funnel?.find?.((r: any) => r.order === 2);
+    const f1 = f?.funnel?.find?.((r: any) => r.order === 1);
+    if (f2?.customers && f1?.customers) {
+      return +(100 * f2.customers / f1.customers).toFixed(1);
+    }
+    return null;
   })();
   const marketCount = liveTWAll.length;
   const twSub = marketCount > 0 ? `Triple Whale · ${marketCount} market${marketCount !== 1 ? "s" : ""}` : "TW not connected";
