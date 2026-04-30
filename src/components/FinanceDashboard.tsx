@@ -108,10 +108,58 @@ function drDaysAgo(n) {
   const d = new Date(); d.setDate(d.getDate() - n);
   return d.toISOString().split("T")[0];
 }
+function drYesterday() { return drDaysAgo(1); }
+function drStartOfWeek(date = new Date()) {
+  // ISO week — Monday
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().split("T")[0];
+}
+function drLastWeekStart() {
+  const d = new Date(drStartOfWeek() + "T12:00:00");
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().split("T")[0];
+}
+function drLastWeekEnd() {
+  const d = new Date(drStartOfWeek() + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split("T")[0];
+}
+function drStartOfQuarter() {
+  const d = new Date();
+  const q = Math.floor(d.getMonth() / 3);
+  return `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
+}
+function drStartOfYear() { return `${new Date().getFullYear()}-01-01`; }
+function drLastYearStart() { return `${new Date().getFullYear() - 1}-01-01`; }
+function drLastYearEnd() { return `${new Date().getFullYear() - 1}-12-31`; }
+
+// Centralised preset list — used by DateRangePicker everywhere.
+function getDatePresets() {
+  return [
+    { label: "Today",         from: drToday(),          to: drToday() },
+    { label: "Yesterday",     from: drYesterday(),      to: drYesterday() },
+    { label: "Last 7 days",   from: drDaysAgo(7),       to: drToday() },
+    { label: "Last 14 days",  from: drDaysAgo(14),      to: drToday() },
+    { label: "Last 30 days",  from: drDaysAgo(30),      to: drToday() },
+    { label: "Last 90 days",  from: drDaysAgo(90),      to: drToday() },
+    { label: "Last 365 days", from: drDaysAgo(365),     to: drToday() },
+    { label: "This week",     from: drStartOfWeek(),    to: drToday() },
+    { label: "Last week",     from: drLastWeekStart(),  to: drLastWeekEnd() },
+    { label: "This month",    from: drStartOfMonth(),   to: drToday() },
+    { label: "Last month",    from: drLastMonthStart(), to: drLastMonthEnd() },
+    { label: "This quarter",  from: drStartOfQuarter(), to: drToday() },
+    { label: "This year",     from: drStartOfYear(),    to: drToday() },
+    { label: "Last year",     from: drLastYearStart(),  to: drLastYearEnd() },
+  ];
+}
+
 function drFormatLabel(from, to) {
-  const som = drStartOfMonth(), tod = drToday();
-  if (from === som && to === tod) return "This month";
-  if (from === drLastMonthStart() && to === drLastMonthEnd()) return "Last month";
+  // If the range matches a known preset, show its friendly label
+  const match = getDatePresets().find((p) => p.from === from && p.to === to);
+  if (match) return match.label;
   const fmt = (s) => {
     const d = new Date(s + "T12:00:00");
     return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "2-digit" });
@@ -280,7 +328,7 @@ const QuickRangePills = ({ from, to, onApply, disabled = false }) => {
   );
 };
 
-const DateRangePicker = ({ from, to, onApply, loading = false }) => {
+export const DateRangePicker = ({ from, to, onApply, loading = false }) => {
   const [open, setOpen]           = useState(false);
   const [pendingFrom, setPendingFrom] = useState(from);
   const [pendingTo,   setPendingTo]   = useState(to);
@@ -295,15 +343,7 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
     return () => document.removeEventListener("mousedown", outside);
   }, []);
 
-  const PRESETS = [
-    { label: "7D",            from: drDaysAgo(7),       to: drToday() },
-    { label: "30D",           from: drDaysAgo(30),      to: drToday() },
-    { label: "90D",           from: drDaysAgo(90),      to: drToday() },
-    { label: "This month",    from: drStartOfMonth(),   to: drToday() },
-    { label: "Last month",    from: drLastMonthStart(), to: drLastMonthEnd() },
-    { label: "Last 3 months", from: drMonthsAgo(3),     to: drToday() },
-    { label: "Last 6 months", from: drMonthsAgo(6),     to: drToday() },
-  ];
+  const PRESETS = getDatePresets();
 
   const handleApply = () => {
     if (!pendingFrom || !pendingTo) return;
@@ -331,10 +371,10 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 top-10 z-50 w-[268px] rounded-xl border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-200/60">
+        <div className="absolute right-0 top-10 z-50 w-[300px] rounded-xl border border-neutral-200 bg-white p-3 shadow-xl shadow-neutral-200/60">
           {/* Presets */}
           <div className="mb-1 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Quick select</div>
-          <div className="mb-3 grid grid-cols-2 gap-1">
+          <div className="mb-3 grid max-h-[180px] grid-cols-2 gap-1 overflow-y-auto pr-1">
             {PRESETS.map(p => (
               <button
                 key={p.label}
