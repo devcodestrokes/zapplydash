@@ -86,49 +86,39 @@ function fmtIso(d: Date) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-function weekStartIso() {
-  // ISO week start = Monday
-  const d = new Date();
-  const day = d.getUTCDay(); // 0..6 (Sun..Sat)
-  const diff = day === 0 ? 6 : day - 1;
-  d.setUTCDate(d.getUTCDate() - diff);
-  return fmtIso(d);
-}
-
-// Previous week: same weekday-span as WTD, shifted back 7 days.
-// e.g. if today is Wed and WTD = Mon..Wed, prev = Mon-7..Wed-7
-function prevWeekRange() {
-  const d = new Date();
-  const day = d.getUTCDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const monThis = new Date(d);
-  monThis.setUTCDate(monThis.getUTCDate() - diff);
-  const fromD = new Date(monThis);
-  fromD.setUTCDate(fromD.getUTCDate() - 7);
-  const toD = new Date(d);
-  toD.setUTCDate(toD.getUTCDate() - 7);
-  return { from: fmtIso(fromD), to: fmtIso(toD) };
-}
-
-// Previous month: same day-of-month span. e.g. if today is Apr 15,
-// prev = Mar 1..Mar 15 (or last day of Mar if shorter).
-function prevMonthRange() {
-  const d = new Date();
-  const dayOfMonth = d.getUTCDate();
-  const fromD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
-  // Clamp end to last day of previous month if needed
-  const lastDayPrev = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)).getUTCDate();
-  const toD = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, Math.min(dayOfMonth, lastDayPrev)));
-  return { from: fmtIso(fromD), to: fmtIso(toD) };
-}
-
 function yesterdayIso() {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 1);
   return fmtIso(d);
 }
 
-type Period = "today" | "wtd" | "mtd";
+// Days in [from, to] inclusive
+function daysInRange(from: string, to: string) {
+  const a = new Date(from + "T00:00:00Z").getTime();
+  const b = new Date(to + "T00:00:00Z").getTime();
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+
+// Baseline = same-length window ending the day before `from`
+function baselineRange(from: string, to: string) {
+  const len = daysInRange(from, to);
+  const baseTo = new Date(from + "T00:00:00Z");
+  baseTo.setUTCDate(baseTo.getUTCDate() - 1);
+  const baseFrom = new Date(baseTo);
+  baseFrom.setUTCDate(baseFrom.getUTCDate() - (len - 1));
+  return { from: fmtIso(baseFrom), to: fmtIso(baseTo) };
+}
+
+// Friendly label for the active range
+function rangeLabel(from: string, to: string) {
+  if (from === to) {
+    if (from === todayIso()) return "today";
+    if (from === yesterdayIso()) return "yesterday";
+    return from;
+  }
+  return "selected range";
+}
+
 
 function DailyPnlPage() {
   const { user } = useDashboardSession();
