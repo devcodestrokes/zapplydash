@@ -343,15 +343,7 @@ const DateRangePicker = ({ from, to, onApply, loading = false }) => {
     return () => document.removeEventListener("mousedown", outside);
   }, []);
 
-  const PRESETS = [
-    { label: "7D",            from: drDaysAgo(7),       to: drToday() },
-    { label: "30D",           from: drDaysAgo(30),      to: drToday() },
-    { label: "90D",           from: drDaysAgo(90),      to: drToday() },
-    { label: "This month",    from: drStartOfMonth(),   to: drToday() },
-    { label: "Last month",    from: drLastMonthStart(), to: drLastMonthEnd() },
-    { label: "Last 3 months", from: drMonthsAgo(3),     to: drToday() },
-    { label: "Last 6 months", from: drMonthsAgo(6),     to: drToday() },
-  ];
+  const PRESETS = getDatePresets();
 
   const handleApply = () => {
     if (!pendingFrom || !pendingTo) return;
