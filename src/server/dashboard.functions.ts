@@ -223,6 +223,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     shopifyToday: shopifyTodayCache?.payload ?? null,
     shopifyDaily: shopifyDailyCache?.payload ?? null,
     shopifyRepeatFunnel: shopifyRepeatFunnelCache?.payload ?? null,
+    shopifyPayouts: shopifyPayoutsCache?.payload ?? null,
     tripleWhale: tripleWhaleCache?.payload ?? null,
     tripleWhaleCustomerEconomics,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
