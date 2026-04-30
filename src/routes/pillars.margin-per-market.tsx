@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
@@ -9,6 +9,18 @@ export const Route = createFileRoute("/pillars/margin-per-market")({
   head: () => ({ meta: [{ title: "Margin per Market — Zapply" }] }),
   component: MarginPerMarketPage,
 });
+
+function todayStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function startOfMonthStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function daysAgoStr(n: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return todayStr(d);
+}
 
 function SkeletonBox({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-neutral-200/70 ${className}`} />;
@@ -32,12 +44,48 @@ function MarginPerMarketPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const [dateRange, setDateRange] = useState({ from: daysAgoStr(30), to: todayStr() });
+  const [rangeData, setRangeData] = useState<any>(null);
+  const [rangeSyncing, setRangeSyncing] = useState(false);
+
   useEffect(() => {
     let alive = true;
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
+  }, []);
+
+  // Auto-load default 30D range so the table reflects the picker on first paint.
+  useEffect(() => {
+    let alive = true;
+    setRangeSyncing(true);
+    fetch(`/api/sync?from=${daysAgoStr(30)}&to=${todayStr()}`, { method: "POST" })
+      .then((r) => r.json())
+      .then((json) => { if (alive) setRangeData(json.rangeData ?? null); })
+      .catch(() => { if (alive) setRangeData(null); })
+      .finally(() => { if (alive) setRangeSyncing(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const handleDateChange = useCallback(async (from: string, to: string) => {
+    setDateRange({ from, to });
+    const isCurrentMonth = from === startOfMonthStr() && to === todayStr();
+    if (isCurrentMonth) {
+      setRangeData(null);
+      return;
+    }
+    setRangeSyncing(true);
+    setRangeData(null);
+    try {
+      const res = await fetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
+      const json = await res.json();
+      setRangeData(json.rangeData ?? null);
+    } catch {
+      setRangeData(null);
+    } finally {
+      setRangeSyncing(false);
+    }
   }, []);
 
   if (loading) {
@@ -48,15 +96,28 @@ function MarginPerMarketPage() {
     );
   }
 
-  const shopifyMarkets = Array.isArray(data?.shopifyMarkets) ? data.shopifyMarkets : [];
-  const activeMarkets = shopifyMarkets.some((m: any) => m?.live) ? shopifyMarkets : null;
-  const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
+  const cachedShopifyMarkets = Array.isArray(data?.shopifyMarkets) ? data.shopifyMarkets : [];
+  const cachedTwData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
+
+  // Prefer fresh range-synced data when available
+  const effectiveMarkets = Array.isArray(rangeData?.shopifyMarkets) ? rangeData.shopifyMarkets : cachedShopifyMarkets;
+  const effectiveTw = Array.isArray(rangeData?.tripleWhale)
+    ? rangeData.tripleWhale.filter((m: any) => m?.live)
+    : cachedTwData;
+
+  const activeMarkets = effectiveMarkets.some((m: any) => m?.live) ? effectiveMarkets : null;
 
   return (
     <DashboardShell user={user} title="Margin per Market">
       <div className="p-6">
         {activeMarkets ? (
-          <MarketsView liveMarkets={activeMarkets} twData={twData} />
+          <MarketsView
+            liveMarkets={activeMarkets}
+            twData={effectiveTw}
+            dateRange={dateRange}
+            onDateChange={handleDateChange}
+            rangeSyncing={rangeSyncing}
+          />
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800">
             <strong>Margin per Market</strong> requires Shopify &amp; Triple Whale data.
