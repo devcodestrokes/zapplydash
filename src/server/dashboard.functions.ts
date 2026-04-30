@@ -187,6 +187,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const shopifyTodayCache = get("shopify", "today");
   const shopifyDailyCache = get("shopify", "daily");
   const shopifyRepeatFunnelCache = get("shopify", "repeat_funnel");
+  const shopifyPayoutsCache = get("shopify", "payouts");
   const tripleWhaleCache = get("triplewhale", "summary");
   const tripleWhaleCustomerEconomicsCache = get("triplewhale", "customer_economics");
   const tripleWhaleDailyCache = get("triplewhale", "daily");
