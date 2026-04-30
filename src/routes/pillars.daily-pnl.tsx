@@ -9,10 +9,10 @@ import {
   ArrowDownRight,
   type LucideIcon,
 } from "lucide-react";
-// date-fns no longer needed after header redesign
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData, getTripleWhaleRange } from "@/server/dashboard.functions";
+import { DateRangePicker } from "@/components/FinanceDashboard.tsx";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pillars/daily-pnl")({
