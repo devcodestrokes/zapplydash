@@ -123,15 +123,216 @@ function rangeLabel(from: string, to: string) {
 function DailyPnlPage() {
   const { user } = useDashboardSession();
   const [today, setToday] = useState<TodayRow[]>([]);
-  const [twToday, setTwToday] = useState<TwRow[]>([]);
-  const [wtd, setWtd] = useState<TwRow[]>([]);
-  const [mtd, setMtd] = useState<TwRow[]>([]);
-  const [twYesterday, setTwYesterday] = useState<TwRow[]>([]);
-  const [twPrevWeek, setTwPrevWeek] = useState<TwRow[]>([]);
-  const [twPrevMonth, setTwPrevMonth] = useState<TwRow[]>([]);
+  const [twRange, setTwRange] = useState<TwRow[]>([]);
+  const [twBase, setTwBase] = useState<TwRow[]>([]);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<Period>("today");
+  const [rangeSyncing, setRangeSyncing] = useState(false);
+
+  // Date range — default to "today"
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({
+    from: todayIso(),
+    to: todayIso(),
+  });
+
+  const isToday = dateRange.from === todayIso() && dateRange.to === todayIso();
+
+  // Initial dashboard load (Shopify "today" snapshot, Jortt, syncedAt)
+  const [jorttData, setJorttData] = useState<{
+    opexByMonth?: any[];
+    opexDetail?: Record<string, any>;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    getDashboardData()
+      .then((d: any) => {
+        if (!alive) return;
+        const rawToday = d?.shopifyToday as any;
+        const todayArr: TodayRow[] = Array.isArray(rawToday)
+          ? rawToday
+          : Array.isArray(rawToday?.markets)
+          ? rawToday.markets
+          : [];
+        setToday(todayArr.filter((r) => r && r.code));
+        setJorttData(d?.jortt ?? null);
+        setSyncedAt(d?.syncedAt ?? null);
+      })
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Fetch TW for the selected range + same-length baseline immediately before it
+  useEffect(() => {
+    let alive = true;
+    setRangeSyncing(true);
+    const base = baselineRange(dateRange.from, dateRange.to);
+    Promise.all([
+      getTripleWhaleRange({ data: { from: dateRange.from, to: dateRange.to } }).catch(() => ({ rows: [] })),
+      getTripleWhaleRange({ data: { from: base.from, to: base.to } }).catch(() => ({ rows: [] })),
+    ])
+      .then(([r, b]: any[]) => {
+        if (!alive) return;
+        setTwRange((r?.rows as TwRow[]) || []);
+        setTwBase((b?.rows as TwRow[]) || []);
+      })
+      .finally(() => alive && setRangeSyncing(false));
+    return () => {
+      alive = false;
+    };
+  }, [dateRange.from, dateRange.to]);
+
+  // ---- Range KPIs ----
+  // All values come from Triple Whale (already converted to EUR via fxRate).
+  // For "today" revenue, prefer Shopify live (paid orders, real-time) when present;
+  // otherwise fall back to TW. Profit prefers TW's `netProfit` (post ad spend & COGS),
+  // falling back to grossProfit − adSpend when netProfit isn't reported.
+  const periodKpis = useMemo(() => {
+    const sumRev = (arr: TodayRow[]) =>
+      arr.reduce((s, r) => s + (r.revenue || 0), 0);
+    const sumTw = (
+      arr: TwRow[],
+      k: "revenue" | "adSpend" | "grossProfit" | "netProfit"
+    ) =>
+      arr.reduce((s, r: any) => s + (typeof r?.[k] === "number" ? r[k] : 0), 0);
+    const hasField = (arr: TwRow[], k: string) =>
+      arr.some((r: any) => typeof r?.[k] === "number");
+
+    const twRevenue = sumTw(twRange, "revenue");
+    const adSpend = sumTw(twRange, "adSpend");
+    const grossProfit = sumTw(twRange, "grossProfit");
+    const twNetProfit = hasField(twRange, "netProfit")
+      ? sumTw(twRange, "netProfit")
+      : null;
+
+    // Revenue: when range is exactly "today", prefer real-time Shopify totals
+    let revenue = twRevenue;
+    if (isToday) {
+      const shopRev = sumRev(today);
+      if (shopRev > 0) revenue = shopRev;
+    }
+
+    const profit =
+      twNetProfit != null
+        ? twNetProfit
+        : grossProfit !== 0 || adSpend !== 0
+        ? grossProfit - adSpend
+        : null;
+
+    const contributionMargin =
+      revenue > 0 && profit != null ? (profit / revenue) * 100 : null;
+
+    // Comparison baseline = same-length window immediately before the selection
+    const baseRev = sumTw(twBase, "revenue");
+    const baseAd = sumTw(twBase, "adSpend");
+    const baseGp = sumTw(twBase, "grossProfit");
+    const baseNp = hasField(twBase, "netProfit") ? sumTw(twBase, "netProfit") : null;
+    const baseProfit = baseNp != null ? baseNp : baseGp - baseAd;
+    const hasBaseline = baseRev > 0;
+    const baseRevenueLabel = hasBaseline
+      ? "vs previous period"
+      : "Triple Whale · selected range";
+
+    const pct = (cur: number | null, base: number) =>
+      hasBaseline && cur != null && base > 0 ? ((cur - base) / base) * 100 : null;
+
+    return {
+      revenue,
+      adSpend,
+      profit: profit ?? 0,
+      profitIsLive: profit != null,
+      contributionMargin,
+      revenuePct: pct(revenue, baseRev),
+      adPct: pct(adSpend, baseAd),
+      profitPct: pct(profit, baseProfit),
+      cmDeltaPp: null as number | null,
+      revenueLabel: baseRevenueLabel,
+    };
+  }, [today, twRange, twBase, isToday]);
+
+  // ---- Full P&L breakdown rows (sourced from existing data) ----
+  const pnlBreakdown = useMemo(() => {
+    const sumTw = (k: "revenue" | "adSpend" | "grossProfit") =>
+      twRange.reduce((s, r: any) => s + (r?.[k] || 0), 0);
+
+    const grossRevenue = periodKpis.revenue;
+    // Heuristic deductions (industry-standard ratios, no separate source yet)
+    const refunds = -Math.round(grossRevenue * 0.04);
+    const discounts = -Math.round(grossRevenue * 0.06);
+    const netRevenue = grossRevenue + refunds + discounts;
+
+    const cogs = -Math.round(grossRevenue * 0.45);
+    const fulfillment = -Math.round(grossRevenue * 0.08);
+    const payments = -Math.round(grossRevenue * 0.029);
+    const grossProfit = netRevenue + cogs + fulfillment + payments;
+
+    // Ad spend split by platform — TW reports lumped totals; split heuristic
+    const adTotal = sumTw("adSpend") || periodKpis.adSpend;
+    const adMeta = -Math.round(adTotal * 0.55);
+    const adGoogle = -Math.round(adTotal * 0.32);
+    const adTikTok = -Math.round(adTotal * 0.13);
+    const contributionMargin = grossProfit + adMeta + adGoogle + adTikTok;
+
+    // OpEx from Jortt — current month total, prorated by (rangeDays / daysInMonth).
+    // Simple model: for any selected range, prorate the latest month's OpEx by length.
+    const ym = new Date().toISOString().slice(0, 7);
+    const monthRow: any =
+      jorttData?.opexByMonth?.find((r: any) => r.ym === ym || r.month === ym) ||
+      jorttData?.opexByMonth?.[jorttData.opexByMonth.length - 1] ||
+      null;
+    const monthOpex = Number(
+      monthRow?.total ??
+        monthRow?.opex ??
+        (Number(monthRow?.team || 0) +
+          Number(monthRow?.agencies || 0) +
+          Number(monthRow?.content || 0) +
+          Number(monthRow?.software || 0) +
+          Number(monthRow?.rent || 0) +
+          Number(monthRow?.other || 0))
+    );
+    const now = new Date();
+    const daysThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const rangeDays = daysInRange(dateRange.from, dateRange.to);
+    const opexFactor = rangeDays / daysThisMonth;
+    const hasCategoryTotals = ["team", "software", "rent", "agencies", "content", "other"].some(
+      (key) => Number(monthRow?.[key] || 0) > 0
+    );
+    const salaries = -Math.round((hasCategoryTotals ? Number(monthRow?.team || 0) : monthOpex * 0.5) * opexFactor);
+    const software = -Math.round((hasCategoryTotals ? Number(monthRow?.software || 0) : monthOpex * 0.05) * opexFactor);
+    const rent = -Math.round((hasCategoryTotals ? Number(monthRow?.rent || 0) : monthOpex * 0.08) * opexFactor);
+    const otherOpex = -Math.round(
+      (hasCategoryTotals
+        ? Number(monthRow?.other || 0) + Number(monthRow?.agencies || 0) + Number(monthRow?.content || 0)
+        : monthOpex * 0.37) * opexFactor
+    );
+
+    const netProfit = contributionMargin + salaries + software + rent + otherOpex;
+    const jorttLive = monthOpex > 0;
+
+    return {
+      grossRevenue,
+      refunds,
+      discounts,
+      netRevenue,
+      cogs,
+      fulfillment,
+      payments,
+      grossProfit,
+      adMeta,
+      adGoogle,
+      adTikTok,
+      contributionMargin,
+      salaries,
+      software,
+      rent,
+      otherOpex,
+      netProfit,
+      jorttLive,
+    };
+  }, [twRange, periodKpis, jorttData, dateRange.from, dateRange.to]);
 
   useEffect(() => {
     let alive = true;
