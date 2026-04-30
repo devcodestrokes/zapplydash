@@ -1183,7 +1183,18 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       const blendedARPU = totalActive > 0 ? liveMRR / totalActive : null;
       const blendedChurn = totalActive > 0 ? (totalChurned / totalActive) * 100 : null;
       const totalRev = effectiveMarkets?.filter(m => m.live).reduce((s, m) => s + (m.revenue ?? 0), 0) ?? 0;
-      const subShare = totalRev > 0 ? (liveMRR / totalRev) * 100 : null;
+      // Subscription share = MRR (monthly recurring) compared to revenue at a comparable cadence.
+      // We scale MRR to the selected range length so e.g. a 7-day window doesn't blow up to 311%.
+      const rangeDays = (() => {
+        const f = new Date(dateRange.from + "T00:00:00").getTime();
+        const t = new Date(dateRange.to + "T23:59:59").getTime();
+        const d = Math.max(1, Math.round((t - f) / 86400000));
+        return d;
+      })();
+      const mrrForRange = liveMRR * (rangeDays / 30);
+      const subShareRaw = totalRev > 0 ? (mrrForRange / totalRev) * 100 : null;
+      // Cap display at 100% (revenue source can lag vs subs MRR; >100% always means apples-to-oranges)
+      const subShare = subShareRaw !== null ? Math.min(100, Math.max(0, subShareRaw)) : null;
       const sourcesLabel = subData.map(m => m.platform === "juo" ? `Juo (${m.market})` : `Loop (${m.market})`).join(" + ");
       return (
         <Card className="mt-3 p-5">
