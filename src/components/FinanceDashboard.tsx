@@ -2150,16 +2150,35 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
     <Card className="mt-3 overflow-hidden">
       {/* Header */}
       <div className="border-b border-neutral-100 p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-[13px] font-semibold">OpEx breakdown — April '26</div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">OpEx breakdown — {monthLabel}</div>
             <div className="mt-0.5 text-[12px] text-neutral-400">
-              Indirect costs by category · source: Jortt OPEX overview
+              Team + Software + Agencies + Content · source: Jortt OPEX overview
+            </div>
+            {/* Month switcher */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {data.map((m: any, i: number) => {
+                const isActive = i === idx;
+                return (
+                  <button
+                    key={`${m.month}-${i}`}
+                    onClick={() => setMonthIdx(i)}
+                    className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                      isActive
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {m.month}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Total OpEx</div>
-            <div className="mt-0.5 text-[22px] font-semibold tabular-nums">€{totalCurrent.toLocaleString()}</div>
+            <div className="mt-0.5 text-[22px] font-semibold tabular-nums">€{Math.round(totalCurrent).toLocaleString()}</div>
             <div className={`text-[11px] font-medium ${totalDelta >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
               {totalDelta >= 0 ? "+" : ""}{totalDelta.toFixed(1)}% MoM
             </div>
@@ -2168,12 +2187,12 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
       </div>
 
       {/* Category cards */}
-      <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-4">
         {categories.map(cat => {
-          const value = current[cat.key];
-          const prevValue = prev[cat.key];
-          const delta = ((value - prevValue) / prevValue * 100);
-          const share = (value / totalCurrent * 100);
+          const value = current[cat.key] || 0;
+          const prevValue = prev[cat.key] || 0;
+          const delta = prevValue > 0 ? ((value - prevValue) / prevValue * 100) : 0;
+          const share = totalCurrent > 0 ? (value / totalCurrent * 100) : 0;
           const isActive = activeCategory === cat.key;
           return (
             <button
