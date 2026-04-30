@@ -652,14 +652,13 @@ type PnlBreakdownData = {
 };
 
 function PnlBreakdown({
-  period,
+  periodLabel,
   data,
 }: {
-  period: Period;
+  periodLabel: string;
   data: PnlBreakdownData;
 }) {
-  const periodLabel =
-    period === "today" ? "today" : period === "wtd" ? "week-to-date" : "month-to-date";
+
 
   type Line = {
     label: string;
