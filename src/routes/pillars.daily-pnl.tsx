@@ -474,6 +474,67 @@ function DailyPnlPage() {
                 </span>
               </div>
             </div>
+
+            {/* Selected vs previous-period revenue chart */}
+            <div className="mt-4 h-[220px] w-full">
+              {revenueSeries.hasAny ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={revenueSeries.points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={16}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={56}
+                      tickFormatter={(v: any) => {
+                        const n = Number(v) || 0;
+                        if (n >= 1000) return `€${Math.round(n / 1000)}k`;
+                        return `€${Math.round(n)}`;
+                      }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: 11,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--card))",
+                      }}
+                      formatter={(v: any, name: any) => [fmtMoney(Number(v), "EUR"), name]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="selected"
+                      name="Selected"
+                      stroke="hsl(var(--foreground))"
+                      strokeWidth={2}
+                      dot={revenueSeries.len <= 14 ? { r: 2.5 } : false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="previous"
+                      name="Previous period"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                  Daily data syncing — refresh in a minute
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Full P&L breakdown — line-by-line, traced to source */}
