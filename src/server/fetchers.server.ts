@@ -2352,7 +2352,19 @@ export async function fetchJortt() {
     const t = tokens["organizations:read"]!;
     organization = await jorttGet(t, "/v1/organizations");
     tradenames = await jorttPaginate(t, "/v1/tradenames", 3);
-    ledgerAccounts = await jorttPaginate(t, "/v1/ledger_accounts/invoices", 5);
+    // Pull ledger accounts from BOTH the invoices and expenses endpoints so
+    // we get a full id→category map (Jortt splits them by intent).
+    const [invLedgers, expLedgers] = await Promise.all([
+      jorttPaginate(t, "/v1/ledger_accounts/invoices", 5),
+      jorttPaginate(t, "/v1/ledger_accounts/expenses", 10),
+    ]);
+    const seen = new Set<string>();
+    ledgerAccounts = [...invLedgers, ...expLedgers].filter((l: any) => {
+      const id = String(l?.id ?? "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
     labels = await jorttPaginate(t, "/v1/labels", 3);
   }
 
