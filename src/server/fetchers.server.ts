@@ -2791,9 +2791,10 @@ export async function fetchShopifyRepeatFunnel() {
     maturing: boolean;
   }> = [];
 
-  // last 4 calendar months including current
+  // last 6 calendar months including current — ensures the oldest mature
+  // cohort (>= 90 days observed) is visible alongside still-maturing months.
   const now2 = new Date();
-  for (let i = 3; i >= 0; i--) {
+  for (let i = 5; i >= 0; i--) {
     const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
     const key = monthKeyFromDate(d);
     const cohort = cohortBuckets.get(key) ?? [];
@@ -2841,7 +2842,7 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
-    calcVersion: 4,
+    calcVersion: 5,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
