@@ -2068,52 +2068,111 @@ const JORTT_ALL_SCOPES = [
   "estimates:read",
 ] as const;
 
-// OpEx categorisation — used to roll real Jortt expense descriptions / ledger
-// account names into the 5 categories the dashboard renders.
-const JORTT_CATEGORY_MAP: Record<string, string> = {
+// OpEx categorisation.
+//
+// Primary signal: Jortt's native ledger-account category (`category` /
+// `ledger_account_category` on the account, e.g. `personeelskosten`,
+// `huisvestingskosten`, `verkoopkosten`, `algemene_kosten`,
+// `afschrijvingen`, `financiele_baten_lasten`). This is what Jortt itself
+// uses to build its P&L, so matching it produces numbers that line up with
+// Jortt's own reports.
+//
+// Fallback: Dutch account-number ranges (4xxx series for OpEx) when the
+// category field is absent.
+//
+// Last resort: keyword match on description for items without a ledger
+// account (rare — usually free-text expenses).
+type OpExCat = "team" | "agencies" | "content" | "software" | "rent" | "other";
+
+// Jortt category slug → bucket
+const JORTT_LEDGER_CATEGORY_TO_BUCKET: Record<string, OpExCat> = {
+  // personnel / payroll
+  personeelskosten: "team",
+  loonkosten: "team",
+  salariskosten: "team",
+  // housing / rent / utilities
+  huisvestingskosten: "rent",
+  // sales / marketing / agencies / content
+  verkoopkosten: "agencies",
+  marketingkosten: "agencies",
+  reclamekosten: "agencies",
+  // general / office / software typically lands here in Jortt
+  algemene_kosten: "software",
+  kantoorkosten: "software",
+  autokosten: "other",
+  afschrijvingen: "other",
+  financiele_baten_lasten: "other",
+  rentelasten: "other",
+};
+
+// Keyword fallback (only used when no ledger account info is available)
+const JORTT_KEYWORD_FALLBACK: Record<string, OpExCat> = {
   personeel: "team",
   salaris: "team",
   loon: "team",
   freelance: "team",
   "management fee": "team",
   managementfee: "team",
-  klantenservice: "team",
-  nodots: "team",
   agency: "agencies",
-  bureaukosten: "agencies",
-  argento: "agencies",
-  eightx: "agencies",
-  fractional: "agencies",
+  bureau: "agencies",
+  marketing: "agencies",
+  reclame: "agencies",
+  ads: "agencies",
   content: "content",
   creator: "content",
   influencer: "content",
   samenwerking: "content",
-  "thor magis": "content",
-  haec: "content",
-  zadero: "content",
-  remy: "content",
   software: "software",
   saas: "software",
   klaviyo: "software",
+  shopify: "software",
   "triple whale": "software",
   monday: "software",
   notion: "software",
+  figma: "software",
+  adobe: "software",
+  google: "software",
+  microsoft: "software",
   huur: "rent",
   rent: "rent",
-  utility: "rent",
-  utilities: "rent",
   energie: "rent",
-  electricity: "rent",
-  gas: "rent",
-  water: "rent",
   internet: "rent",
   kantoor: "rent",
 };
 
-function categorise(name: string): "team" | "agencies" | "content" | "software" | "rent" | "other" {
-  const lower = (name ?? "").toLowerCase();
-  for (const [kw, cat] of Object.entries(JORTT_CATEGORY_MAP)) {
-    if (lower.includes(kw)) return cat as any;
+function bucketFromLedger(
+  ledgerAcct: any | null | undefined,
+): OpExCat | null {
+  if (!ledgerAcct) return null;
+  const catRaw =
+    ledgerAcct.category ??
+    ledgerAcct.ledger_account_category ??
+    ledgerAcct.account_category ??
+    "";
+  const cat = String(catRaw).toLowerCase().replace(/[\s-]+/g, "_");
+  if (cat && JORTT_LEDGER_CATEGORY_TO_BUCKET[cat]) {
+    return JORTT_LEDGER_CATEGORY_TO_BUCKET[cat];
+  }
+  // Fall back to the Dutch 4xxx OpEx code ranges
+  const code = String(ledgerAcct.code ?? ledgerAcct.number ?? "").trim();
+  const num = parseInt(code, 10);
+  if (Number.isFinite(num)) {
+    if (num >= 4000 && num <= 4099) return "team";        // personnel
+    if (num >= 4100 && num <= 4199) return "rent";        // housing
+    if (num >= 4200 && num <= 4299) return "other";       // exploitation
+    if (num >= 4300 && num <= 4399) return "other";       // depreciation
+    if (num >= 4400 && num <= 4499) return "software";    // general / office
+    if (num >= 4500 && num <= 4599) return "other";       // car / transport
+    if (num >= 4600 && num <= 4699) return "agencies";    // selling / marketing
+    if (num >= 4700 && num <= 4799) return "other";       // financial
+  }
+  return null;
+}
+
+function bucketFromKeywords(text: string): OpExCat {
+  const lower = (text ?? "").toLowerCase();
+  for (const [kw, cat] of Object.entries(JORTT_KEYWORD_FALLBACK)) {
+    if (lower.includes(kw)) return cat;
   }
   return "other";
 }
@@ -2293,7 +2352,19 @@ export async function fetchJortt() {
     const t = tokens["organizations:read"]!;
     organization = await jorttGet(t, "/v1/organizations");
     tradenames = await jorttPaginate(t, "/v1/tradenames", 3);
-    ledgerAccounts = await jorttPaginate(t, "/v1/ledger_accounts/invoices", 5);
+    // Pull ledger accounts from BOTH the invoices and expenses endpoints so
+    // we get a full id→category map (Jortt splits them by intent).
+    const [invLedgers, expLedgers] = await Promise.all([
+      jorttPaginate(t, "/v1/ledger_accounts/invoices", 5),
+      jorttPaginate(t, "/v1/ledger_accounts/expenses", 10),
+    ]);
+    const seen = new Set<string>();
+    ledgerAccounts = [...invLedgers, ...expLedgers].filter((l: any) => {
+      const id = String(l?.id ?? "");
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
     labels = await jorttPaginate(t, "/v1/labels", 3);
   }
 
@@ -2346,6 +2417,12 @@ export async function fetchJortt() {
     other: {},
   };
 
+  // Build a fast id → ledger account map for category lookup.
+  const ledgerById = new Map<string, any>();
+  for (const la of ledgerAccounts) {
+    if (la?.id) ledgerById.set(String(la.id), la);
+  }
+
   for (const ex of expenses) {
     if (String(ex.expense_type ?? "").toLowerCase() !== "cost") continue;
     const dateStr = ex.vat_date ?? ex.delivery_period ?? ex.created_at ?? "";
@@ -2367,13 +2444,16 @@ export async function fetchJortt() {
 
     expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
 
-    // category from description / ledger account name
+    // Categorise: prefer Jortt's native ledger-account category, then
+    // account-number ranges, then keyword fallback on description.
+    const ledger =
+      (ex.ledger_account_id && ledgerById.get(String(ex.ledger_account_id))) ||
+      null;
     const ledgerName =
-      ex.ledger_account_name ??
-      ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ??
-      "";
+      ex.ledger_account_name ?? ledger?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
-    const cat = categorise(`${desc} ${ledgerName}`);
+    const cat: OpExCat =
+      bucketFromLedger(ledger) ?? bucketFromKeywords(`${desc} ${ledgerName}`);
 
     if (!opexBuckets[mk])
       opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
@@ -2381,6 +2461,46 @@ export async function fetchJortt() {
 
     const itemName = (desc || "Unknown").trim().slice(0, 80);
     opexDetailMap[cat][itemName] = (opexDetailMap[cat][itemName] ?? 0) + amount;
+  }
+
+  // Payroll (loonjournaalposten) — Jortt's payroll posts are NOT included in
+  // /v3/expenses, so add them to the team bucket explicitly. Each post has a
+  // total gross/employer cost we can extract from common field shapes.
+  for (const post of payroll) {
+    const dateStr =
+      post?.payment_date ??
+      post?.period_end ??
+      post?.period ??
+      post?.date ??
+      post?.created_at ??
+      "";
+    const mk = monthKey(dateStr);
+    const ym = monthIsoKey(dateStr);
+    if (!mk || !ym) continue;
+    const amountStr =
+      post?.total_employer_cost?.value ??
+      post?.employer_cost?.value ??
+      post?.total_amount?.value ??
+      post?.gross_amount?.value ??
+      post?.amount?.value ??
+      post?.total ??
+      post?.amount ??
+      "0";
+    const amount = Math.abs(parseFloat(String(amountStr)));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
+    if (!opexBuckets[mk])
+      opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+    opexBuckets[mk].team += amount;
+
+    const employee =
+      post?.employee_name ??
+      post?.employee?.name ??
+      post?.description ??
+      "Payroll";
+    const itemName = `Payroll · ${String(employee).trim().slice(0, 70)}`;
+    opexDetailMap.team[itemName] = (opexDetailMap.team[itemName] ?? 0) + amount;
   }
 
   // Sort months chronologically for opexByMonth
