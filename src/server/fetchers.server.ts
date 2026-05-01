@@ -2417,6 +2417,12 @@ export async function fetchJortt() {
     other: {},
   };
 
+  // Build a fast id → ledger account map for category lookup.
+  const ledgerById = new Map<string, any>();
+  for (const la of ledgerAccounts) {
+    if (la?.id) ledgerById.set(String(la.id), la);
+  }
+
   for (const ex of expenses) {
     if (String(ex.expense_type ?? "").toLowerCase() !== "cost") continue;
     const dateStr = ex.vat_date ?? ex.delivery_period ?? ex.created_at ?? "";
@@ -2438,13 +2444,16 @@ export async function fetchJortt() {
 
     expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
 
-    // category from description / ledger account name
+    // Categorise: prefer Jortt's native ledger-account category, then
+    // account-number ranges, then keyword fallback on description.
+    const ledger =
+      (ex.ledger_account_id && ledgerById.get(String(ex.ledger_account_id))) ||
+      null;
     const ledgerName =
-      ex.ledger_account_name ??
-      ledgerAccounts.find((l: any) => l.id === ex.ledger_account_id)?.name ??
-      "";
+      ex.ledger_account_name ?? ledger?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
-    const cat = categorise(`${desc} ${ledgerName}`);
+    const cat: OpExCat =
+      bucketFromLedger(ledger) ?? bucketFromKeywords(`${desc} ${ledgerName}`);
 
     if (!opexBuckets[mk])
       opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
@@ -2452,6 +2461,46 @@ export async function fetchJortt() {
 
     const itemName = (desc || "Unknown").trim().slice(0, 80);
     opexDetailMap[cat][itemName] = (opexDetailMap[cat][itemName] ?? 0) + amount;
+  }
+
+  // Payroll (loonjournaalposten) — Jortt's payroll posts are NOT included in
+  // /v3/expenses, so add them to the team bucket explicitly. Each post has a
+  // total gross/employer cost we can extract from common field shapes.
+  for (const post of payroll) {
+    const dateStr =
+      post?.payment_date ??
+      post?.period_end ??
+      post?.period ??
+      post?.date ??
+      post?.created_at ??
+      "";
+    const mk = monthKey(dateStr);
+    const ym = monthIsoKey(dateStr);
+    if (!mk || !ym) continue;
+    const amountStr =
+      post?.total_employer_cost?.value ??
+      post?.employer_cost?.value ??
+      post?.total_amount?.value ??
+      post?.gross_amount?.value ??
+      post?.amount?.value ??
+      post?.total ??
+      post?.amount ??
+      "0";
+    const amount = Math.abs(parseFloat(String(amountStr)));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+
+    expensesByMonth[mk] = (expensesByMonth[mk] ?? 0) + amount;
+    if (!opexBuckets[mk])
+      opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+    opexBuckets[mk].team += amount;
+
+    const employee =
+      post?.employee_name ??
+      post?.employee?.name ??
+      post?.description ??
+      "Payroll";
+    const itemName = `Payroll · ${String(employee).trim().slice(0, 70)}`;
+    opexDetailMap.team[itemName] = (opexDetailMap.team[itemName] ?? 0) + amount;
   }
 
   // Sort months chronologically for opexByMonth
