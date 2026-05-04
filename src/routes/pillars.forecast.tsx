@@ -825,17 +825,18 @@ function GrowthPlan2026({ data }: { data: any }) {
         fullMonthRunRate = Math.min(fullMonthRunRate, completedAvg * 2.5);
       }
 
+      // Dampen trend so it doesn't compound to unrealistic levels far in the future
+      const dampenedTrend = clamp(trend, -0.1, 0.08);
       const monthly = MONTHS.map((_, i) => {
         if (i <= currentMonthIdx) return Math.round(actualByMonth[i][mk.code] || 0);
         const seasonalBase = SEASONALITY[currentMonthIdx] || 1;
-        return Math.max(
-          0,
-          Math.round(
-            fullMonthRunRate *
-              (SEASONALITY[i] / seasonalBase) *
-              Math.pow(1 + trend, i - currentMonthIdx),
-          ),
-        );
+        const monthsAhead = i - currentMonthIdx;
+        // Cap compounding effect at 6 months out
+        const trendFactor = Math.pow(1 + dampenedTrend, Math.min(monthsAhead, 6));
+        const projected = fullMonthRunRate * (SEASONALITY[i] / seasonalBase) * trendFactor;
+        // Hard ceiling: never exceed 3× the avg of completed months
+        const ceiling = completedAvg > 0 ? completedAvg * 3 : projected;
+        return Math.max(0, Math.round(Math.min(projected, ceiling)));
       });
       const target = monthly.reduce((s, v) => s + v, 0);
       const actualYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, v) => s + v, 0);
