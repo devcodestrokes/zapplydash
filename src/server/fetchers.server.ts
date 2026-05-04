@@ -453,10 +453,38 @@ export async function fetchShopifyGrowthYear(year: number) {
   const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
   if (!clientId) return null;
 
-  const since = `${year}-01-01T00:00:00Z`;
-  const until = `${year}-12-31T23:59:59Z`;
   const sinceDay = `${year}-01-01`;
   const untilDay = `${year}-12-31`;
+  const now = new Date();
+  const currentYear = now.getUTCFullYear();
+  const lastActualMonthIdx = year === currentYear ? now.getUTCMonth() : 11;
+  const monthIndices = Array.from({ length: lastActualMonthIdx + 1 }, (_, i) => i);
+
+  const mapWithConcurrency = async <T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T) => Promise<R>,
+  ) => {
+    const results: R[] = [];
+    let index = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (index < items.length) {
+        const current = index++;
+        results[current] = await fn(items[current]);
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  };
+
+  const monthWindow = (monthIdx: number) => {
+    const month = String(monthIdx + 1).padStart(2, "0");
+    const endDay = String(new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate()).padStart(2, "0");
+    return {
+      since: `${year}-${month}-01T00:00:00Z`,
+      until: `${year}-${month}-${endDay}T23:59:59Z`,
+    };
+  };
 
   try {
     const perStore = await Promise.all(
@@ -466,47 +494,72 @@ export async function fetchShopifyGrowthYear(year: number) {
         const token = await getShopifyToken(store);
         if (!token) return { code, monthlySums: {}, dailySums: {} };
 
+        const monthResults = await mapWithConcurrency(monthIndices, 2, async (monthIdx) => {
+          const { since, until } = monthWindow(monthIdx);
+          const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
+          const dailySums: Record<string, { revenue: number; orders: number }> = {};
+          let cursor: string | null = null;
+          let hasNextPage = true;
+          let page = 0;
+          const maxPages = 120;
+
+          while (hasNextPage && page < maxPages) {
+            const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+              method: "POST",
+              headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+              body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
+              cache: "no-store",
+            });
+            if (!res.ok) break;
+            const json = await res.json();
+            if (json.errors) {
+              console.error(`Shopify growth-month ${year}-${monthIdx + 1} ${code}:`, json.errors[0]?.message);
+              break;
+            }
+            const pageData = json.data?.orders ?? {};
+            const edges: any[] = pageData.edges ?? [];
+            hasNextPage = pageData.pageInfo?.hasNextPage ?? false;
+            cursor = pageData.pageInfo?.endCursor ?? null;
+            page++;
+
+            for (const { node: o } of edges) {
+              const r = parseFloat(o.totalPriceSet.shopMoney.amount);
+              const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
+              const net = r - rf;
+              const created = new Date(o.createdAt);
+              const mk = created
+                .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+                .replace(" ", " '");
+              if (!monthlySums[mk]) monthlySums[mk] = { revenue: 0, orders: 0, refunds: 0 };
+              monthlySums[mk].revenue += net;
+              monthlySums[mk].refunds += rf;
+              monthlySums[mk].orders += 1;
+              const dayKey = amsterdamDateKey(o.createdAt);
+              if (!dailySums[dayKey]) dailySums[dayKey] = { revenue: 0, orders: 0 };
+              dailySums[dayKey].revenue += net;
+              dailySums[dayKey].orders += 1;
+            }
+          }
+
+          if (hasNextPage) {
+            console.warn(`Shopify growth-month ${year}-${monthIdx + 1} ${code}: capped at ${maxPages} pages`);
+          }
+          return { monthlySums, dailySums };
+        });
+
         const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
         const dailySums: Record<string, { revenue: number; orders: number }> = {};
-        let cursor: string | null = null;
-        let hasNextPage = true;
-        let page = 0;
-        const maxPages = 400;
-
-        while (hasNextPage && page < maxPages) {
-          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
-            method: "POST",
-            headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
-            body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
-          });
-          if (!res.ok) break;
-          const json = await res.json();
-          if (json.errors) {
-            console.error(`Shopify growth-year ${year} ${code}:`, json.errors[0]?.message);
-            break;
+        for (const result of monthResults) {
+          for (const [k, v] of Object.entries(result.monthlySums)) {
+            if (!monthlySums[k]) monthlySums[k] = { revenue: 0, orders: 0, refunds: 0 };
+            monthlySums[k].revenue += v.revenue;
+            monthlySums[k].refunds += v.refunds;
+            monthlySums[k].orders += v.orders;
           }
-          const pageData = json.data?.orders ?? {};
-          const edges: any[] = pageData.edges ?? [];
-          hasNextPage = pageData.pageInfo?.hasNextPage ?? false;
-          cursor = pageData.pageInfo?.endCursor ?? null;
-          page++;
-
-          for (const { node: o } of edges) {
-            const r = parseFloat(o.totalPriceSet.shopMoney.amount);
-            const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
-            const net = r - rf;
-            const created = new Date(o.createdAt);
-            const mk = created
-              .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
-              .replace(" ", " '");
-            if (!monthlySums[mk]) monthlySums[mk] = { revenue: 0, orders: 0, refunds: 0 };
-            monthlySums[mk].revenue += net;
-            monthlySums[mk].refunds += rf;
-            monthlySums[mk].orders += 1;
-            const dayKey = amsterdamDateKey(o.createdAt);
-            if (!dailySums[dayKey]) dailySums[dayKey] = { revenue: 0, orders: 0 };
-            dailySums[dayKey].revenue += net;
-            dailySums[dayKey].orders += 1;
+          for (const [k, v] of Object.entries(result.dailySums)) {
+            if (!dailySums[k]) dailySums[k] = { revenue: 0, orders: 0 };
+            dailySums[k].revenue += v.revenue;
+            dailySums[k].orders += v.orders;
           }
         }
 
