@@ -685,6 +685,10 @@ const MARKET_CURRENCY: Record<string, string> = {
 };
 
 const fxCache = new Map<string, Promise<number>>();
+// Last-known-good rate per currency. Populated on every successful fetch; used
+// as a graceful fallback when Frankfurter is unreachable. NEVER fabricate 1.0
+// for non-EUR currencies — that silently corrupts UK/US revenue totals.
+const fxLastGood = new Map<string, { rate: number; at: number }>();
 
 async function getEurRate(currency: string, start: string, end: string): Promise<number> {
   if (currency === "EUR") return 1;
@@ -704,11 +708,18 @@ async function getEurRate(currency: string, start: string, end: string): Promise
         // Single-day response: { rates: { EUR: 0.92 } }
         // Range response: { rates: { "2026-04-01": { EUR: 0.92 }, ... } }
         const direct = toNumber(rates.EUR);
-        if (direct !== null && direct > 0) return direct;
+        if (direct !== null && direct > 0) {
+          fxLastGood.set(currency, { rate: direct, at: Date.now() });
+          return direct;
+        }
         const series = Object.values(rates)
           .map((r: any) => toNumber(r?.EUR))
           .filter((n): n is number => typeof n === "number" && n > 0);
-        if (series.length > 0) return series.reduce((a, b) => a + b, 0) / series.length;
+        if (series.length > 0) {
+          const avg = series.reduce((a, b) => a + b, 0) / series.length;
+          fxLastGood.set(currency, { rate: avg, at: Date.now() });
+          return avg;
+        }
         console.warn(
           `FX ${currency}->EUR: no rates in response`,
           JSON.stringify(data).slice(0, 200),
@@ -719,10 +730,22 @@ async function getEurRate(currency: string, start: string, end: string): Promise
     } catch (err: any) {
       console.warn(`FX ${currency}->EUR failed:`, err?.message);
     }
-    return 1;
+    // Fall back to last-known-good rate rather than 1.0 (which would silently
+    // misrepresent UK/US revenue at parity with EUR).
+    const lkg = fxLastGood.get(currency);
+    if (lkg) {
+      console.warn(
+        `FX ${currency}->EUR: using last-known-good rate ${lkg.rate} from ${new Date(lkg.at).toISOString()}`,
+      );
+      return lkg.rate;
+    }
+    throw new Error(`FX rate unavailable for ${currency} and no last-known-good cached`);
   })();
 
   fxCache.set(key, task);
+  // Don't poison the cache with a rejected promise — drop on failure so the
+  // next call retries Frankfurter.
+  task.catch(() => fxCache.delete(key));
   return task;
 }
 
