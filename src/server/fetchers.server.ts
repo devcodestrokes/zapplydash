@@ -2817,7 +2817,9 @@ export async function fetchShopifyRepeatFunnel() {
     let cursor: string | null = null;
     let hasNextPage = true;
     let page = 0;
-    const maxPages = 600; // up to ~150k orders per store over 540d (sorted oldest-first so partial fetches still cover early cohorts)
+    const maxPages = 1200; // up to ~300k orders per store over 5y (oldest-first so partial fetches still cover early cohorts)
+    let firstOrder: string | null = null;
+    let lastOrder: string | null = null;
 
     try {
       while (hasNextPage && page < maxPages) {
@@ -2841,6 +2843,8 @@ export async function fetchShopifyRepeatFunnel() {
         for (const { node: o } of edges) {
           const cid = o.customer?.id;
           if (!cid) continue;
+          firstOrder = firstOrder ?? o.createdAt;
+          lastOrder = o.createdAt;
           const lifetimeOrders = Number(o.customer?.numberOfOrders ?? 0) || 0;
           const entry = customerOrders.get(cid) ?? { dates: [], lifetimeOrders: 0 };
           entry.dates.push(o.createdAt);
@@ -2851,6 +2855,7 @@ export async function fetchShopifyRepeatFunnel() {
     } catch (err: any) {
       console.error(`Shopify repeat ${code}:`, err?.message);
     }
+    storeCoverage.push({ code, pages: page, truncated: hasNextPage, firstOrder, lastOrder });
   }
 
   if (customerOrders.size === 0) return null;
