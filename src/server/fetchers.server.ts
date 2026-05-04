@@ -176,7 +176,7 @@ async function fetchShopifyAllOrders(
   let page = 0;
 
   while (hasNextPage && page < maxPages) {
-    const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+    const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: "POST",
       headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
       body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
@@ -313,7 +313,7 @@ export async function fetchShopifyToday() {
         let page = 0;
 
         while (hasNextPage && page < 5) {
-          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+          const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
             method: "POST",
             headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
             body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(todayStart, cursor) }),
@@ -508,7 +508,7 @@ export async function fetchShopifyGrowthYear(year: number) {
           const maxPages = 120;
 
           while (hasNextPage && page < maxPages) {
-            const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+            const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
               method: "POST",
               headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
               body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
@@ -1003,7 +1003,7 @@ export async function fetchShopifyDaily() {
         const maxPages = 240; // up to 60k orders / store / year
 
         while (hasNextPage && page < maxPages) {
-          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+          const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
             method: "POST",
             headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
             body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
@@ -2880,7 +2880,7 @@ export async function fetchShopifyRepeatFunnel() {
 
     try {
       while (hasNextPage && page < maxPages) {
-        const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+        const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
           method: "POST",
           headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
           body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
@@ -3089,7 +3089,7 @@ export async function fetchShopifyPayouts() {
       if (!token) return { market: s.code, name: s.name, live: false, reason: "no token" };
 
       const headers = { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
-      const base = `https://${store}/admin/api/2025-01/shopify_payments`;
+      const base = `https://${store}/admin/api/${SHOPIFY_API_VERSION}/shopify_payments`;
 
       try {
         const [balRes, payRes] = await Promise.all([
