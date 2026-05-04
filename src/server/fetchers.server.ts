@@ -48,6 +48,10 @@ function serviceClient() {
 // ─── Shopify ─────────────────────────────────────────────────────────────────
 //
 // Uses Shopify OAuth2 client_credentials grant (no user redirect needed).
+// Pin a single explicit Admin API version. 2025-01 reaches end-of-life Jan 2026
+// and Shopify silently forwards stale callers to the latest stable schema —
+// pin to current to avoid silent field drops.
+export const SHOPIFY_API_VERSION = "2026-01" as const;
 // Requires: SHOPIFY_APP_CLIENT_ID + SHOPIFY_APP_CLIENT_SECRET in .env.local
 //           App must be installed in each store (done in Shopify Partner Dashboard).
 // Tokens (~24h TTL) are cached in Supabase integrations table and auto-refreshed.
@@ -172,7 +176,7 @@ async function fetchShopifyAllOrders(
   let page = 0;
 
   while (hasNextPage && page < maxPages) {
-    const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+    const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
       method: "POST",
       headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
       body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
@@ -309,7 +313,7 @@ export async function fetchShopifyToday() {
         let page = 0;
 
         while (hasNextPage && page < 5) {
-          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+          const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
             method: "POST",
             headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
             body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(todayStart, cursor) }),
@@ -504,7 +508,7 @@ export async function fetchShopifyGrowthYear(year: number) {
           const maxPages = 120;
 
           while (hasNextPage && page < maxPages) {
-            const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+            const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
               method: "POST",
               headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
               body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
@@ -681,6 +685,10 @@ const MARKET_CURRENCY: Record<string, string> = {
 };
 
 const fxCache = new Map<string, Promise<number>>();
+// Last-known-good rate per currency. Populated on every successful fetch; used
+// as a graceful fallback when Frankfurter is unreachable. NEVER fabricate 1.0
+// for non-EUR currencies — that silently corrupts UK/US revenue totals.
+const fxLastGood = new Map<string, { rate: number; at: number }>();
 
 async function getEurRate(currency: string, start: string, end: string): Promise<number> {
   if (currency === "EUR") return 1;
@@ -700,11 +708,18 @@ async function getEurRate(currency: string, start: string, end: string): Promise
         // Single-day response: { rates: { EUR: 0.92 } }
         // Range response: { rates: { "2026-04-01": { EUR: 0.92 }, ... } }
         const direct = toNumber(rates.EUR);
-        if (direct !== null && direct > 0) return direct;
+        if (direct !== null && direct > 0) {
+          fxLastGood.set(currency, { rate: direct, at: Date.now() });
+          return direct;
+        }
         const series = Object.values(rates)
           .map((r: any) => toNumber(r?.EUR))
           .filter((n): n is number => typeof n === "number" && n > 0);
-        if (series.length > 0) return series.reduce((a, b) => a + b, 0) / series.length;
+        if (series.length > 0) {
+          const avg = series.reduce((a, b) => a + b, 0) / series.length;
+          fxLastGood.set(currency, { rate: avg, at: Date.now() });
+          return avg;
+        }
         console.warn(
           `FX ${currency}->EUR: no rates in response`,
           JSON.stringify(data).slice(0, 200),
@@ -715,10 +730,22 @@ async function getEurRate(currency: string, start: string, end: string): Promise
     } catch (err: any) {
       console.warn(`FX ${currency}->EUR failed:`, err?.message);
     }
-    return 1;
+    // Fall back to last-known-good rate rather than 1.0 (which would silently
+    // misrepresent UK/US revenue at parity with EUR).
+    const lkg = fxLastGood.get(currency);
+    if (lkg) {
+      console.warn(
+        `FX ${currency}->EUR: using last-known-good rate ${lkg.rate} from ${new Date(lkg.at).toISOString()}`,
+      );
+      return lkg.rate;
+    }
+    throw new Error(`FX rate unavailable for ${currency} and no last-known-good cached`);
   })();
 
   fxCache.set(key, task);
+  // Don't poison the cache with a rejected promise — drop on failure so the
+  // next call retries Frankfurter.
+  task.catch(() => fxCache.delete(key));
   return task;
 }
 
@@ -999,7 +1026,7 @@ export async function fetchShopifyDaily() {
         const maxPages = 240; // up to 60k orders / store / year
 
         while (hasNextPage && page < maxPages) {
-          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+          const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
             method: "POST",
             headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
             body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
@@ -1306,64 +1333,71 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const headers = { "X-Loop-Token": key, Accept: "application/json" };
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const allSubs: any[] = [];
   const MAX_PAGES = 500;
   // Loop currently caps this endpoint at 100 rows even when pageSize is higher.
   // Keeping the requested size aligned prevents bad hasNext fallbacks and makes
   // partial-page detection reliable.
   const PAGE_SIZE = 100;
-  let apiReached = false; // true once we get at least one 200 response
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    // Loop rate limit: ~1 req/s — wait between every page. Do not write a
-    // partial subscription book as finance data; stale cache is safer than a
-    // fabricated total.
-    if (page > 1) await new Promise((r) => setTimeout(r, 1300));
-
-    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
-    let res: Response = await fetch(url, {
-      headers,
-      cache: "no-store",
-    });
-
-    // On 429: wait 15s and retry once — if still 429, abort this market so we
-    // do not cache partial totals as accurate subscriber counts.
-    if (res.status === 429) {
-      await new Promise((r) => setTimeout(r, 15000));
-      res = await fetch(url, { headers, cache: "no-store" });
+  // Fetch ACTIVE subs (paginated). To compute real churn we make a second pass
+  // for CANCELLED subs — without this, churnedThisMonth is structurally always 0.
+  async function fetchPages(status: "ACTIVE" | "CANCELLED"): Promise<{
+    subs: any[];
+    apiReached: boolean;
+    rateLimited: boolean;
+  }> {
+    const subs: any[] = [];
+    let apiReached = false;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      if (page > 1) await new Promise((r) => setTimeout(r, 1300));
+      const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+      let res: Response = await fetch(url, { headers, cache: "no-store" });
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 15000));
+        res = await fetch(url, { headers, cache: "no-store" });
+      }
+      if (res.status === 429) {
+        console.warn(`Loop ${market} ${status}: rate-limited at page ${page}`);
+        return { subs, apiReached, rateLimited: true };
+      }
+      if (!res.ok) {
+        console.error(`Loop ${market} ${status} page ${page} → ${res.status}`);
+        break;
+      }
+      apiReached = true;
+      const json = await res.json();
+      const batch: any[] = json.data ?? [];
+      subs.push(...batch);
+      const hasNext =
+        json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
+      if (!hasNext || batch.length === 0) break;
     }
-    if (res.status === 429) {
-      console.warn(
-        `Loop ${market}: rate-limited at page ${page}; keeping previous cache instead of partial data`,
-      );
-      return null;
-    }
-
-    if (!res.ok) {
-      console.error(`Loop ${market} page ${page} → ${res.status}`);
-      break;
-    }
-
-    apiReached = true;
-    const json = await res.json();
-    const batch: any[] = json.data ?? [];
-    allSubs.push(...batch);
-    const hasNext =
-      json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
-    if (!hasNext || batch.length === 0) break;
+    return { subs, apiReached, rateLimited: false };
   }
 
-  // Return null only if the API never responded (key invalid / network error)
-  if (!apiReached) return null;
+  const activeResult = await fetchPages("ACTIVE");
+  if (activeResult.rateLimited && !activeResult.apiReached) return null;
+
+  // For CANCELLED, only paginate while results are still within the current
+  // month — Loop returns newest first, so we can stop once cancelledAt < monthStart.
+  let cancelledSubs: any[] = [];
+  try {
+    const cancelledResult = await fetchPages("CANCELLED");
+    cancelledSubs = cancelledResult.subs;
+  } catch (err: any) {
+    console.warn(`Loop ${market} cancelled fetch failed:`, err?.message);
+  }
+
+  const allSubsFromActive = activeResult.subs;
+  if (!activeResult.apiReached) return null;
 
   const currency = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
-  const activeSubs = allSubs.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
-  const canceledSubs: any[] = [];
+  const activeSubs = allSubsFromActive.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
   const mrr = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
-  const newThisMonth = allSubs.filter(
+  const newThisMonth = allSubsFromActive.filter(
     (s) => s.createdAt && new Date(s.createdAt) >= monthStart,
   ).length;
-  const churnedThisMonth = canceledSubs.filter(
+  const churnedThisMonth = cancelledSubs.filter(
     (s) => s.cancelledAt && new Date(s.cancelledAt) >= monthStart,
   ).length;
   const arpu = activeSubs.length > 0 ? mrr / activeSubs.length : null;
@@ -1377,10 +1411,10 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     flag,
     platform: "loop",
     live: true,
-    calcVersion: 3,
+    calcVersion: 4,
     mrr: Math.round(mrr),
     activeSubs: activeSubs.length,
-    totalFetched: allSubs.length,
+    totalFetched: allSubsFromActive.length + cancelledSubs.length,
     newThisMonth,
     churnedThisMonth,
     arpu: arpu != null ? +arpu.toFixed(2) : null,
@@ -2876,7 +2910,7 @@ export async function fetchShopifyRepeatFunnel() {
 
     try {
       while (hasNextPage && page < maxPages) {
-        const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+        const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
           method: "POST",
           headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
           body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor) }),
@@ -3085,7 +3119,7 @@ export async function fetchShopifyPayouts() {
       if (!token) return { market: s.code, name: s.name, live: false, reason: "no token" };
 
       const headers = { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
-      const base = `https://${store}/admin/api/2025-01/shopify_payments`;
+      const base = `https://${store}/admin/api/${SHOPIFY_API_VERSION}/shopify_payments`;
 
       try {
         const [balRes, payRes] = await Promise.all([

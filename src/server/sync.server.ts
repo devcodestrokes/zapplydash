@@ -198,7 +198,7 @@ export function refreshStaleInBackground(cache: CacheMap): void {
         !Array.isArray(payload?.__empty) &&
         !payload?.__error &&
         Array.isArray(payload) &&
-        payload.some((row: any) => row?.calcVersion !== 3)) ||
+        payload.some((row: any) => (row?.calcVersion ?? 0) < 4)) ||
       (job.provider === "juo" &&
         job.key === "subscriptions" &&
         !payload?.__error &&

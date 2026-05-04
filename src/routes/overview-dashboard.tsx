@@ -103,7 +103,7 @@ function OverviewPage() {
   const liveMarkets = shopifyMarketsArr.some((m: any) => m?.live) ? shopifyMarketsArr : null;
   const twData = asArr(data?.tripleWhale).filter((m: any) => m?.live);
   const juoArr = asArr(data?.juo).filter((m: any) => m?.calcVersion === 2);
-  const loopArr = asArr(data?.loop).filter((m: any) => m?.calcVersion === 3);
+  const loopArr = asArr(data?.loop).filter((m: any) => (m?.calcVersion ?? 0) >= 3);
   const allSubData = [...juoArr, ...loopArr].filter((m: any) => m?.live);
   const shopifyMonthly = asArr(data?.shopifyMonthly);
   const jorttObj =
@@ -120,6 +120,18 @@ function OverviewPage() {
           className="p-6 bg-neutral-50 min-h-full"
           style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}
         >
+          {data?.errors && Object.keys(data.errors).length > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
+              <div className="font-semibold mb-1">Some sources didn't sync cleanly</div>
+              <ul className="space-y-0.5 list-disc pl-5">
+                {Object.entries(data.errors).map(([k, v]) => (
+                  <li key={k}>
+                    <span className="font-mono">{k}</span>: {String(v)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <OverviewView
             dateRange={dateRange}
             onDateChange={handleDateChange}
