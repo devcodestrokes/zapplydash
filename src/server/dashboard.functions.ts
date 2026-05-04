@@ -221,6 +221,33 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     }
   }
 
+  // Build a structured errors map so the UI can show *why* a tile is empty
+  // (e.g., "Shopify token expired" vs. "no data yet"). Reads the __error and
+  // __empty sentinels written by sync.server.ts.
+  const errors: Record<string, string> = {};
+  const collectError = (label: string, c: { payload: any } | null) => {
+    const p = c?.payload;
+    if (!p || typeof p !== "object") return;
+    if ((p as any).__error) {
+      errors[label] = String((p as any).message ?? "fetch failed").slice(0, 200);
+    } else if ((p as any).__empty) {
+      errors[label] = "Source returned empty payload";
+    }
+  };
+  collectError("shopifyMarkets", shopifyMarketsCache);
+  collectError("shopifyMonthly", shopifyMonthlyCache);
+  collectError("shopifyToday", shopifyTodayCache);
+  collectError("shopifyDaily", shopifyDailyCache);
+  collectError("shopifyRepeatFunnel", shopifyRepeatFunnelCache);
+  collectError("shopifyPayouts", shopifyPayoutsCache);
+  collectError("tripleWhale", tripleWhaleCache);
+  collectError("tripleWhaleCustomerEconomics", tripleWhaleCustomerEconomicsCache);
+  collectError("tripleWhaleDaily", tripleWhaleDailyCache);
+  collectError("juo", juoCache);
+  collectError("loop", loopCache);
+  collectError("jortt", jorttCache);
+  collectError("xero", xeroCache);
+
   return {
     shopifyMarkets: shopifyMarketsCache?.payload ?? null,
     shopifyMonthly: shopifyMonthlyCache?.payload ?? null,
@@ -240,6 +267,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     syncedAt: oldestSyncedAt,
     dataIsStale,
     hasAnyData,
+    errors,
   };
 });
 
