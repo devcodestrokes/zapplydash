@@ -953,7 +953,6 @@ function GrowthPlan2026({ data }: { data: any }) {
                 Could not load {selectedYear}: {yearError}
               </div>
             )}
-            </div>
             <div className="text-neutral-500 mt-0.5">
               Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
               come from Triple Whale. Future months are calculated from current run-rate,
