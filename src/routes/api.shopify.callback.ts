@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/shopify/callback")({
           const { access_token } = await tokenRes.json();
 
           const shopRes = await fetch(
-            `https://${shop}/admin/api/2025-01/shop.json`,
+            `https://${shop}/admin/api/2026-01/shop.json`,
             { headers: { "X-Shopify-Access-Token": access_token } },
           );
           const shopData: any = shopRes.ok ? await shopRes.json() : {};
