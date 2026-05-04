@@ -1372,6 +1372,9 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             </div>
             <div className="text-right text-[11px] text-neutral-400">
               Cohort size: <span className="font-semibold text-neutral-700">{cohortSize.toLocaleString()} first-time buyers</span>
+              {f.sourceStart && f.sourceEnd && (
+                <div className="mt-1">Source: Shopify orders {f.sourceStart}–{f.sourceEnd}</div>
+              )}
             </div>
           </div>
 
