@@ -285,7 +285,7 @@ export const getGrowthYearData = createServerFn({ method: "POST" })
       try {
         const result = await withTimeout(
           fetchShopifyGrowthYear(year),
-          120_000,
+          240_000,
           `Growth Year ${year}`,
         );
         if (!result) return { ok: false, error: "No Shopify data for that year" } as const;
