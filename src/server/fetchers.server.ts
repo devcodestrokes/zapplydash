@@ -2783,7 +2783,7 @@ export async function fetchJortt() {
 }
 
 // ─── Shopify Repeat Purchase Funnel ──────────────────────────────────────────
-// Pulls the last ~365 days of orders for every Shopify store, builds per-customer
+// Pulls the last 5 years of orders for every Shopify store, builds per-customer
 // order timelines, then computes cohort-based repeat rates (1st → 2nd → 3rd → 4th
 // + 5th/6th/7th orders) and monthly cohort tables.
 //
@@ -2794,10 +2794,11 @@ export async function fetchShopifyRepeatFunnel() {
   const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
   if (!clientId) return null;
 
-  // Look back 540 days so we can reliably identify a customer's TRUE first
-  // order. With only 365d we mis-label long-time customers as "first-time"
-  // when they re-order, and the older cohort window comes up empty.
-  const lookbackDays = 540;
+  // This is intentionally independent from the Overview page date filter.
+  // Five years gives enough customer history to avoid marking old repeat buyers
+  // as new first-time buyers in recent cohorts.
+  const lookbackYears = 5;
+  const lookbackDays = 365 * lookbackYears + 2;
   const sinceDate = daysAgoIso(lookbackDays);
   const since = `${sinceDate}T00:00:00Z`;
 
@@ -2805,6 +2806,7 @@ export async function fetchShopifyRepeatFunnel() {
   // order count. Lifetime count prevents a truncated lookback window from
   // pretending older customers are new first-time buyers.
   const customerOrders = new Map<string, { dates: string[]; lifetimeOrders: number }>();
+  const storeCoverage: Array<{ code: string; pages: number; truncated: boolean; firstOrder: string | null; lastOrder: string | null }> = [];
 
   for (const { code, storeKey } of SHOPIFY_STORES) {
     const store = process.env[storeKey];
