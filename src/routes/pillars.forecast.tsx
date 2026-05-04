@@ -931,17 +931,28 @@ function GrowthPlan2026({ data }: { data: any }) {
               <div className="font-semibold text-neutral-900">
                 Growth Plan {year} · all Shopify stores combined · live API model
               </div>
-              <div className="inline-flex rounded-md border border-neutral-200 bg-white p-0.5 text-[11px] font-medium">
-                {yearOptions.map((y) => (
-                  <button
-                    key={y}
-                    onClick={() => setSelectedYear(y)}
-                    className={`rounded px-2.5 py-1 transition ${selectedYear === y ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
-                  >
-                    {y}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {loadingYear != null && (
+                  <span className="text-[11px] text-neutral-500">Loading {loadingYear}…</span>
+                )}
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12px] font-medium text-neutral-700 focus:outline-none focus:ring-1 focus:ring-neutral-300"
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
+            {yearError && (
+              <div className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                Could not load {selectedYear}: {yearError}
+              </div>
+            )}
             </div>
             <div className="text-neutral-500 mt-0.5">
               Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
