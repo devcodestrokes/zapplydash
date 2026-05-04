@@ -2936,7 +2936,7 @@ export async function fetchShopifyRepeatFunnel() {
     maturing: i > 0 && !((i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured)),
   }));
 
-  // ── Monthly cohort table — last 4 calendar months ───────────────────
+  // ── Monthly cohort table — last 6 calendar months ───────────────────
   const monthlyCohorts: Array<{
     month: string;
     size: number;
@@ -2998,7 +2998,12 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
-    calcVersion: 5,
+    calcVersion: 6,
+    sourceWindowDays: lookbackDays,
+    sourceWindowYears: lookbackYears,
+    sourceStart: sinceDate,
+    sourceEnd: today(),
+    storeCoverage,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
