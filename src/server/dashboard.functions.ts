@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { readCacheKeys, writeCache, ageMinutes, type CacheMap } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
-import { fetchTripleWhale, fetchTripleWhaleCustomerEconomics } from "./fetchers.server";
+import {
+  fetchTripleWhale,
+  fetchTripleWhaleCustomerEconomics,
+  fetchShopifyGrowthYear,
+} from "./fetchers.server";
 import { getProgress } from "./progress.server";
 
 // In-memory range cache (per Worker instance). Triple Whale aggregates are
@@ -256,3 +260,43 @@ export const getSyncStatus = createServerFn({ method: "GET" }).handler(async () 
   ]);
   return buildSourceStatus(cache);
 });
+
+// In-memory cache for Growth Plan year data — 10 minutes per year.
+const GROWTH_YEAR_TTL_MS = 10 * 60 * 1000;
+const growthYearCache = new Map<number, { data: any; fetchedAt: number }>();
+const growthYearInflight = new Map<number, Promise<any>>();
+
+export const getGrowthYearData = createServerFn({ method: "POST" })
+  .inputValidator((input: { year: number }) => ({ year: Number(input.year) }))
+  .handler(async ({ data }) => {
+    const year = data.year;
+    if (!Number.isInteger(year) || year < 2015 || year > 2100) {
+      return { ok: false, error: "Invalid year" } as const;
+    }
+    const now = Date.now();
+    const cached = growthYearCache.get(year);
+    if (cached && now - cached.fetchedAt < GROWTH_YEAR_TTL_MS) {
+      return { ok: true, ...cached.data } as const;
+    }
+    const pending = growthYearInflight.get(year);
+    if (pending) return await pending;
+
+    const task = (async () => {
+      try {
+        const result = await withTimeout(
+          fetchShopifyGrowthYear(year),
+          120_000,
+          `Growth Year ${year}`,
+        );
+        if (!result) return { ok: false, error: "No Shopify data for that year" } as const;
+        growthYearCache.set(year, { data: result, fetchedAt: Date.now() });
+        return { ok: true, ...result } as const;
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? "fetch failed" } as const;
+      } finally {
+        growthYearInflight.delete(year);
+      }
+    })();
+    growthYearInflight.set(year, task);
+    return await task;
+  });

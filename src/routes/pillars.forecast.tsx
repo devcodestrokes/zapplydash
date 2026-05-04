@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getDashboardData } from "@/server/dashboard.functions";
+import { getDashboardData, getGrowthYearData } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/pillars/forecast")({
   head: () => ({ meta: [{ title: "Forecast — Zapply" }] }),
@@ -631,8 +631,77 @@ function parseMonthLabel(label: string) {
 function GrowthPlan2026({ data }: { data: any }) {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
   const nowYear = new Date().getFullYear();
-  const yearOptions = [nowYear - 2, nowYear - 1, nowYear];
   const [selectedYear, setSelectedYear] = useState<number>(nowYear);
+  const [yearOverride, setYearOverride] = useState<{
+    year: number;
+    shopifyMonthly: any[];
+    shopifyDaily: any;
+  } | null>(null);
+  const [loadingYear, setLoadingYear] = useState<number | null>(null);
+  const [yearError, setYearError] = useState<string | null>(null);
+
+  // Years discoverable from cached + override data (used to pre-seed the dropdown).
+  const knownYears = useMemo(() => {
+    const set = new Set<number>();
+    const monthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
+    for (const row of monthly) {
+      const p = parseMonthLabel(row?.month);
+      if (p) set.add(p.year);
+    }
+    const dailyByMarket = data?.shopifyDaily?.byMarket;
+    if (dailyByMarket && typeof dailyByMarket === "object") {
+      for (const code of Object.keys(dailyByMarket)) {
+        for (const date of Object.keys(dailyByMarket[code] ?? {})) {
+          const y = Number(String(date).slice(0, 4));
+          if (Number.isInteger(y)) set.add(y);
+        }
+      }
+    }
+    if (yearOverride) set.add(yearOverride.year);
+    set.add(nowYear);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [data, yearOverride, nowYear]);
+
+  // Allow picking any year back to 2018 even if not yet present in cache —
+  // selecting an unseen year triggers a live API fetch.
+  const yearOptions = useMemo(() => {
+    const oldest = Math.min(...knownYears, nowYear - 4, 2018);
+    const list: number[] = [];
+    for (let y = nowYear; y >= oldest; y--) list.push(y);
+    return list;
+  }, [knownYears, nowYear]);
+
+  // Fetch fresh data when switching to a non-current year.
+  useEffect(() => {
+    if (selectedYear === nowYear) {
+      setYearOverride(null);
+      setYearError(null);
+      return;
+    }
+    if (yearOverride?.year === selectedYear) return;
+    let alive = true;
+    setLoadingYear(selectedYear);
+    setYearError(null);
+    getGrowthYearData({ data: { year: selectedYear } })
+      .then((res: any) => {
+        if (!alive) return;
+        if (res?.ok) {
+          setYearOverride({
+            year: res.year,
+            shopifyMonthly: res.shopifyMonthly ?? [],
+            shopifyDaily: res.shopifyDaily ?? null,
+          });
+        } else {
+          setYearError(res?.error ?? "Failed to load year");
+          setYearOverride(null);
+        }
+      })
+      .catch((e) => alive && setYearError(e?.message ?? "Failed to load year"))
+      .finally(() => alive && setLoadingYear(null));
+    return () => {
+      alive = false;
+    };
+  }, [selectedYear, nowYear, yearOverride?.year]);
 
   const model = useMemo(() => {
     const now = new Date();
@@ -651,16 +720,24 @@ function GrowthPlan2026({ data }: { data: any }) {
           100
         : 0;
 
-    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets)
-      ? data.shopifyMarkets.filter((m: any) => m?.live)
-      : [];
-    const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
-    const twRows: any[] = Array.isArray(data?.tripleWhale)
-      ? data.tripleWhale.filter((m: any) => m?.live)
-      : [];
+    const useOverride = !isCurrentYear && yearOverride?.year === year;
+    const shopifyMarkets: any[] =
+      isCurrentYear && Array.isArray(data?.shopifyMarkets)
+        ? data.shopifyMarkets.filter((m: any) => m?.live)
+        : [];
+    const shopifyMonthly: any[] = useOverride
+      ? yearOverride!.shopifyMonthly
+      : Array.isArray(data?.shopifyMonthly)
+        ? data.shopifyMonthly
+        : [];
+    const twRows: any[] =
+      isCurrentYear && Array.isArray(data?.tripleWhale)
+        ? data.tripleWhale.filter((m: any) => m?.live)
+        : [];
+    const dailySource = useOverride ? yearOverride!.shopifyDaily : data?.shopifyDaily;
     const dailyByMarket =
-      data?.shopifyDaily?.byMarket && typeof data.shopifyDaily.byMarket === "object"
-        ? data.shopifyDaily.byMarket
+      dailySource?.byMarket && typeof dailySource.byMarket === "object"
+        ? dailySource.byMarket
         : {};
 
     const actualByMonth = MONTHS.map(
@@ -808,9 +885,9 @@ function GrowthPlan2026({ data }: { data: any }) {
       dataStart,
       dataEnd,
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
-      hasAllStoreDaily: data?.shopifyDaily?.calcVersion === 2,
+      hasAllStoreDaily: useOverride ? true : data?.shopifyDaily?.calcVersion === 2,
     };
-  }, [data, selectedYear]);
+  }, [data, selectedYear, yearOverride]);
 
   const {
     year,
@@ -854,18 +931,28 @@ function GrowthPlan2026({ data }: { data: any }) {
               <div className="font-semibold text-neutral-900">
                 Growth Plan {year} · all Shopify stores combined · live API model
               </div>
-              <div className="inline-flex rounded-md border border-neutral-200 bg-white p-0.5 text-[11px] font-medium">
-                {yearOptions.map((y) => (
-                  <button
-                    key={y}
-                    onClick={() => setSelectedYear(y)}
-                    className={`rounded px-2.5 py-1 transition ${selectedYear === y ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
-                  >
-                    {y}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                {loadingYear != null && (
+                  <span className="text-[11px] text-neutral-500">Loading {loadingYear}…</span>
+                )}
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="h-8 rounded-md border border-neutral-200 bg-white px-2 text-[12px] font-medium text-neutral-700 focus:outline-none focus:ring-1 focus:ring-neutral-300"
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
+            {yearError && (
+              <div className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                Could not load {selectedYear}: {yearError}
+              </div>
+            )}
             <div className="text-neutral-500 mt-0.5">
               Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
               come from Triple Whale. Future months are calculated from current run-rate,

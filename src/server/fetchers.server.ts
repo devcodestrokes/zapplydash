@@ -445,6 +445,142 @@ export async function fetchShopifyMonthly() {
   }
 }
 
+// Fetch Shopify per-market monthly + daily revenue for a specific calendar year.
+// Used by the Growth Plan year selector — runs on demand (not cached) so any
+// year (including older years) can be inspected.
+export async function fetchShopifyGrowthYear(year: number) {
+  const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
+  if (!clientId) return null;
+
+  const since = `${year}-01-01T00:00:00Z`;
+  const until = `${year}-12-31T23:59:59Z`;
+  const sinceDay = `${year}-01-01`;
+  const untilDay = `${year}-12-31`;
+
+  try {
+    const perStore = await Promise.all(
+      SHOPIFY_STORES.map(async ({ code, storeKey }: any) => {
+        const store = process.env[storeKey];
+        if (!store) return { code, monthlySums: {}, dailySums: {} };
+        const token = await getShopifyToken(store);
+        if (!token) return { code, monthlySums: {}, dailySums: {} };
+
+        const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
+        const dailySums: Record<string, { revenue: number; orders: number }> = {};
+        let cursor: string | null = null;
+        let hasNextPage = true;
+        let page = 0;
+        const maxPages = 400;
+
+        while (hasNextPage && page < maxPages) {
+          const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+            method: "POST",
+            headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+            body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
+          });
+          if (!res.ok) break;
+          const json = await res.json();
+          if (json.errors) {
+            console.error(`Shopify growth-year ${year} ${code}:`, json.errors[0]?.message);
+            break;
+          }
+          const pageData = json.data?.orders ?? {};
+          const edges: any[] = pageData.edges ?? [];
+          hasNextPage = pageData.pageInfo?.hasNextPage ?? false;
+          cursor = pageData.pageInfo?.endCursor ?? null;
+          page++;
+
+          for (const { node: o } of edges) {
+            const r = parseFloat(o.totalPriceSet.shopMoney.amount);
+            const rf = parseFloat(o.totalRefundedSet.shopMoney.amount);
+            const net = r - rf;
+            const created = new Date(o.createdAt);
+            const mk = created
+              .toLocaleDateString("en-US", { month: "short", year: "2-digit" })
+              .replace(" ", " '");
+            if (!monthlySums[mk]) monthlySums[mk] = { revenue: 0, orders: 0, refunds: 0 };
+            monthlySums[mk].revenue += net;
+            monthlySums[mk].refunds += rf;
+            monthlySums[mk].orders += 1;
+            const dayKey = amsterdamDateKey(o.createdAt);
+            if (!dailySums[dayKey]) dailySums[dayKey] = { revenue: 0, orders: 0 };
+            dailySums[dayKey].revenue += net;
+            dailySums[dayKey].orders += 1;
+          }
+        }
+
+        const sourceCurrency = MARKET_CURRENCY[code] ?? "EUR";
+        const fxRate = await getEurRate(sourceCurrency, sinceDay, untilDay);
+        const monthlyEur: Record<string, { revenue: number; orders: number; refunds: number }> = {};
+        for (const [k, v] of Object.entries(monthlySums)) {
+          monthlyEur[k] = {
+            revenue: +(v.revenue * fxRate).toFixed(2),
+            orders: v.orders,
+            refunds: +(v.refunds * fxRate).toFixed(2),
+          };
+        }
+        const dailyEur: Record<string, { revenue: number; orders: number }> = {};
+        for (const [k, v] of Object.entries(dailySums)) {
+          dailyEur[k] = { revenue: +(v.revenue * fxRate).toFixed(2), orders: v.orders };
+        }
+        return { code, monthlySums: monthlyEur, dailySums: dailyEur };
+      }),
+    );
+
+    // Build shopifyMonthly-shaped rows and shopifyDaily.byMarket
+    const merged: Record<
+      string,
+      {
+        revenue: number;
+        orders: number;
+        refunds: number;
+        byMarket: Record<string, { revenue: number; orders: number; refunds: number }>;
+      }
+    > = {};
+    for (const storeRow of perStore) {
+      for (const [month, row] of Object.entries(storeRow.monthlySums)) {
+        if (!merged[month]) merged[month] = { revenue: 0, orders: 0, refunds: 0, byMarket: {} };
+        merged[month].revenue += row.revenue;
+        merged[month].orders += row.orders;
+        merged[month].refunds += row.refunds;
+        merged[month].byMarket[storeRow.code] = row;
+      }
+    }
+    const shopifyMonthly = Object.entries(merged)
+      .sort(
+        ([a], [b]) =>
+          new Date("1 " + a.replace("'", "20")).getTime() -
+          new Date("1 " + b.replace("'", "20")).getTime(),
+      )
+      .map(([month, d]) => ({ month, ...d, calcVersion: 2 }));
+
+    const dailyByMarket: Record<string, Record<string, { revenue: number; orders: number }>> = {};
+    const mergedDaily: Record<string, { revenue: number; orders: number }> = {};
+    for (const s of perStore) {
+      dailyByMarket[s.code] = s.dailySums;
+      for (const [k, v] of Object.entries(s.dailySums)) {
+        if (!mergedDaily[k]) mergedDaily[k] = { revenue: 0, orders: 0 };
+        mergedDaily[k].revenue += v.revenue;
+        mergedDaily[k].orders += v.orders;
+      }
+    }
+
+    return {
+      year,
+      shopifyMonthly,
+      shopifyDaily: {
+        daily: mergedDaily,
+        byMarket: dailyByMarket,
+        calcVersion: 2,
+        fetchedAt: new Date().toISOString(),
+      },
+    };
+  } catch (err: any) {
+    console.error(`fetchShopifyGrowthYear ${year} failed:`, err?.message);
+    return null;
+  }
+}
+
 // ─── Triple Whale ─────────────────────────────────────────────────────────────
 //
 // CONFIRMED WORKING — POST https://api.triplewhale.com/api/v2/summary-page/get-data
