@@ -282,7 +282,7 @@ function ForecastPage() {
               onClick={() => setTab("growth")}
               className={`rounded-md px-3 py-1.5 transition ${tab === "growth" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
             >
-              Growth Plan 2026
+              Growth Plan
             </button>
           </div>
         </div>
@@ -630,17 +630,26 @@ function parseMonthLabel(label: string) {
 
 function GrowthPlan2026({ data }: { data: any }) {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
+  const nowYear = new Date().getFullYear();
+  const yearOptions = [nowYear - 2, nowYear - 1, nowYear];
+  const [selectedYear, setSelectedYear] = useState<number>(nowYear);
 
   const model = useMemo(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    const elapsedDay = now.getDate();
-    const daysInMonth = new Date(year, currentMonthIdx + 1, 0).getDate();
-    const expectedPace =
-      ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) /
-        (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) *
-      100;
+    const year = selectedYear;
+    const isCurrentYear = year === now.getFullYear();
+    const isPastYear = year < now.getFullYear();
+    const currentMonthIdx = isCurrentYear ? now.getMonth() : isPastYear ? 11 : -1;
+    const elapsedDay = isCurrentYear ? now.getDate() : 1;
+    const daysInMonth =
+      currentMonthIdx >= 0 ? new Date(year, currentMonthIdx + 1, 0).getDate() : 30;
+    const expectedPace = isPastYear
+      ? 100
+      : isCurrentYear
+        ? ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) /
+            (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) *
+          100
+        : 0;
 
     const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets)
       ? data.shopifyMarkets.filter((m: any) => m?.live)
@@ -801,7 +810,7 @@ function GrowthPlan2026({ data }: { data: any }) {
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
       hasAllStoreDaily: data?.shopifyDaily?.calcVersion === 2,
     };
-  }, [data]);
+  }, [data, selectedYear]);
 
   const {
     year,
@@ -840,9 +849,22 @@ function GrowthPlan2026({ data }: { data: any }) {
           <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100">
             <Sparkles className="h-4 w-4 text-neutral-600" />
           </div>
-          <div className="text-[13px]">
-            <div className="font-semibold text-neutral-900">
-              Growth Plan {year} · all Shopify stores combined · live API model
+          <div className="text-[13px] flex-1">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="font-semibold text-neutral-900">
+                Growth Plan {year} · all Shopify stores combined · live API model
+              </div>
+              <div className="inline-flex rounded-md border border-neutral-200 bg-white p-0.5 text-[11px] font-medium">
+                {yearOptions.map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setSelectedYear(y)}
+                    className={`rounded px-2.5 py-1 transition ${selectedYear === y ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="text-neutral-500 mt-0.5">
               Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
