@@ -282,7 +282,7 @@ function ForecastPage() {
               onClick={() => setTab("growth")}
               className={`rounded-md px-3 py-1.5 transition ${tab === "growth" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
             >
-              Growth Plan 2026
+              Growth Plan
             </button>
           </div>
         </div>
