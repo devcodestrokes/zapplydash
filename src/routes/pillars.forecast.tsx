@@ -885,9 +885,9 @@ function GrowthPlan2026({ data }: { data: any }) {
       dataStart,
       dataEnd,
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
-      hasAllStoreDaily: data?.shopifyDaily?.calcVersion === 2,
+      hasAllStoreDaily: useOverride ? true : data?.shopifyDaily?.calcVersion === 2,
     };
-  }, [data, selectedYear]);
+  }, [data, selectedYear, yearOverride]);
 
   const {
     year,
