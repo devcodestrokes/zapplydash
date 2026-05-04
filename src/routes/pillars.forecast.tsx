@@ -716,11 +716,12 @@ function GrowthPlan2026({ data }: { data: any }) {
           100
         : 0;
 
-    const useOverride = !isCurrentYear && yearOverride?.year === year;
+    const useOverride = yearOverride?.year === year;
     const shopifyMarkets: any[] =
       isCurrentYear && Array.isArray(data?.shopifyMarkets)
         ? data.shopifyMarkets.filter((m: any) => m?.live)
         : [];
+    // Prefer full-year override; fall back to dashboard cache for the same year.
     const shopifyMonthly: any[] = useOverride
       ? yearOverride!.shopifyMonthly
       : Array.isArray(data?.shopifyMonthly)
