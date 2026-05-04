@@ -631,7 +631,7 @@ function parseMonthLabel(label: string) {
 function GrowthPlan2026({ data }: { data: any }) {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
   const nowYear = new Date().getFullYear();
-  const yearOptions = [nowYear - 2, nowYear - 1, nowYear, nowYear + 1];
+  const yearOptions = [nowYear - 2, nowYear - 1, nowYear];
   const [selectedYear, setSelectedYear] = useState<number>(nowYear);
 
   const model = useMemo(() => {
