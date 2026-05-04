@@ -630,17 +630,26 @@ function parseMonthLabel(label: string) {
 
 function GrowthPlan2026({ data }: { data: any }) {
   const [metric, setMetric] = useState<"revenue" | "netprofit" | "marketing">("revenue");
+  const nowYear = new Date().getFullYear();
+  const yearOptions = [nowYear - 2, nowYear - 1, nowYear, nowYear + 1];
+  const [selectedYear, setSelectedYear] = useState<number>(nowYear);
 
   const model = useMemo(() => {
     const now = new Date();
-    const year = now.getFullYear();
-    const currentMonthIdx = now.getMonth();
-    const elapsedDay = now.getDate();
-    const daysInMonth = new Date(year, currentMonthIdx + 1, 0).getDate();
-    const expectedPace =
-      ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) /
-        (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) *
-      100;
+    const year = selectedYear;
+    const isCurrentYear = year === now.getFullYear();
+    const isPastYear = year < now.getFullYear();
+    const currentMonthIdx = isCurrentYear ? now.getMonth() : isPastYear ? 11 : -1;
+    const elapsedDay = isCurrentYear ? now.getDate() : 1;
+    const daysInMonth =
+      currentMonthIdx >= 0 ? new Date(year, currentMonthIdx + 1, 0).getDate() : 30;
+    const expectedPace = isPastYear
+      ? 100
+      : isCurrentYear
+        ? ((Date.UTC(year, currentMonthIdx, elapsedDay) - Date.UTC(year, 0, 1)) /
+            (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1))) *
+          100
+        : 0;
 
     const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets)
       ? data.shopifyMarkets.filter((m: any) => m?.live)
