@@ -793,24 +793,50 @@ function GrowthPlan2026({ data }: { data: any }) {
       const trend = previous30 > 0 ? clamp((recent30 - previous30) / previous30, -0.2, 0.25) : 0;
       const currentMonthActual =
         actualByMonth[currentMonthIdx][mk.code] || currentMtd[mk.code] || 0;
-      const fullMonthRunRate =
-        currentMonthActual > 0
-          ? (currentMonthActual / Math.max(1, elapsedDay)) * daysInMonth
-          : recent30 > 0
-            ? recent30
-            : 0;
+      // Baseline = average of last 3 completed months (most reliable)
+      const completedMonths: number[] = [];
+      for (let i = currentMonthIdx - 1; i >= 0 && completedMonths.length < 3; i--) {
+        const v = Number(actualByMonth[i]?.[mk.code] || 0);
+        if (v > 0) completedMonths.push(v);
+      }
+      const completedAvg =
+        completedMonths.length > 0
+          ? completedMonths.reduce((s, v) => s + v, 0) / completedMonths.length
+          : 0;
+      // MTD extrapolation, only trusted once enough of the month has elapsed
+      const mtdExtrapolated =
+        currentMonthActual > 0 && elapsedDay > 0
+          ? (currentMonthActual / elapsedDay) * daysInMonth
+          : 0;
+      const mtdWeight = isCurrentYear ? clamp(elapsedDay / daysInMonth, 0, 1) : 0;
+      // Blend: early in month -> rely on completed-month average; late in month -> trust MTD
+      let fullMonthRunRate =
+        completedAvg > 0 && mtdExtrapolated > 0
+          ? completedAvg * (1 - mtdWeight) + mtdExtrapolated * mtdWeight
+          : completedAvg > 0
+            ? completedAvg
+            : mtdExtrapolated > 0
+              ? mtdExtrapolated
+              : recent30 > 0
+                ? recent30
+                : 0;
+      // Safety cap: never project a month more than 2.5× the average of completed months
+      if (completedAvg > 0) {
+        fullMonthRunRate = Math.min(fullMonthRunRate, completedAvg * 2.5);
+      }
 
+      // Dampen trend so it doesn't compound to unrealistic levels far in the future
+      const dampenedTrend = clamp(trend, -0.1, 0.08);
       const monthly = MONTHS.map((_, i) => {
         if (i <= currentMonthIdx) return Math.round(actualByMonth[i][mk.code] || 0);
         const seasonalBase = SEASONALITY[currentMonthIdx] || 1;
-        return Math.max(
-          0,
-          Math.round(
-            fullMonthRunRate *
-              (SEASONALITY[i] / seasonalBase) *
-              Math.pow(1 + trend, i - currentMonthIdx),
-          ),
-        );
+        const monthsAhead = i - currentMonthIdx;
+        // Cap compounding effect at 6 months out
+        const trendFactor = Math.pow(1 + dampenedTrend, Math.min(monthsAhead, 6));
+        const projected = fullMonthRunRate * (SEASONALITY[i] / seasonalBase) * trendFactor;
+        // Hard ceiling: never exceed 3× the avg of completed months
+        const ceiling = completedAvg > 0 ? completedAvg * 3 : projected;
+        return Math.max(0, Math.round(Math.min(projected, ceiling)));
       });
       const target = monthly.reduce((s, v) => s + v, 0);
       const actualYtd = monthly.slice(0, currentMonthIdx + 1).reduce((s, v) => s + v, 0);
