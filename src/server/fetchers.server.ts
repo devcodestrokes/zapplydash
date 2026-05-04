@@ -1333,13 +1333,11 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const headers = { "X-Loop-Token": key, Accept: "application/json" };
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const allSubs: any[] = [];
   const MAX_PAGES = 500;
   // Loop currently caps this endpoint at 100 rows even when pageSize is higher.
   // Keeping the requested size aligned prevents bad hasNext fallbacks and makes
   // partial-page detection reliable.
   const PAGE_SIZE = 100;
-  let apiReached = false; // true once we get at least one 200 response
 
   // Fetch ACTIVE subs (paginated). To compute real churn we make a second pass
   // for CANCELLED subs — without this, churnedThisMonth is structurally always 0.
