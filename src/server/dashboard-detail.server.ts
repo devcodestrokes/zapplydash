@@ -6,6 +6,7 @@
  * Uses the SAME token helpers and OAuth flows as fetchers.server.ts.
  */
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
+import { SHOPIFY_API_VERSION } from "./fetchers.server";
 
 const VITE_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
 const VITE_SUPABASE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
@@ -159,7 +160,7 @@ export async function fetchShopifyStoreDetail(
 
   try {
     while (hasNextPage && page < MAX_PAGES) {
-      const res: Response = await fetch(`https://${store}/admin/api/2025-01/graphql.json`, {
+      const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
         method: "POST",
         headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
         body: JSON.stringify({ query: QUERY(cursor) }),
@@ -271,23 +272,27 @@ export async function fetchLoopMarketDetail(marketCode: string, fromDate: string
   const PAGE_SIZE = 100;
   let apiReached = false;
 
+  // Two-pass: ACTIVE then CANCELLED, so churn/canceled counts are real.
+  const STATUSES: Array<"ACTIVE" | "CANCELLED"> = ["ACTIVE", "CANCELLED"];
   try {
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      if (page > 1) await new Promise((r) => setTimeout(r, 1300));
-      const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
-      let res: Response = await fetch(url, { headers, cache: "no-store" });
-      if (res.status === 429) {
-        await new Promise((r) => setTimeout(r, 15000));
-        res = await fetch(url, { headers, cache: "no-store" });
+    for (const status of STATUSES) {
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        if (page > 1) await new Promise((r) => setTimeout(r, 1300));
+        const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+        let res: Response = await fetch(url, { headers, cache: "no-store" });
+        if (res.status === 429) {
+          await new Promise((r) => setTimeout(r, 15000));
+          res = await fetch(url, { headers, cache: "no-store" });
+        }
+        if (res.status === 429) return { live: false, error: "Loop API rate-limited; kept previous complete data", market: marketCode, subscriptions: [], totals: {} };
+        if (!res.ok) break;
+        apiReached = true;
+        const json = await res.json();
+        const batch: any[] = json.data ?? [];
+        allSubs.push(...batch);
+        const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
+        if (!hasNext || batch.length === 0) break;
       }
-      if (res.status === 429) return { live: false, error: "Loop API rate-limited; kept previous complete data", market: marketCode, subscriptions: [], totals: {} };
-      if (!res.ok) break;
-      apiReached = true;
-      const json = await res.json();
-      const batch: any[] = json.data ?? [];
-      allSubs.push(...batch);
-      const hasNext = json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? (batch.length === PAGE_SIZE);
-      if (!hasNext || batch.length === 0) break;
     }
   } catch (err: any) {
     return { live: false, error: err?.message, market: marketCode, subscriptions: [], totals: {} };
