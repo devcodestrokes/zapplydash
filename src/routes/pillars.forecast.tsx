@@ -671,13 +671,10 @@ function GrowthPlan2026({ data }: { data: any }) {
     return list;
   }, [knownYears, nowYear]);
 
-  // Fetch fresh data when switching to a non-current year.
+  // Always fetch full-year data for the selected year (including current year)
+  // so months outside the rolling daily/monthly cache window (e.g. Jan/Feb)
+  // are still populated.
   useEffect(() => {
-    if (selectedYear === nowYear) {
-      setYearOverride(null);
-      setYearError(null);
-      return;
-    }
     if (yearOverride?.year === selectedYear) return;
     let alive = true;
     setLoadingYear(selectedYear);
@@ -693,7 +690,6 @@ function GrowthPlan2026({ data }: { data: any }) {
           });
         } else {
           setYearError(res?.error ?? "Failed to load year");
-          setYearOverride(null);
         }
       })
       .catch((e) => alive && setYearError(e?.message ?? "Failed to load year"))
@@ -701,7 +697,7 @@ function GrowthPlan2026({ data }: { data: any }) {
     return () => {
       alive = false;
     };
-  }, [selectedYear, nowYear, yearOverride?.year]);
+  }, [selectedYear, yearOverride?.year]);
 
   const model = useMemo(() => {
     const now = new Date();
