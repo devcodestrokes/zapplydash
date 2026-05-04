@@ -48,6 +48,10 @@ function serviceClient() {
 // ─── Shopify ─────────────────────────────────────────────────────────────────
 //
 // Uses Shopify OAuth2 client_credentials grant (no user redirect needed).
+// Pin a single explicit Admin API version. 2025-01 reaches end-of-life Jan 2026
+// and Shopify silently forwards stale callers to the latest stable schema —
+// pin to current to avoid silent field drops.
+export const SHOPIFY_API_VERSION = "2026-01" as const;
 // Requires: SHOPIFY_APP_CLIENT_ID + SHOPIFY_APP_CLIENT_SECRET in .env.local
 //           App must be installed in each store (done in Shopify Partner Dashboard).
 // Tokens (~24h TTL) are cached in Supabase integrations table and auto-refreshed.
