@@ -120,6 +120,18 @@ function OverviewPage() {
           className="p-6 bg-neutral-50 min-h-full"
           style={{ fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' }}
         >
+          {data?.errors && Object.keys(data.errors).length > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
+              <div className="font-semibold mb-1">Some sources didn't sync cleanly</div>
+              <ul className="space-y-0.5 list-disc pl-5">
+                {Object.entries(data.errors).map(([k, v]) => (
+                  <li key={k}>
+                    <span className="font-mono">{k}</span>: {String(v)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <OverviewView
             dateRange={dateRange}
             onDateChange={handleDateChange}
