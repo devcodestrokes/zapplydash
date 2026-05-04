@@ -1341,56 +1341,65 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   const PAGE_SIZE = 100;
   let apiReached = false; // true once we get at least one 200 response
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    // Loop rate limit: ~1 req/s — wait between every page. Do not write a
-    // partial subscription book as finance data; stale cache is safer than a
-    // fabricated total.
-    if (page > 1) await new Promise((r) => setTimeout(r, 1300));
-
-    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=ACTIVE`;
-    let res: Response = await fetch(url, {
-      headers,
-      cache: "no-store",
-    });
-
-    // On 429: wait 15s and retry once — if still 429, abort this market so we
-    // do not cache partial totals as accurate subscriber counts.
-    if (res.status === 429) {
-      await new Promise((r) => setTimeout(r, 15000));
-      res = await fetch(url, { headers, cache: "no-store" });
+  // Fetch ACTIVE subs (paginated). To compute real churn we make a second pass
+  // for CANCELLED subs — without this, churnedThisMonth is structurally always 0.
+  async function fetchPages(status: "ACTIVE" | "CANCELLED"): Promise<{
+    subs: any[];
+    apiReached: boolean;
+    rateLimited: boolean;
+  }> {
+    const subs: any[] = [];
+    let apiReached = false;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      if (page > 1) await new Promise((r) => setTimeout(r, 1300));
+      const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+      let res: Response = await fetch(url, { headers, cache: "no-store" });
+      if (res.status === 429) {
+        await new Promise((r) => setTimeout(r, 15000));
+        res = await fetch(url, { headers, cache: "no-store" });
+      }
+      if (res.status === 429) {
+        console.warn(`Loop ${market} ${status}: rate-limited at page ${page}`);
+        return { subs, apiReached, rateLimited: true };
+      }
+      if (!res.ok) {
+        console.error(`Loop ${market} ${status} page ${page} → ${res.status}`);
+        break;
+      }
+      apiReached = true;
+      const json = await res.json();
+      const batch: any[] = json.data ?? [];
+      subs.push(...batch);
+      const hasNext =
+        json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
+      if (!hasNext || batch.length === 0) break;
     }
-    if (res.status === 429) {
-      console.warn(
-        `Loop ${market}: rate-limited at page ${page}; keeping previous cache instead of partial data`,
-      );
-      return null;
-    }
-
-    if (!res.ok) {
-      console.error(`Loop ${market} page ${page} → ${res.status}`);
-      break;
-    }
-
-    apiReached = true;
-    const json = await res.json();
-    const batch: any[] = json.data ?? [];
-    allSubs.push(...batch);
-    const hasNext =
-      json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
-    if (!hasNext || batch.length === 0) break;
+    return { subs, apiReached, rateLimited: false };
   }
 
-  // Return null only if the API never responded (key invalid / network error)
-  if (!apiReached) return null;
+  const activeResult = await fetchPages("ACTIVE");
+  if (activeResult.rateLimited && !activeResult.apiReached) return null;
+
+  // For CANCELLED, only paginate while results are still within the current
+  // month — Loop returns newest first, so we can stop once cancelledAt < monthStart.
+  let cancelledSubs: any[] = [];
+  try {
+    const cancelledResult = await fetchPages("CANCELLED");
+    cancelledSubs = cancelledResult.subs;
+  } catch (err: any) {
+    console.warn(`Loop ${market} cancelled fetch failed:`, err?.message);
+  }
+
+  const allSubsFromActive = activeResult.subs;
+  if (!activeResult.apiReached) return null;
 
   const currency = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
-  const activeSubs = allSubs.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
-  const canceledSubs: any[] = [];
+  const activeSubs = allSubsFromActive.filter((s) => (s.status ?? "").toUpperCase() === "ACTIVE");
   const mrr = activeSubs.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
-  const newThisMonth = allSubs.filter(
+  const newThisMonth = allSubsFromActive.filter(
     (s) => s.createdAt && new Date(s.createdAt) >= monthStart,
   ).length;
-  const churnedThisMonth = canceledSubs.filter(
+  const churnedThisMonth = cancelledSubs.filter(
     (s) => s.cancelledAt && new Date(s.cancelledAt) >= monthStart,
   ).length;
   const arpu = activeSubs.length > 0 ? mrr / activeSubs.length : null;
@@ -1404,10 +1413,10 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
     flag,
     platform: "loop",
     live: true,
-    calcVersion: 3,
+    calcVersion: 4,
     mrr: Math.round(mrr),
     activeSubs: activeSubs.length,
-    totalFetched: allSubs.length,
+    totalFetched: allSubsFromActive.length + cancelledSubs.length,
     newThisMonth,
     churnedThisMonth,
     arpu: arpu != null ? +arpu.toFixed(2) : null,
