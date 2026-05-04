@@ -2484,18 +2484,32 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
   const marketCount = liveTWAll.length;
   const twSub = marketCount > 0 ? `Triple Whale · ${marketCount} market${marketCount !== 1 ? "s" : ""}` : "TW not connected";
   const activeMonths = useMemo(() => {
-    if (!shopifyMonthly?.length) return [];
-    return shopifyMonthly.map(({ month, revenue, refunds = 0 }) => {
-      const net = revenue - refunds;
-      return {
-        month,
-        revenue: Math.round(revenue),
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0-based
+    const yy = String(curYear).slice(-2);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    // Build a lookup from incoming shopifyMonthly entries.
+    const byKey = new Map<string, { revenue: number; refunds: number }>();
+    for (const m of shopifyMonthly ?? []) {
+      if (!m?.month) continue;
+      byKey.set(String(m.month), { revenue: m.revenue ?? 0, refunds: m.refunds ?? 0 });
+    }
+    const out = [];
+    for (let i = 0; i <= curMonth; i++) {
+      const label = `${monthNames[i]} '${yy}`;
+      const entry = byKey.get(label) ?? { revenue: 0, refunds: 0 };
+      const net = entry.revenue - entry.refunds;
+      out.push({
+        month: label,
+        revenue: Math.round(entry.revenue),
         grossProfit: Math.round(net * 0.54),
         adSpend: Math.round(net * 0.26),
         contributionMargin: Math.round(net * 0.26),
         netProfit: Math.round(net * 0.12),
-      };
-    });
+      });
+    }
+    return out;
   }, [shopifyMonthly]);
   if (activeMonths.length === 0) {
     return (
