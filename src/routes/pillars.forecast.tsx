@@ -849,9 +849,22 @@ function GrowthPlan2026({ data }: { data: any }) {
           <div className="grid h-8 w-8 place-items-center rounded-md bg-neutral-100">
             <Sparkles className="h-4 w-4 text-neutral-600" />
           </div>
-          <div className="text-[13px]">
-            <div className="font-semibold text-neutral-900">
-              Growth Plan {year} · all Shopify stores combined · live API model
+          <div className="text-[13px] flex-1">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="font-semibold text-neutral-900">
+                Growth Plan {year} · all Shopify stores combined · live API model
+              </div>
+              <div className="inline-flex rounded-md border border-neutral-200 bg-white p-0.5 text-[11px] font-medium">
+                {yearOptions.map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setSelectedYear(y)}
+                    className={`rounded px-2.5 py-1 transition ${selectedYear === y ? "bg-neutral-900 text-white" : "text-neutral-600 hover:text-neutral-900"}`}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="text-neutral-500 mt-0.5">
               Actuals come from Shopify daily/monthly all-store data; marketing and profit ratios
