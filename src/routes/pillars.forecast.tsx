@@ -867,6 +867,7 @@ function GrowthPlan2026({ data }: { data: any }) {
     const actualYtd = MARKETS.reduce((s, mk) => s + plan[mk.code].actualYtd, 0);
     const dataStart = availableDailyDates.length ? availableDailyDates.sort()[0] : null;
     const dataEnd = availableDailyDates.length ? availableDailyDates.sort().at(-1) : null;
+    const coverage = useOverride ? yearOverride?.coverage : null;
 
     return {
       year,
@@ -883,6 +884,8 @@ function GrowthPlan2026({ data }: { data: any }) {
       actualYtd,
       dataStart,
       dataEnd,
+      missingMonths: coverage?.missingMonths ?? [],
+      returnedMonths: coverage?.returnedMonths ?? [],
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
       hasAllStoreDaily: useOverride ? true : data?.shopifyDaily?.calcVersion === 2,
     };
