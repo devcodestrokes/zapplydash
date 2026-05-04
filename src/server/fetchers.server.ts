@@ -79,13 +79,14 @@ async function getShopifyToken(store: string): Promise<string | null> {
     const supabase = serviceClient();
     const { data } = await supabase
       .from("integrations")
-      .select("access_token, expires_at")
+      .select("access_token, expires_at, metadata")
       .eq("provider", provider)
       .single();
 
     if (data?.access_token) {
       const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : Infinity;
-      if (expiresAt > Date.now() + 10 * 60 * 1000) {
+      const scopes = String((data.metadata as any)?.scopes ?? "");
+      if (expiresAt > Date.now() + 10 * 60 * 1000 && scopes.includes("read_all_orders")) {
         return data.access_token;
       }
     }
@@ -125,7 +126,7 @@ async function getShopifyToken(store: string): Promise<string | null> {
           access_token,
           expires_at: expiresAt,
           updated_at: new Date().toISOString(),
-          metadata: { shop_domain: store, source: "client_credentials" },
+          metadata: { shop_domain: store, source: "client_credentials", scopes: "read_orders,read_all_orders" },
         },
         { onConflict: "provider" },
       );
