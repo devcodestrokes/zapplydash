@@ -79,13 +79,14 @@ async function getShopifyToken(store: string): Promise<string | null> {
     const supabase = serviceClient();
     const { data } = await supabase
       .from("integrations")
-      .select("access_token, expires_at")
+      .select("access_token, expires_at, metadata")
       .eq("provider", provider)
       .single();
 
     if (data?.access_token) {
       const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : Infinity;
-      if (expiresAt > Date.now() + 10 * 60 * 1000) {
+      const scopes = String((data.metadata as any)?.scopes ?? "");
+      if (expiresAt > Date.now() + 10 * 60 * 1000 && scopes.includes("read_all_orders")) {
         return data.access_token;
       }
     }
@@ -125,7 +126,7 @@ async function getShopifyToken(store: string): Promise<string | null> {
           access_token,
           expires_at: expiresAt,
           updated_at: new Date().toISOString(),
-          metadata: { shop_domain: store, source: "client_credentials" },
+          metadata: { shop_domain: store, source: "client_credentials", scopes: "read_orders,read_all_orders" },
         },
         { onConflict: "provider" },
       );
@@ -565,6 +566,12 @@ export async function fetchShopifyGrowthYear(year: number) {
       }
     }
 
+    const dailyDates = Object.keys(mergedDaily).sort();
+    const returnedMonths = shopifyMonthly.map((m: any) => m.month);
+    const expectedMonths = Array.from({ length: 12 }, (_, i) =>
+      new Date(Date.UTC(year, i, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " '")
+    );
+
     return {
       year,
       shopifyMonthly,
@@ -573,6 +580,12 @@ export async function fetchShopifyGrowthYear(year: number) {
         byMarket: dailyByMarket,
         calcVersion: 2,
         fetchedAt: new Date().toISOString(),
+      },
+      coverage: {
+        dataStart: dailyDates[0] ?? null,
+        dataEnd: dailyDates.at(-1) ?? null,
+        returnedMonths,
+        missingMonths: expectedMonths.filter((m) => !returnedMonths.includes(m)),
       },
     };
   } catch (err: any) {

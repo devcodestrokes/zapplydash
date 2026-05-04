@@ -32,7 +32,7 @@ export const Route = createFileRoute("/api/shopify/install")({
           .join("");
 
         const scopes =
-          "read_orders,read_customers,read_products,read_inventory,read_analytics";
+          "read_orders,read_all_orders,read_customers,read_products,read_inventory,read_analytics";
 
         const params = new URLSearchParams({
           client_id: clientId,

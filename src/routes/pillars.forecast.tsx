@@ -636,6 +636,7 @@ function GrowthPlan2026({ data }: { data: any }) {
     year: number;
     shopifyMonthly: any[];
     shopifyDaily: any;
+    coverage?: { dataStart: string | null; dataEnd: string | null; returnedMonths: string[]; missingMonths: string[] };
   } | null>(null);
   const [loadingYear, setLoadingYear] = useState<number | null>(null);
   const [yearError, setYearError] = useState<string | null>(null);
@@ -687,6 +688,7 @@ function GrowthPlan2026({ data }: { data: any }) {
             year: res.year,
             shopifyMonthly: res.shopifyMonthly ?? [],
             shopifyDaily: res.shopifyDaily ?? null,
+            coverage: res.coverage ?? undefined,
           });
         } else {
           setYearError(res?.error ?? "Failed to load year");
@@ -865,6 +867,7 @@ function GrowthPlan2026({ data }: { data: any }) {
     const actualYtd = MARKETS.reduce((s, mk) => s + plan[mk.code].actualYtd, 0);
     const dataStart = availableDailyDates.length ? availableDailyDates.sort()[0] : null;
     const dataEnd = availableDailyDates.length ? availableDailyDates.sort().at(-1) : null;
+    const coverage = useOverride ? yearOverride?.coverage : null;
 
     return {
       year,
@@ -881,6 +884,8 @@ function GrowthPlan2026({ data }: { data: any }) {
       actualYtd,
       dataStart,
       dataEnd,
+      missingMonths: coverage?.missingMonths ?? [],
+      returnedMonths: coverage?.returnedMonths ?? [],
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
       hasAllStoreDaily: useOverride ? true : data?.shopifyDaily?.calcVersion === 2,
     };
@@ -960,6 +965,12 @@ function GrowthPlan2026({ data }: { data: any }) {
                 All-store cache refresh is running in the background. Until it finishes, older
                 daily/monthly rows may show partial historical coverage
                 {model.dataStart ? ` (${model.dataStart}–${model.dataEnd})` : ""}.
+              </div>
+            )}
+            {model.missingMonths.length > 0 && (
+              <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                Shopify returned data only for {model.returnedMonths.join(", ") || "no months"}.
+                Missing from the API response: {model.missingMonths.join(", ")}.
               </div>
             )}
           </div>
