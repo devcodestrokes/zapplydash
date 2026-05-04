@@ -220,7 +220,7 @@ export function refreshStaleInBackground(cache: CacheMap): void {
         payload &&
         !payload.__empty &&
         !payload.__error &&
-        payload.calcVersion !== 4);
+        payload.calcVersion !== 6);
     if (!entry || age > job.maxAgeMin || needsFreshCalc) {
       void runJob(job);
     }
