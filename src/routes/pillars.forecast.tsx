@@ -636,6 +636,7 @@ function GrowthPlan2026({ data }: { data: any }) {
     year: number;
     shopifyMonthly: any[];
     shopifyDaily: any;
+    coverage?: { dataStart: string | null; dataEnd: string | null; returnedMonths: string[]; missingMonths: string[] };
   } | null>(null);
   const [loadingYear, setLoadingYear] = useState<number | null>(null);
   const [yearError, setYearError] = useState<string | null>(null);
@@ -687,6 +688,7 @@ function GrowthPlan2026({ data }: { data: any }) {
             year: res.year,
             shopifyMonthly: res.shopifyMonthly ?? [],
             shopifyDaily: res.shopifyDaily ?? null,
+            coverage: res.coverage ?? undefined,
           });
         } else {
           setYearError(res?.error ?? "Failed to load year");
