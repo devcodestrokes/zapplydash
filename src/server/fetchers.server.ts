@@ -565,6 +565,12 @@ export async function fetchShopifyGrowthYear(year: number) {
       }
     }
 
+    const dailyDates = Object.keys(mergedDaily).sort();
+    const returnedMonths = shopifyMonthly.map((m: any) => m.month);
+    const expectedMonths = Array.from({ length: 12 }, (_, i) =>
+      new Date(Date.UTC(year, i, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " '")
+    );
+
     return {
       year,
       shopifyMonthly,
@@ -573,6 +579,12 @@ export async function fetchShopifyGrowthYear(year: number) {
         byMarket: dailyByMarket,
         calcVersion: 2,
         fetchedAt: new Date().toISOString(),
+      },
+      coverage: {
+        dataStart: dailyDates[0] ?? null,
+        dataEnd: dailyDates.at(-1) ?? null,
+        returnedMonths,
+        missingMonths: expectedMonths.filter((m) => !returnedMonths.includes(m)),
       },
     };
   } catch (err: any) {
