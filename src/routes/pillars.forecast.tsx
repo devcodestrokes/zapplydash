@@ -810,7 +810,7 @@ function GrowthPlan2026({ data }: { data: any }) {
       hasAllStoreMonthly: shopifyMonthly.some((m: any) => m?.calcVersion === 2 && m?.byMarket),
       hasAllStoreDaily: data?.shopifyDaily?.calcVersion === 2,
     };
-  }, [data]);
+  }, [data, selectedYear]);
 
   const {
     year,
