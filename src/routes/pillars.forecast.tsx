@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getDashboardData } from "@/server/dashboard.functions";
+import { getDashboardData, getGrowthYearData } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/pillars/forecast")({
   head: () => ({ meta: [{ title: "Forecast — Zapply" }] }),
