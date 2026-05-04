@@ -2783,7 +2783,7 @@ export async function fetchJortt() {
 }
 
 // ─── Shopify Repeat Purchase Funnel ──────────────────────────────────────────
-// Pulls the last ~365 days of orders for every Shopify store, builds per-customer
+// Pulls the last 5 years of orders for every Shopify store, builds per-customer
 // order timelines, then computes cohort-based repeat rates (1st → 2nd → 3rd → 4th
 // + 5th/6th/7th orders) and monthly cohort tables.
 //
@@ -2794,10 +2794,11 @@ export async function fetchShopifyRepeatFunnel() {
   const clientId = process.env.SHOPIFY_APP_CLIENT_ID;
   if (!clientId) return null;
 
-  // Look back 540 days so we can reliably identify a customer's TRUE first
-  // order. With only 365d we mis-label long-time customers as "first-time"
-  // when they re-order, and the older cohort window comes up empty.
-  const lookbackDays = 540;
+  // This is intentionally independent from the Overview page date filter.
+  // Five years gives enough customer history to avoid marking old repeat buyers
+  // as new first-time buyers in recent cohorts.
+  const lookbackYears = 5;
+  const lookbackDays = 365 * lookbackYears + 2;
   const sinceDate = daysAgoIso(lookbackDays);
   const since = `${sinceDate}T00:00:00Z`;
 
@@ -2805,6 +2806,7 @@ export async function fetchShopifyRepeatFunnel() {
   // order count. Lifetime count prevents a truncated lookback window from
   // pretending older customers are new first-time buyers.
   const customerOrders = new Map<string, { dates: string[]; lifetimeOrders: number }>();
+  const storeCoverage: Array<{ code: string; pages: number; truncated: boolean; firstOrder: string | null; lastOrder: string | null }> = [];
 
   for (const { code, storeKey } of SHOPIFY_STORES) {
     const store = process.env[storeKey];
@@ -2815,7 +2817,9 @@ export async function fetchShopifyRepeatFunnel() {
     let cursor: string | null = null;
     let hasNextPage = true;
     let page = 0;
-    const maxPages = 600; // up to ~150k orders per store over 540d (sorted oldest-first so partial fetches still cover early cohorts)
+    const maxPages = 1200; // up to ~300k orders per store over 5y (oldest-first so partial fetches still cover early cohorts)
+    let firstOrder: string | null = null;
+    let lastOrder: string | null = null;
 
     try {
       while (hasNextPage && page < maxPages) {
@@ -2839,6 +2843,8 @@ export async function fetchShopifyRepeatFunnel() {
         for (const { node: o } of edges) {
           const cid = o.customer?.id;
           if (!cid) continue;
+          firstOrder = firstOrder ?? o.createdAt;
+          lastOrder = o.createdAt;
           const lifetimeOrders = Number(o.customer?.numberOfOrders ?? 0) || 0;
           const entry = customerOrders.get(cid) ?? { dates: [], lifetimeOrders: 0 };
           entry.dates.push(o.createdAt);
@@ -2849,6 +2855,7 @@ export async function fetchShopifyRepeatFunnel() {
     } catch (err: any) {
       console.error(`Shopify repeat ${code}:`, err?.message);
     }
+    storeCoverage.push({ code, pages: page, truncated: hasNextPage, firstOrder, lastOrder });
   }
 
   if (customerOrders.size === 0) return null;
@@ -2929,7 +2936,7 @@ export async function fetchShopifyRepeatFunnel() {
     maturing: i > 0 && !((i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured)),
   }));
 
-  // ── Monthly cohort table — last 4 calendar months ───────────────────
+  // ── Monthly cohort table — last 6 calendar months ───────────────────
   const monthlyCohorts: Array<{
     month: string;
     size: number;
@@ -2991,7 +2998,12 @@ export async function fetchShopifyRepeatFunnel() {
   }
 
   return {
-    calcVersion: 5,
+    calcVersion: 6,
+    sourceWindowDays: lookbackDays,
+    sourceWindowYears: lookbackYears,
+    sourceStart: sinceDate,
+    sourceEnd: today(),
+    storeCoverage,
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
