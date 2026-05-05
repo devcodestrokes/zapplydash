@@ -584,7 +584,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
               )}
             </div>
             <div className="mt-1 text-[12px] text-neutral-400">
-              vs. yesterday {fmtEur0(metrics.yesterday)} · 30-day avg {fmtEur0(avg30)}
+              vs. same day last week {fmtEur0(metrics.sameDayLastWeek ?? metrics.yesterday)} · 30-day avg {fmtEur0(avg30)}
             </div>
           </div>
         </div>
@@ -649,6 +649,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
 export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
+  const [showRevProfitChart, setShowRevProfitChart] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
 
   // When a custom-range sync has returned data, use it in place of the live props
@@ -798,10 +799,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     const now = new Date();
     const todayKey = now.toISOString().split("T")[0];
     const today = dayProfit(todayKey);
-    const yesterday = (() => {
-      const y = new Date(now); y.setUTCDate(y.getUTCDate() - 1);
+    // Same day last week (like-for-like, removes day-of-week effects)
+    const sameDayLastWeek = (() => {
+      const y = new Date(now); y.setUTCDate(y.getUTCDate() - 7);
       return dayProfit(y.toISOString().split("T")[0]);
     })();
+    const yesterday = sameDayLastWeek; // alias kept for backwards compat in shape
 
     // This week (Monday → today, UTC)
     const weekStart = new Date(now);
@@ -826,12 +829,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       series.push({ date: k, profit: p ?? 0 });
     }
     const avg30 = series.length ? series.reduce((s, x) => s + x.profit, 0) / series.length : null;
-    const todayVsYesterdayPct = (today != null && yesterday != null && yesterday !== 0)
-      ? ((today - yesterday) / Math.abs(yesterday)) * 100
+    const todayVsYesterdayPct = (today != null && sameDayLastWeek != null && sameDayLastWeek !== 0)
+      ? ((today - sameDayLastWeek) / Math.abs(sameDayLastWeek)) * 100
       : null;
 
     const hasAnyDaily = Object.keys(rev).length > 0 || Object.keys(tw).length > 0;
-    return { today, yesterday, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
+    return { today, yesterday, sameDayLastWeek, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
   }, [shopifyDaily, tripleWhaleDaily]);
 
   const dashboardDiagnostics = useMemo(() => {
@@ -945,8 +948,21 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               )}
             </div>
             <div className="mt-1 text-[12px] text-neutral-400">{rangeRevenue !== null ? revenueSourceLabel : "Shopify not connected"}</div>
-            {effectiveMarkets && effectiveMarkets.filter(m => m.live && m.currency !== "EUR").length > 0 && (
-              <div className="mt-1 text-[11px] text-neutral-400">Hover total for per-store breakdown · all values converted to EUR</div>
+            {revenueBreakdownMarkets.length > 0 && rangeRevenue !== null && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {revenueBreakdownMarkets.map(m => {
+                  const eur = m.revenue ?? 0;
+                  const pct = rangeRevenue > 0 ? (eur / rangeRevenue) * 100 : 0;
+                  return (
+                    <div key={m.code} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px]">
+                      <span>{m.flag}</span>
+                      <span className="font-medium text-neutral-600">{m.code}</span>
+                      <span className="font-semibold tabular-nums text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                      <span className="text-neutral-400 tabular-nums">{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
           <div className="hidden items-center gap-6 md:flex">
@@ -1536,7 +1552,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       </Card>
     )}
 
-    {/* Revenue vs Profit (monthly, real Shopify + TW/Jortt) */}
+    {/* Revenue vs Profit (per-store table + monthly chart toggle) */}
     {(() => {
       const months = (shopifyMonthly ?? [])
         .filter(m => monthInRange(m.month, dateRange.from, dateRange.to))
@@ -1544,40 +1560,101 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       if (months.length === 0) return null;
       const jorttExp = jorttData?.expensesByMonth ?? {};
       const totalRev = months.reduce((s,m)=>s+((m.revenue ?? 0) - (m.refunds ?? 0)), 0);
+      const totalExp = months.reduce((s,m)=>s+(jorttExp[m.month] ?? 0), 0);
+      const totalProfit = totalExp ? totalRev - totalExp : null;
       const chartData = months.map(m => {
         const rev = (m.revenue ?? 0) - (m.refunds ?? 0);
         const exp = jorttExp[m.month] ?? 0;
         const profit = exp ? rev - exp : null;
         return { month: m.month.slice(2), revenue: Math.round(rev), profit: profit != null ? Math.round(profit) : null };
       });
+
+      // Per-store table — uses effectiveMarkets (live store totals for selected period)
+      const liveStores = (effectiveMarkets ?? []).filter((m: any) => m.live);
+      // Allocate Jortt expenses across stores by their share of revenue (best-effort)
+      const totalLiveRev = liveStores.reduce((s: number, m: any) => s + (m.revenue ?? 0), 0);
+      const storeRows = liveStores.map((m: any) => {
+        const rev = m.revenue ?? 0;
+        const share = totalLiveRev > 0 ? rev / totalLiveRev : 0;
+        const allocExp = totalExp ? totalExp * share : 0;
+        const profit = totalExp ? rev - allocExp : null;
+        const margin = profit != null && rev > 0 ? (profit / rev) * 100 : null;
+        return { code: m.code, flag: m.flag, name: m.name ?? m.code, rev, profit, margin };
+      });
+
       return (
         <Card className="mt-3 p-5">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-[13px] font-semibold">Revenue vs. Profit</div>
-              <div className="mt-1 text-[22px] font-semibold tabular-nums">€{Math.round(totalRev).toLocaleString()}</div>
+              <div className="text-[13px] font-semibold">Revenue vs. Profit per store</div>
+              <div className="mt-1 text-[11px] text-neutral-400">
+                Total revenue €{Math.round(totalRev).toLocaleString()}
+                {totalProfit != null && <> · Profit €{Math.round(totalProfit).toLocaleString()}</>}
+              </div>
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+            <button
+              onClick={() => setShowRevProfitChart((v: boolean) => !v)}
+              className="rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
+            >
+              {showRevProfitChart ? "Hide chart" : "Show chart"}
+            </button>
+          </div>
+
+          {/* Hard-numbers table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-neutral-100 text-left text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                  <th className="pb-2 pr-4">Store</th>
+                  <th className="pb-2 pr-4 text-right">Revenue (EUR)</th>
+                  <th className="pb-2 pr-4 text-right">Profit (est.)</th>
+                  <th className="pb-2 text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeRows.map(r => (
+                  <tr key={r.code} className="border-b border-neutral-50 last:border-0">
+                    <td className="py-2 pr-4"><span className="mr-1.5">{r.flag}</span><span className="font-medium">{r.name}</span></td>
+                    <td className="py-2 pr-4 text-right tabular-nums">€{Math.round(r.rev).toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums">{r.profit != null ? `€${Math.round(r.profit).toLocaleString()}` : "—"}</td>
+                    <td className="py-2 text-right tabular-nums">{r.margin != null ? `${r.margin.toFixed(1)}%` : "—"}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold">
+                  <td className="pt-3 pr-4">Total</td>
+                  <td className="pt-3 pr-4 text-right tabular-nums">€{Math.round(totalRev).toLocaleString()}</td>
+                  <td className="pt-3 pr-4 text-right tabular-nums">{totalProfit != null ? `€${Math.round(totalProfit).toLocaleString()}` : "—"}</td>
+                  <td className="pt-3 text-right tabular-nums">{totalProfit != null && totalRev > 0 ? `${((totalProfit/totalRev)*100).toFixed(1)}%` : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {totalExp > 0 && (
+            <div className="mt-2 text-[10px] text-neutral-400">Per-store profit allocates Jortt OpEx by revenue share.</div>
+          )}
+
+          {showRevProfitChart && (
+            <div className="h-56 mt-4 border-t border-neutral-100 pt-4">
+              <div className="flex items-center justify-end gap-3 text-[11px] text-neutral-500 mb-2">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+              </div>
+              {chartsReady && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v: any)=>v != null ? `€${v.toLocaleString()}` : "—"} />
+                    <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
-          </div>
-          <div className="h-56 mt-3">
-            {chartsReady && (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid stroke="#f3f4f6" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v)=>v != null ? `€${v.toLocaleString()}` : "—"} />
-                  <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
-                  <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          )}
           {!jorttData && (
-            <div className="mt-2 text-[11px] text-neutral-400">Profit line requires Jortt expenses data — connect Jortt to display.</div>
+            <div className="mt-2 text-[11px] text-neutral-400">Profit requires Jortt expenses data — connect Jortt to display.</div>
           )}
         </Card>
       );
@@ -1998,9 +2075,21 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
+
+  // Trend vs previous period — derive from shopifyMonthly cache.
+  // Compute previous-month CM% per market for delta. Best-effort.
+  const prevMonthByMarket: Record<string, { revenue: number; refunds: number }> = (() => {
+    const out: Record<string, { revenue: number; refunds: number }> = {};
+    if (!Array.isArray(shopifyMonthly) || shopifyMonthly.length < 2) return out;
+    const sorted = [...shopifyMonthly].sort((a, b) => (a.month ?? "").localeCompare(b.month ?? ""));
+    const prev = sorted[sorted.length - 2];
+    const bm = prev?.byMarket ?? {};
+    for (const code of Object.keys(bm)) out[code] = { revenue: bm[code].revenue ?? 0, refunds: bm[code].refunds ?? 0 };
+    return out;
+  })();
 
   const activeMarkets = (liveMarkets ?? [])
     .filter(m => m.live && m.code !== "DE")
@@ -2008,10 +2097,29 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
       const adSpend = tw?.adSpend ?? null;
-      const grossMarginPct = tw?.grossProfit != null && revenue > 0 ? +(tw.grossProfit / revenue * 100).toFixed(1) : null;
-      const contributionMarginPct = tw?.grossProfit != null && adSpend != null && revenue > 0
-        ? +((tw.grossProfit - adSpend) / revenue * 100).toFixed(1) : null;
-      return { ...m, adSpend, grossMargin: grossMarginPct, contributionMargin: contributionMarginPct, roas: tw?.roas ?? null, cac: tw?.ncpa ?? null };
+      const grossProfit = tw?.grossProfit ?? null;
+      const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
+      const contributionMarginAbs = grossProfit != null && adSpend != null ? +(grossProfit - adSpend).toFixed(0) : null;
+      const contributionMarginPct = contributionMarginAbs != null && revenue > 0
+        ? +(contributionMarginAbs / revenue * 100).toFixed(1) : null;
+      // Refund rate per market
+      const refunds = m.refunds ?? 0;
+      const grossRevenue = revenue + refunds; // revenue is net-of-refunds
+      const refundRate = grossRevenue > 0 ? +(refunds / grossRevenue * 100).toFixed(1) : null;
+      // Trend: prev-month rev delta
+      const prev = prevMonthByMarket[m.code];
+      const revDeltaPct = prev && prev.revenue > 0 ? +((revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : null;
+      return {
+        ...m,
+        adSpend,
+        grossMargin: grossMarginPct,
+        contributionMargin: contributionMarginPct,
+        contributionMarginAbs,
+        refundRate,
+        revDeltaPct,
+        roas: tw?.roas ?? null,
+        cac: tw?.ncpa ?? null,
+      };
     });
   if (activeMarkets.length === 0) {
     return (
@@ -2064,13 +2172,28 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
             <Card key={m.code} className="p-5">
               <div className="flex items-start justify-between">
                 <div className="text-[15px] font-semibold tracking-tight text-neutral-900">{displayCode}</div>
-                <span className={`text-[11px] font-medium tabular-nums ${cmClass}`}>
-                  {cm != null ? `${cm}%` : "—"}
-                </span>
+                <div className="flex items-center gap-2 text-[11px] tabular-nums">
+                  <span className={cmClass + " font-medium"}>
+                    {cm != null ? `${cm}%` : "—"}
+                  </span>
+                  {m.revDeltaPct != null && (
+                    <span className={(m.revDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600") + " text-[10px]"}>
+                      {m.revDeltaPct >= 0 ? "+" : ""}{m.revDeltaPct}% vs last mo
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-2 text-[12px] text-neutral-500">{m.name ?? m.code}</div>
               <div className="mt-2 text-[20px] font-semibold tabular-nums tracking-tight">
                 €{(m.revenue / 1000).toFixed(1)}k
+              </div>
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-neutral-500 tabular-nums">
+                {m.contributionMarginAbs != null && (
+                  <span>CM <span className="font-medium text-neutral-800">€{m.contributionMarginAbs.toLocaleString()}</span></span>
+                )}
+                {m.refundRate != null && (
+                  <span>Refunds <span className={m.refundRate > 5 ? "text-rose-600 font-medium" : "text-neutral-700"}>{m.refundRate}%</span></span>
+                )}
               </div>
             </Card>
           );
@@ -2100,6 +2223,9 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                 <th className="px-3 py-2.5 font-medium text-right">CAC</th>
                 <th className="px-3 py-2.5 font-medium text-right">Gross M%</th>
                 <th className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-neutral-900" onClick={() => setSortBy("contributionMargin")}>Contrib M%</th>
+                <th className="px-3 py-2.5 font-medium text-right">Contrib (€)</th>
+                <th className="px-3 py-2.5 font-medium text-right">Refund %</th>
+                <th className="px-3 py-2.5 font-medium text-right">Δ vs prev mo</th>
                 <th className="px-5 py-2.5 font-medium">Share</th>
               </tr>
             </thead>
@@ -2135,6 +2261,25 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.contributionMarginAbs != null ? (
+                        <span className={m.contributionMarginAbs >= 0 ? "text-neutral-900 font-medium" : "text-rose-600 font-medium"}>
+                          €{m.contributionMarginAbs.toLocaleString()}
+                        </span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.refundRate != null ? (
+                        <span className={m.refundRate > 5 ? "text-rose-600 font-medium" : "text-neutral-700"}>{m.refundRate}%</span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.revDeltaPct != null ? (
+                        <span className={m.revDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                          {m.revDeltaPct >= 0 ? "+" : ""}{m.revDeltaPct}%
+                        </span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-1 w-20 overflow-hidden rounded-full bg-neutral-100">
@@ -2147,6 +2292,9 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
               })}
             </tbody>
           </table>
+        </div>
+        <div className="border-t border-neutral-100 px-5 py-3 text-[11px] text-neutral-400">
+          Shipping cost &amp; payment-fee per market not yet wired — these vary per region and need to be added per store. Refund rate uses Shopify gross-vs-net revenue.
         </div>
       </Card>
 
@@ -2564,6 +2712,97 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
           })}
         </div>
       </Card>
+
+      {/* Central P&L table — heart of the page (Mike's request) */}
+      {(() => {
+        const monthsData = (shopifyMonthly ?? []).slice().sort((a: any, b: any) => (a.month ?? "").localeCompare(b.month ?? ""));
+        if (monthsData.length === 0) return null;
+        const recent = monthsData.slice(-6);
+        const opexMap = new Map<string, any>();
+        for (const o of liveOpexByMonth ?? []) opexMap.set(o.month, o);
+
+        // Per-month rows
+        const cols = recent.map((m: any) => {
+          const o = opexMap.get(m.month) ?? {};
+          const revenue = (m.revenue ?? 0) - (m.refunds ?? 0);
+          const tw = liveTWAll.find((t: any) => t.market === "NL"); // best-effort blended
+          // COGS approximation: TW gross-profit ratio (NL) applied to revenue
+          const gpRatio = tw && typeof tw.revenue === "number" && tw.revenue > 0 && typeof tw.grossProfit === "number"
+            ? tw.grossProfit / tw.revenue : 0.54;
+          const cogs = Math.round(revenue * (1 - gpRatio));
+          const grossProfit = revenue - cogs;
+          const adSpend = Math.round(revenue * 0.26);
+          const shipping = 0;
+          const fees = 0;
+          const cm = grossProfit - adSpend - shipping - fees;
+          const team = o.team ?? 0;
+          const software = o.software ?? 0;
+          const agencies = o.agencies ?? 0;
+          const content = o.content ?? 0;
+          const otherOpex = (o.rent ?? 0) + (o.other ?? 0);
+          const ebitda = cm - team - software - agencies - content - otherOpex;
+          const netProfit = ebitda; // interest/tax not wired
+          return { month: m.month, revenue, cogs, grossProfit, adSpend, shipping, fees, cm, team, software, agencies, content, otherOpex, ebitda, netProfit };
+        });
+        const latest = cols[cols.length - 1];
+        const fmt = (v: number) => `€${Math.round(v).toLocaleString()}`;
+        const pct = (v: number) => latest.revenue > 0 ? `${(v / latest.revenue * 100).toFixed(1)}%` : "—";
+
+        const lines = [
+          { k: "Revenue", get: (c: any) => c.revenue, bold: true },
+          { k: "COGS", get: (c: any) => -c.cogs },
+          { k: "Gross Profit", get: (c: any) => c.grossProfit, bold: true },
+          { k: "Marketing / Ad spend", get: (c: any) => -c.adSpend },
+          { k: "Shipping", get: (c: any) => -c.shipping, muted: true },
+          { k: "Payment fees", get: (c: any) => -c.fees, muted: true },
+          { k: "= Contribution Margin", get: (c: any) => c.cm, bold: true },
+          { k: "Team", get: (c: any) => -c.team },
+          { k: "Software", get: (c: any) => -c.software },
+          { k: "Agencies", get: (c: any) => -c.agencies },
+          { k: "Content collaborations", get: (c: any) => -c.content },
+          { k: "Other OpEx", get: (c: any) => -c.otherOpex },
+          { k: "EBITDA", get: (c: any) => c.ebitda, bold: true },
+          { k: "Interest / Tax", get: () => 0, muted: true },
+          { k: "Net Profit", get: (c: any) => c.netProfit, bold: true },
+        ];
+
+        return (
+          <Card className="mt-3 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold">P&amp;L · trailing {cols.length} months</div>
+                <div className="mt-0.5 text-[11px] text-neutral-400">Latest month % of revenue shown in last column</div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="border-b border-neutral-100 text-left text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                    <th className="py-2 pr-4">Line item</th>
+                    {cols.map(c => <th key={c.month} className="py-2 px-2 text-right">{c.month}</th>)}
+                    <th className="py-2 pl-4 text-right">% of revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map(l => (
+                    <tr key={l.k} className={`border-b border-neutral-50 ${l.bold ? "font-semibold bg-neutral-50/40" : ""} ${l.muted ? "text-neutral-400" : ""}`}>
+                      <td className="py-1.5 pr-4">{l.k}</td>
+                      {cols.map(c => {
+                        const v = l.get(c);
+                        return <td key={c.month} className="py-1.5 px-2 text-right tabular-nums">{v === 0 ? "—" : fmt(v)}</td>;
+                      })}
+                      <td className="py-1.5 pl-4 text-right tabular-nums">{pct(Math.abs(l.get(latest)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 text-[10px] text-neutral-400">
+              COGS estimated via Triple Whale gross-margin ratio. Shipping &amp; payment fees not yet wired (per-market). Interest/Tax pending Xero integration.
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* Trend chart */}
       <Card className="mt-3 p-5">
