@@ -473,6 +473,7 @@ function ForecastPage() {
                           fontSize: 10,
                         }}
                       />
+                    )}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
