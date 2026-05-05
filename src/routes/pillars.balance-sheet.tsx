@@ -562,6 +562,76 @@ function BalanceSheetPage() {
           </div>
         )}
 
+        {/* Compact 4-block balance sheet */}
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            {
+              key: "assets",
+              label: "Total Assets",
+              value: totalAssets,
+              sub: currentAssets != null ? `Current ${fmt(currentAssets)}` : "Cash + inventory + AR",
+              tone: "text-neutral-900",
+              ring: "hover:border-neutral-900",
+              target: "section-assets",
+            },
+            {
+              key: "liab",
+              label: "Total Liabilities",
+              value: totalCurrentLiabilities,
+              sub: outstandingTotal != null ? `Outstanding ${fmt(outstandingTotal)}` : "AP + VAT + other",
+              tone: "text-rose-600",
+              ring: "hover:border-rose-300",
+              target: "section-liab",
+            },
+            {
+              key: "equity",
+              label: "Total Equity",
+              value: totalEquity,
+              sub: ytdResult != null ? `YTD result ${fmtSigned(ytdResult)}` : "Capital + retained",
+              tone: "text-neutral-900",
+              ring: "hover:border-neutral-900",
+              target: "section-liab",
+            },
+            {
+              key: "cash",
+              label: "Net Cash Position",
+              value:
+                cashTotal != null && outstandingTotal != null
+                  ? cashTotal - outstandingTotal
+                  : cashTotal,
+              sub:
+                cashTotal != null
+                  ? `Cash ${fmt(cashTotal)}${outstandingTotal != null ? ` − Debt ${fmt(outstandingTotal)}` : ""}`
+                  : "Bank + platforms − debt",
+              tone:
+                cashTotal != null &&
+                outstandingTotal != null &&
+                cashTotal - outstandingTotal < 0
+                  ? "text-rose-600"
+                  : "text-emerald-600",
+              ring: "hover:border-emerald-400",
+              target: "section-cash",
+            },
+          ].map((b) => (
+            <button
+              key={b.key}
+              onClick={() => {
+                const el = document.getElementById(b.target);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className={`rounded-xl border border-neutral-200 bg-white p-5 text-left transition ${b.ring}`}
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                {b.label}
+              </div>
+              <div className={`mt-2 text-[24px] font-semibold tabular-nums leading-none ${b.tone}`}>
+                {fmt(b.value)}
+              </div>
+              <div className="mt-2 text-[11px] text-neutral-400">{b.sub}</div>
+            </button>
+          ))}
+        </section>
+
         {/* Ratios */}
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Card className="p-5">
@@ -591,7 +661,7 @@ function BalanceSheetPage() {
         </section>
 
         {/* Cash & platform positions */}
-        <Card className="p-6">
+        <div id="section-cash"><Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
               <div className="text-[15px] font-semibold">Cash &amp; platform positions</div>
@@ -662,7 +732,7 @@ function BalanceSheetPage() {
               )}
             </div>
           </div>
-        </Card>
+        </Card></div>
 
         {/* Cash & assets · week over week */}
         <Card className="p-6">
@@ -950,7 +1020,7 @@ function BalanceSheetPage() {
         </Card>
 
         {/* Assets vs Liabilities & Equity */}
-        <Card className="p-6">
+        <div id="section-assets"><Card className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold">Assets</div>
             <div
@@ -986,9 +1056,9 @@ function BalanceSheetPage() {
             />
             <Row label="Total fixed" value={fmt(fixedAssetsNet)} bold divider neg={(fixedAssetsNet ?? 0) < 0} />
           </div>
-        </Card>
+        </Card></div>
 
-        <Card className="p-6">
+        <div id="section-liab"><Card className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold">Liabilities &amp; Equity</div>
             <div className="text-[18px] font-semibold tabular-nums">{fmt(totalLiabEquity)}</div>
@@ -1008,7 +1078,7 @@ function BalanceSheetPage() {
             <Row label="Current period result (YTD)" sub="EBITDA YTD" value={fmt(ytdResult)} />
             <Row label="Total equity" value={fmt(totalEquity)} bold divider />
           </div>
-        </Card>
+        </Card></div>
 
         <div className="text-center text-[11px] text-neutral-400">
           Synced ·{" "}
