@@ -50,6 +50,7 @@ const pillarItems: NavItem[] = [
 const operationsItems: NavItem[] = [
   { to: "/operations/reconciliation", label: "Reconciliation", icon: GitMerge },
   { to: "/operations/sync-status", label: "Sync status", icon: Activity },
+  { to: "/admin/manual-data", label: "Manual data", icon: FileText },
 ];
 
 const dataSourceMeta: { providerKeys: string[]; label: string; icon: typeof LayoutDashboard; suffix?: string }[] = [
