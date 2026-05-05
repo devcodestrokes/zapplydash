@@ -1551,7 +1551,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       </Card>
     )}
 
-    {/* Revenue vs Profit (monthly, real Shopify + TW/Jortt) */}
+    {/* Revenue vs Profit (per-store table + monthly chart toggle) */}
     {(() => {
       const months = (shopifyMonthly ?? [])
         .filter(m => monthInRange(m.month, dateRange.from, dateRange.to))
@@ -1559,40 +1559,101 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       if (months.length === 0) return null;
       const jorttExp = jorttData?.expensesByMonth ?? {};
       const totalRev = months.reduce((s,m)=>s+((m.revenue ?? 0) - (m.refunds ?? 0)), 0);
+      const totalExp = months.reduce((s,m)=>s+(jorttExp[m.month] ?? 0), 0);
+      const totalProfit = totalExp ? totalRev - totalExp : null;
       const chartData = months.map(m => {
         const rev = (m.revenue ?? 0) - (m.refunds ?? 0);
         const exp = jorttExp[m.month] ?? 0;
         const profit = exp ? rev - exp : null;
         return { month: m.month.slice(2), revenue: Math.round(rev), profit: profit != null ? Math.round(profit) : null };
       });
+
+      // Per-store table — uses effectiveMarkets (live store totals for selected period)
+      const liveStores = (effectiveMarkets ?? []).filter((m: any) => m.live);
+      // Allocate Jortt expenses across stores by their share of revenue (best-effort)
+      const totalLiveRev = liveStores.reduce((s: number, m: any) => s + (m.revenue ?? 0), 0);
+      const storeRows = liveStores.map((m: any) => {
+        const rev = m.revenue ?? 0;
+        const share = totalLiveRev > 0 ? rev / totalLiveRev : 0;
+        const allocExp = totalExp ? totalExp * share : 0;
+        const profit = totalExp ? rev - allocExp : null;
+        const margin = profit != null && rev > 0 ? (profit / rev) * 100 : null;
+        return { code: m.code, flag: m.flag, name: m.name ?? m.code, rev, profit, margin };
+      });
+
       return (
         <Card className="mt-3 p-5">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-[13px] font-semibold">Revenue vs. Profit</div>
-              <div className="mt-1 text-[22px] font-semibold tabular-nums">€{Math.round(totalRev).toLocaleString()}</div>
+              <div className="text-[13px] font-semibold">Revenue vs. Profit per store</div>
+              <div className="mt-1 text-[11px] text-neutral-400">
+                Total revenue €{Math.round(totalRev).toLocaleString()}
+                {totalProfit != null && <> · Profit €{Math.round(totalProfit).toLocaleString()}</>}
+              </div>
             </div>
-            <div className="flex items-center gap-3 text-[11px] text-neutral-500">
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+            <button
+              onClick={() => setShowRevProfitChart((v: boolean) => !v)}
+              className="rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
+            >
+              {showRevProfitChart ? "Hide chart" : "Show chart"}
+            </button>
+          </div>
+
+          {/* Hard-numbers table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-neutral-100 text-left text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                  <th className="pb-2 pr-4">Store</th>
+                  <th className="pb-2 pr-4 text-right">Revenue (EUR)</th>
+                  <th className="pb-2 pr-4 text-right">Profit (est.)</th>
+                  <th className="pb-2 text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storeRows.map(r => (
+                  <tr key={r.code} className="border-b border-neutral-50 last:border-0">
+                    <td className="py-2 pr-4"><span className="mr-1.5">{r.flag}</span><span className="font-medium">{r.name}</span></td>
+                    <td className="py-2 pr-4 text-right tabular-nums">€{Math.round(r.rev).toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums">{r.profit != null ? `€${Math.round(r.profit).toLocaleString()}` : "—"}</td>
+                    <td className="py-2 text-right tabular-nums">{r.margin != null ? `${r.margin.toFixed(1)}%` : "—"}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold">
+                  <td className="pt-3 pr-4">Total</td>
+                  <td className="pt-3 pr-4 text-right tabular-nums">€{Math.round(totalRev).toLocaleString()}</td>
+                  <td className="pt-3 pr-4 text-right tabular-nums">{totalProfit != null ? `€${Math.round(totalProfit).toLocaleString()}` : "—"}</td>
+                  <td className="pt-3 text-right tabular-nums">{totalProfit != null && totalRev > 0 ? `${((totalProfit/totalRev)*100).toFixed(1)}%` : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {totalExp > 0 && (
+            <div className="mt-2 text-[10px] text-neutral-400">Per-store profit allocates Jortt OpEx by revenue share.</div>
+          )}
+
+          {showRevProfitChart && (
+            <div className="h-56 mt-4 border-t border-neutral-100 pt-4">
+              <div className="flex items-center justify-end gap-3 text-[11px] text-neutral-500 mb-2">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-neutral-900" />Revenue</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />Profit</span>
+              </div>
+              {chartsReady && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v: any)=>v != null ? `€${v.toLocaleString()}` : "—"} />
+                    <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
-          </div>
-          <div className="h-56 mt-3">
-            {chartsReady && (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid stroke="#f3f4f6" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} tickFormatter={(v)=>`€${(v/1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} formatter={(v)=>v != null ? `€${v.toLocaleString()}` : "—"} />
-                  <Line type="monotone" dataKey="revenue" stroke="#111827" strokeWidth={2} dot={{ r: 3 }} name="Revenue" />
-                  <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Profit" connectNulls={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          )}
           {!jorttData && (
-            <div className="mt-2 text-[11px] text-neutral-400">Profit line requires Jortt expenses data — connect Jortt to display.</div>
+            <div className="mt-2 text-[11px] text-neutral-400">Profit requires Jortt expenses data — connect Jortt to display.</div>
           )}
         </Card>
       );
