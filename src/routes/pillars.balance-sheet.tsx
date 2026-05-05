@@ -1057,67 +1057,56 @@ function BalanceSheetPage() {
             )}
           </div>
         </Card>
+        )}
 
-        {/* Assets vs Liabilities & Equity */}
-        <div id="section-assets"><Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold">Assets</div>
-            <div
-              className={`text-[18px] font-semibold tabular-nums ${
-                (totalAssets ?? 0) < 0 ? "text-rose-600" : "text-neutral-900"
-              }`}
-            >
-              {fmt(totalAssets)}
+        {/* To be Received drilldown — Customer AR + Platform pending */}
+        {activeBlock === "toreceive" && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[15px] font-semibold">To be Received</div>
+              <div className="mt-1 text-[12px] text-neutral-500">
+                Customer receivables and pending payouts from Shopify Payments, PayPal and Mollie
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-neutral-400">Total Incoming</div>
+              <div className="mt-0.5 text-[20px] font-semibold tabular-nums">
+                {fmt((receivables ?? 0) + (cashPlatforms ?? 0) || receivables)}
+              </div>
             </div>
           </div>
+
           <div className="mt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Current</div>
-            <Row label="Cash — Bank accounts" sub="ING + Revolut (EUR/GBP)" value={fmt(cashBank)} />
-            <Row
-              label="Platform receivables"
-              sub="Mollie + Shopify + PayPal pending payouts"
-              value={fmt(cashPlatforms)}
-            />
-            <Row
-              label="Inventory (at cost)"
-              sub={inventoryItems.length ? `${inventoryItems.length} SKUs across NL/UK/US` : undefined}
-              value={fmt(inventoryTotal)}
-            />
-            <Row label="Prepaid expenses" sub="Rent, software, insurance" value={fmt(prepaidExpenses)} />
-            <Row label="Total current" value={fmt(currentAssets)} bold divider />
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              Customer receivables
+            </div>
+            <Row label="Accounts receivable" sub="Open customer invoices (Xero / Jortt)" value={fmt(receivables)} />
 
-            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Fixed</div>
-            <Row label="Equipment & hardware" value={fmt(fixedAssetsCost)} />
+            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              Platform payouts pending
+            </div>
+            {platformPending.length === 0 ? (
+              <div className="py-3 text-[12px] text-neutral-400">{DASH}</div>
+            ) : (
+              platformPending.map((b, i) => (
+                <Row
+                  key={`${b.name}-${i}`}
+                  label={b.name}
+                  sub="Pending payout"
+                  value={fmt(b.balance, b.currency)}
+                />
+              ))
+            )}
             <Row
-              label="Less: accumulated depreciation"
-              value={fmt(accumDepreciation)}
-              neg={accumDepreciation != null && accumDepreciation < 0}
+              label="Total to be received"
+              value={fmt((receivables ?? 0) + (cashPlatforms ?? 0) || receivables)}
+              bold
+              divider
             />
-            <Row label="Total fixed" value={fmt(fixedAssetsNet)} bold divider neg={(fixedAssetsNet ?? 0) < 0} />
           </div>
-        </Card></div>
-
-        <div id="section-liab"><Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold">Liabilities &amp; Equity</div>
-            <div className="text-[18px] font-semibold tabular-nums">{fmt(totalLiabEquity)}</div>
-          </div>
-          <div className="mt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Current Liabilities</div>
-            <Row label="Accounts payable — Supplier" sub="Product supplier" value={fmt(apSupplier)} />
-            <Row label="Accounts payable — META" sub="Ad spend billing" value={fmt(apMeta)} />
-            <Row label="VAT payable" sub="NL/EU/UK + VPB" value={fmt(vatPayable)} />
-            <Row label="Other payables" sub="Affiliates, partners" value={fmt(otherPayables)} />
-            <Row label="Accrued expenses" sub="Salaries, utilities" value={fmt(accruedExpenses)} />
-            <Row label="Total current liabilities" value={fmt(totalCurrentLiabilities)} bold divider />
-
-            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Equity</div>
-            <Row label="Share capital" value={fmt(shareCapital)} />
-            <Row label="Retained earnings" value={fmt(retainedEarnings)} />
-            <Row label="Current period result (YTD)" sub="EBITDA YTD" value={fmt(ytdResult)} />
-            <Row label="Total equity" value={fmt(totalEquity)} bold divider />
-          </div>
-        </Card></div>
+        </Card>
+        )}
 
         <div className="text-center text-[11px] text-neutral-400">
           Synced ·{" "}
