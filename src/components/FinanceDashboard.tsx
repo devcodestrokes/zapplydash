@@ -2713,6 +2713,97 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
         </div>
       </Card>
 
+      {/* Central P&L table — heart of the page (Mike's request) */}
+      {(() => {
+        const monthsData = (shopifyMonthly ?? []).slice().sort((a: any, b: any) => (a.month ?? "").localeCompare(b.month ?? ""));
+        if (monthsData.length === 0) return null;
+        const recent = monthsData.slice(-6);
+        const opexMap = new Map<string, any>();
+        for (const o of liveOpexByMonth ?? []) opexMap.set(o.month, o);
+
+        // Per-month rows
+        const cols = recent.map((m: any) => {
+          const o = opexMap.get(m.month) ?? {};
+          const revenue = (m.revenue ?? 0) - (m.refunds ?? 0);
+          const tw = liveTWAll.find((t: any) => t.market === "NL"); // best-effort blended
+          // COGS approximation: TW gross-profit ratio (NL) applied to revenue
+          const gpRatio = tw && typeof tw.revenue === "number" && tw.revenue > 0 && typeof tw.grossProfit === "number"
+            ? tw.grossProfit / tw.revenue : 0.54;
+          const cogs = Math.round(revenue * (1 - gpRatio));
+          const grossProfit = revenue - cogs;
+          const adSpend = Math.round(revenue * 0.26);
+          const shipping = 0;
+          const fees = 0;
+          const cm = grossProfit - adSpend - shipping - fees;
+          const team = o.team ?? 0;
+          const software = o.software ?? 0;
+          const agencies = o.agencies ?? 0;
+          const content = o.content ?? 0;
+          const otherOpex = (o.rent ?? 0) + (o.other ?? 0);
+          const ebitda = cm - team - software - agencies - content - otherOpex;
+          const netProfit = ebitda; // interest/tax not wired
+          return { month: m.month, revenue, cogs, grossProfit, adSpend, shipping, fees, cm, team, software, agencies, content, otherOpex, ebitda, netProfit };
+        });
+        const latest = cols[cols.length - 1];
+        const fmt = (v: number) => `€${Math.round(v).toLocaleString()}`;
+        const pct = (v: number) => latest.revenue > 0 ? `${(v / latest.revenue * 100).toFixed(1)}%` : "—";
+
+        const lines = [
+          { k: "Revenue", get: (c: any) => c.revenue, bold: true },
+          { k: "COGS", get: (c: any) => -c.cogs },
+          { k: "Gross Profit", get: (c: any) => c.grossProfit, bold: true },
+          { k: "Marketing / Ad spend", get: (c: any) => -c.adSpend },
+          { k: "Shipping", get: (c: any) => -c.shipping, muted: true },
+          { k: "Payment fees", get: (c: any) => -c.fees, muted: true },
+          { k: "= Contribution Margin", get: (c: any) => c.cm, bold: true },
+          { k: "Team", get: (c: any) => -c.team },
+          { k: "Software", get: (c: any) => -c.software },
+          { k: "Agencies", get: (c: any) => -c.agencies },
+          { k: "Content collaborations", get: (c: any) => -c.content },
+          { k: "Other OpEx", get: (c: any) => -c.otherOpex },
+          { k: "EBITDA", get: (c: any) => c.ebitda, bold: true },
+          { k: "Interest / Tax", get: () => 0, muted: true },
+          { k: "Net Profit", get: (c: any) => c.netProfit, bold: true },
+        ];
+
+        return (
+          <Card className="mt-3 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-[13px] font-semibold">P&amp;L · trailing {cols.length} months</div>
+                <div className="mt-0.5 text-[11px] text-neutral-400">Latest month % of revenue shown in last column</div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="border-b border-neutral-100 text-left text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                    <th className="py-2 pr-4">Line item</th>
+                    {cols.map(c => <th key={c.month} className="py-2 px-2 text-right">{c.month}</th>)}
+                    <th className="py-2 pl-4 text-right">% of revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map(l => (
+                    <tr key={l.k} className={`border-b border-neutral-50 ${l.bold ? "font-semibold bg-neutral-50/40" : ""} ${l.muted ? "text-neutral-400" : ""}`}>
+                      <td className="py-1.5 pr-4">{l.k}</td>
+                      {cols.map(c => {
+                        const v = l.get(c);
+                        return <td key={c.month} className="py-1.5 px-2 text-right tabular-nums">{v === 0 ? "—" : fmt(v)}</td>;
+                      })}
+                      <td className="py-1.5 pl-4 text-right tabular-nums">{pct(Math.abs(l.get(latest)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 text-[10px] text-neutral-400">
+              COGS estimated via Triple Whale gross-margin ratio. Shipping &amp; payment fees not yet wired (per-market). Interest/Tax pending Xero integration.
+            </div>
+          </Card>
+        );
+      })()}
+
       {/* Trend chart */}
       <Card className="mt-3 p-5">
         <div className="mb-4">
