@@ -1020,7 +1020,7 @@ function BalanceSheetPage() {
         </Card>
 
         {/* Assets vs Liabilities & Equity */}
-        <Card className="p-6">
+        <div id="section-assets"><Card className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold">Assets</div>
             <div
