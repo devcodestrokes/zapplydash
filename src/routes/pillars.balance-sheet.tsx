@@ -227,6 +227,20 @@ function BalanceSheetPage() {
       });
     }
 
+    // Augment with manually-entered cash positions (admin form)
+    const manualCash: any[] = Array.isArray((data as any)?.manual?.cashPositions)
+      ? (data as any).manual.cashPositions
+      : [];
+    for (const m of manualCash) {
+      const acct = {
+        name: String(m.account_name ?? "Account"),
+        balance: Number(m.balance_eur ?? 0),
+        currency: String(m.currency ?? "EUR"),
+      };
+      if (m.account_type && m.account_type !== "bank") platformPending.push(acct);
+      else bankAccountsBank.push(acct);
+    }
+
     const cashBank = bankAccountsBank.length
       ? bankAccountsBank.reduce((s, b) => s + (b.balance ?? 0), 0)
       : null;
