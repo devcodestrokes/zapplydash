@@ -661,7 +661,7 @@ function BalanceSheetPage() {
         </section>
 
         {/* Cash & platform positions */}
-        <Card className="p-6" id="section-cash" {...({} as any)}>
+        <div id="section-cash"><Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
               <div className="text-[15px] font-semibold">Cash &amp; platform positions</div>
