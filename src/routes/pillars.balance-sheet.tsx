@@ -118,6 +118,7 @@ function BalanceSheetPage() {
   const [loading, setLoading] = useState(true);
   const [activeCat, setActiveCat] = useState<string>("supplier");
   const [showWeeks, setShowWeeks] = useState(false);
+  const [activeBlock, setActiveBlock] = useState<"cash" | "inventory" | "topay" | "toreceive" | null>("cash");
 
   useEffect(() => {
     let alive = true;
@@ -594,74 +595,75 @@ function BalanceSheetPage() {
           </div>
         )}
 
-        {/* Compact 4-block balance sheet */}
+        {/* Compact 4-block balance sheet — Cash · Inventory · To be Paid · To be Received */}
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
+          {([
             {
-              key: "assets",
-              label: "Total Assets",
-              value: totalAssets,
-              sub: currentAssets != null ? `Current ${fmt(currentAssets)}` : "Cash + inventory + AR",
-              tone: "text-neutral-900",
-              ring: "hover:border-neutral-900",
-              target: "section-assets",
+              key: "cash" as const,
+              label: "Cash",
+              value: cashTotal,
+              sub:
+                cashBank != null || cashPlatforms != null
+                  ? `Bank ${fmt(cashBank)} · Platforms ${fmt(cashPlatforms)}`
+                  : "Bank + payment processors",
+              tone: (cashTotal ?? 0) < 0 ? "text-rose-600" : "text-emerald-600",
+              ring: "hover:border-emerald-400",
             },
             {
-              key: "liab",
-              label: "Total Liabilities",
-              value: totalCurrentLiabilities,
-              sub: outstandingTotal != null ? `Outstanding ${fmt(outstandingTotal)}` : "AP + VAT + other",
+              key: "inventory" as const,
+              label: "Inventory",
+              value: inventoryTotal,
+              sub: inventoryItems.length
+                ? `${inventoryItems.length} SKUs at cost`
+                : "Stock at cost",
+              tone: "text-neutral-900",
+              ring: "hover:border-neutral-900",
+            },
+            {
+              key: "topay" as const,
+              label: "To be Paid",
+              value: outstandingTotal,
+              sub:
+                (apSupplier ?? 0) + (apMeta ?? 0) + (vatPayable ?? 0) > 0
+                  ? `Suppliers · Ads · VAT`
+                  : "AP + VAT + other",
               tone: "text-rose-600",
               ring: "hover:border-rose-300",
-              target: "section-liab",
             },
             {
-              key: "equity",
-              label: "Total Equity",
-              value: totalEquity,
-              sub: ytdResult != null ? `YTD result ${fmtSigned(ytdResult)}` : "Capital + retained",
+              key: "toreceive" as const,
+              label: "To be Received",
+              value:
+                (receivables ?? 0) + (cashPlatforms ?? 0) > 0
+                  ? (receivables ?? 0) + (cashPlatforms ?? 0)
+                  : receivables,
+              sub: "Customer AR + Shopify, PayPal, Mollie pending",
               tone: "text-neutral-900",
               ring: "hover:border-neutral-900",
-              target: "section-liab",
             },
-            {
-              key: "cash",
-              label: "Net Cash Position",
-              value:
-                cashTotal != null && outstandingTotal != null
-                  ? cashTotal - outstandingTotal
-                  : cashTotal,
-              sub:
-                cashTotal != null
-                  ? `Cash ${fmt(cashTotal)}${outstandingTotal != null ? ` − Debt ${fmt(outstandingTotal)}` : ""}`
-                  : "Bank + platforms − debt",
-              tone:
-                cashTotal != null &&
-                outstandingTotal != null &&
-                cashTotal - outstandingTotal < 0
-                  ? "text-rose-600"
-                  : "text-emerald-600",
-              ring: "hover:border-emerald-400",
-              target: "section-cash",
-            },
-          ].map((b) => (
-            <button
-              key={b.key}
-              onClick={() => {
-                const el = document.getElementById(b.target);
-                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className={`rounded-xl border border-neutral-200 bg-white p-5 text-left transition ${b.ring}`}
-            >
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                {b.label}
-              </div>
-              <div className={`mt-2 text-[24px] font-semibold tabular-nums leading-none ${b.tone}`}>
-                {fmt(b.value)}
-              </div>
-              <div className="mt-2 text-[11px] text-neutral-400">{b.sub}</div>
-            </button>
-          ))}
+          ]).map((b) => {
+            const isActive = activeBlock === b.key;
+            return (
+              <button
+                key={b.key}
+                onClick={() => setActiveBlock(isActive ? null : b.key)}
+                className={`rounded-xl border bg-white p-5 text-left transition ${b.ring} ${
+                  isActive ? "border-neutral-900 shadow-sm" : "border-neutral-200"
+                }`}
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                  {b.label}
+                </div>
+                <div className={`mt-2 text-[24px] font-semibold tabular-nums leading-none ${b.tone}`}>
+                  {fmt(b.value)}
+                </div>
+                <div className="mt-2 text-[11px] text-neutral-400">{b.sub}</div>
+                <div className="mt-3 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                  {isActive ? "▾ Showing line items" : "▸ Click for line items"}
+                </div>
+              </button>
+            );
+          })}
         </section>
 
         {/* Ratios */}
@@ -693,6 +695,7 @@ function BalanceSheetPage() {
         </section>
 
         {/* Cash & platform positions */}
+        {activeBlock === "cash" && (
         <div id="section-cash"><Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -765,6 +768,7 @@ function BalanceSheetPage() {
             </div>
           </div>
         </Card></div>
+        )}
 
         {/* Cash & assets · week over week */}
         <Card className="p-6">
@@ -891,7 +895,8 @@ function BalanceSheetPage() {
           </div>
         </Card>
 
-        {/* Outstanding payments */}
+        {/* Outstanding payments — To be Paid drilldown */}
+        {activeBlock === "topay" && (
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
@@ -986,8 +991,10 @@ function BalanceSheetPage() {
             </div>
           </div>
         </Card>
+        )}
 
-        {/* Inventory at cost */}
+        {/* Inventory at cost — Inventory drilldown */}
+        {activeBlock === "inventory" && (
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
@@ -1050,67 +1057,56 @@ function BalanceSheetPage() {
             )}
           </div>
         </Card>
+        )}
 
-        {/* Assets vs Liabilities & Equity */}
-        <div id="section-assets"><Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold">Assets</div>
-            <div
-              className={`text-[18px] font-semibold tabular-nums ${
-                (totalAssets ?? 0) < 0 ? "text-rose-600" : "text-neutral-900"
-              }`}
-            >
-              {fmt(totalAssets)}
+        {/* To be Received drilldown — Customer AR + Platform pending */}
+        {activeBlock === "toreceive" && (
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="text-[15px] font-semibold">To be Received</div>
+              <div className="mt-1 text-[12px] text-neutral-500">
+                Customer receivables and pending payouts from Shopify Payments, PayPal and Mollie
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-neutral-400">Total Incoming</div>
+              <div className="mt-0.5 text-[20px] font-semibold tabular-nums">
+                {fmt((receivables ?? 0) + (cashPlatforms ?? 0) || receivables)}
+              </div>
             </div>
           </div>
+
           <div className="mt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Current</div>
-            <Row label="Cash — Bank accounts" sub="ING + Revolut (EUR/GBP)" value={fmt(cashBank)} />
-            <Row
-              label="Platform receivables"
-              sub="Mollie + Shopify + PayPal pending payouts"
-              value={fmt(cashPlatforms)}
-            />
-            <Row
-              label="Inventory (at cost)"
-              sub={inventoryItems.length ? `${inventoryItems.length} SKUs across NL/UK/US` : undefined}
-              value={fmt(inventoryTotal)}
-            />
-            <Row label="Prepaid expenses" sub="Rent, software, insurance" value={fmt(prepaidExpenses)} />
-            <Row label="Total current" value={fmt(currentAssets)} bold divider />
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              Customer receivables
+            </div>
+            <Row label="Accounts receivable" sub="Open customer invoices (Xero / Jortt)" value={fmt(receivables)} />
 
-            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Fixed</div>
-            <Row label="Equipment & hardware" value={fmt(fixedAssetsCost)} />
+            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              Platform payouts pending
+            </div>
+            {platformPending.length === 0 ? (
+              <div className="py-3 text-[12px] text-neutral-400">{DASH}</div>
+            ) : (
+              platformPending.map((b, i) => (
+                <Row
+                  key={`${b.name}-${i}`}
+                  label={b.name}
+                  sub="Pending payout"
+                  value={fmt(b.balance, b.currency)}
+                />
+              ))
+            )}
             <Row
-              label="Less: accumulated depreciation"
-              value={fmt(accumDepreciation)}
-              neg={accumDepreciation != null && accumDepreciation < 0}
+              label="Total to be received"
+              value={fmt((receivables ?? 0) + (cashPlatforms ?? 0) || receivables)}
+              bold
+              divider
             />
-            <Row label="Total fixed" value={fmt(fixedAssetsNet)} bold divider neg={(fixedAssetsNet ?? 0) < 0} />
           </div>
-        </Card></div>
-
-        <div id="section-liab"><Card className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold">Liabilities &amp; Equity</div>
-            <div className="text-[18px] font-semibold tabular-nums">{fmt(totalLiabEquity)}</div>
-          </div>
-          <div className="mt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Current Liabilities</div>
-            <Row label="Accounts payable — Supplier" sub="Product supplier" value={fmt(apSupplier)} />
-            <Row label="Accounts payable — META" sub="Ad spend billing" value={fmt(apMeta)} />
-            <Row label="VAT payable" sub="NL/EU/UK + VPB" value={fmt(vatPayable)} />
-            <Row label="Other payables" sub="Affiliates, partners" value={fmt(otherPayables)} />
-            <Row label="Accrued expenses" sub="Salaries, utilities" value={fmt(accruedExpenses)} />
-            <Row label="Total current liabilities" value={fmt(totalCurrentLiabilities)} bold divider />
-
-            <div className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">Equity</div>
-            <Row label="Share capital" value={fmt(shareCapital)} />
-            <Row label="Retained earnings" value={fmt(retainedEarnings)} />
-            <Row label="Current period result (YTD)" sub="EBITDA YTD" value={fmt(ytdResult)} />
-            <Row label="Total equity" value={fmt(totalEquity)} bold divider />
-          </div>
-        </Card></div>
+        </Card>
+        )}
 
         <div className="text-center text-[11px] text-neutral-400">
           Synced ·{" "}
