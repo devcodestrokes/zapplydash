@@ -2172,13 +2172,28 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
             <Card key={m.code} className="p-5">
               <div className="flex items-start justify-between">
                 <div className="text-[15px] font-semibold tracking-tight text-neutral-900">{displayCode}</div>
-                <span className={`text-[11px] font-medium tabular-nums ${cmClass}`}>
-                  {cm != null ? `${cm}%` : "—"}
-                </span>
+                <div className="flex items-center gap-2 text-[11px] tabular-nums">
+                  <span className={cmClass + " font-medium"}>
+                    {cm != null ? `${cm}%` : "—"}
+                  </span>
+                  {m.revDeltaPct != null && (
+                    <span className={(m.revDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600") + " text-[10px]"}>
+                      {m.revDeltaPct >= 0 ? "+" : ""}{m.revDeltaPct}% vs last mo
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="mt-2 text-[12px] text-neutral-500">{m.name ?? m.code}</div>
               <div className="mt-2 text-[20px] font-semibold tabular-nums tracking-tight">
                 €{(m.revenue / 1000).toFixed(1)}k
+              </div>
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-neutral-500 tabular-nums">
+                {m.contributionMarginAbs != null && (
+                  <span>CM <span className="font-medium text-neutral-800">€{m.contributionMarginAbs.toLocaleString()}</span></span>
+                )}
+                {m.refundRate != null && (
+                  <span>Refunds <span className={m.refundRate > 5 ? "text-rose-600 font-medium" : "text-neutral-700"}>{m.refundRate}%</span></span>
+                )}
               </div>
             </Card>
           );
