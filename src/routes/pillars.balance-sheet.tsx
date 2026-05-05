@@ -118,6 +118,7 @@ function BalanceSheetPage() {
   const [loading, setLoading] = useState(true);
   const [activeCat, setActiveCat] = useState<string>("supplier");
   const [showWeeks, setShowWeeks] = useState(false);
+  const [activeBlock, setActiveBlock] = useState<"cash" | "inventory" | "topay" | "toreceive" | null>("cash");
 
   useEffect(() => {
     let alive = true;
