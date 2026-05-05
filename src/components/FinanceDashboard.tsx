@@ -649,6 +649,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
 export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
+  const [showRevProfitChart, setShowRevProfitChart] = useState(false);
   useEffect(() => { setChartsReady(true); }, []);
 
   // When a custom-range sync has returned data, use it in place of the live props
