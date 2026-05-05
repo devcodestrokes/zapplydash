@@ -991,8 +991,10 @@ function BalanceSheetPage() {
             </div>
           </div>
         </Card>
+        )}
 
-        {/* Inventory at cost */}
+        {/* Inventory at cost — Inventory drilldown */}
+        {activeBlock === "inventory" && (
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
