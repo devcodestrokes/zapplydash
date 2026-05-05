@@ -461,6 +461,18 @@ function ForecastPage() {
                       strokeWidth={2.5}
                       dot={{ r: 3 }}
                     />
+                    {minBuffer > 0 && (
+                      <ReferenceLine
+                        y={minBuffer}
+                        stroke="#f43f5e"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: `Min cash €${Math.round(minBuffer / 1000)}k`,
+                          position: "insideTopRight",
+                          fill: "#f43f5e",
+                          fontSize: 10,
+                        }}
+                      />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
