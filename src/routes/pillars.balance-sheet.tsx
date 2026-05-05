@@ -595,74 +595,75 @@ function BalanceSheetPage() {
           </div>
         )}
 
-        {/* Compact 4-block balance sheet */}
+        {/* Compact 4-block balance sheet — Cash · Inventory · To be Paid · To be Received */}
         <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
+          {([
             {
-              key: "assets",
-              label: "Total Assets",
-              value: totalAssets,
-              sub: currentAssets != null ? `Current ${fmt(currentAssets)}` : "Cash + inventory + AR",
-              tone: "text-neutral-900",
-              ring: "hover:border-neutral-900",
-              target: "section-assets",
+              key: "cash" as const,
+              label: "Cash",
+              value: cashTotal,
+              sub:
+                cashBank != null || cashPlatforms != null
+                  ? `Bank ${fmt(cashBank)} · Platforms ${fmt(cashPlatforms)}`
+                  : "Bank + payment processors",
+              tone: (cashTotal ?? 0) < 0 ? "text-rose-600" : "text-emerald-600",
+              ring: "hover:border-emerald-400",
             },
             {
-              key: "liab",
-              label: "Total Liabilities",
-              value: totalCurrentLiabilities,
-              sub: outstandingTotal != null ? `Outstanding ${fmt(outstandingTotal)}` : "AP + VAT + other",
+              key: "inventory" as const,
+              label: "Inventory",
+              value: inventoryTotal,
+              sub: inventoryItems.length
+                ? `${inventoryItems.length} SKUs at cost`
+                : "Stock at cost",
+              tone: "text-neutral-900",
+              ring: "hover:border-neutral-900",
+            },
+            {
+              key: "topay" as const,
+              label: "To be Paid",
+              value: outstandingTotal,
+              sub:
+                (apSupplier ?? 0) + (apMeta ?? 0) + (vatPayable ?? 0) > 0
+                  ? `Suppliers · Ads · VAT`
+                  : "AP + VAT + other",
               tone: "text-rose-600",
               ring: "hover:border-rose-300",
-              target: "section-liab",
             },
             {
-              key: "equity",
-              label: "Total Equity",
-              value: totalEquity,
-              sub: ytdResult != null ? `YTD result ${fmtSigned(ytdResult)}` : "Capital + retained",
+              key: "toreceive" as const,
+              label: "To be Received",
+              value:
+                (receivables ?? 0) + (cashPlatforms ?? 0) > 0
+                  ? (receivables ?? 0) + (cashPlatforms ?? 0)
+                  : receivables,
+              sub: "Customer AR + Shopify, PayPal, Mollie pending",
               tone: "text-neutral-900",
               ring: "hover:border-neutral-900",
-              target: "section-liab",
             },
-            {
-              key: "cash",
-              label: "Net Cash Position",
-              value:
-                cashTotal != null && outstandingTotal != null
-                  ? cashTotal - outstandingTotal
-                  : cashTotal,
-              sub:
-                cashTotal != null
-                  ? `Cash ${fmt(cashTotal)}${outstandingTotal != null ? ` − Debt ${fmt(outstandingTotal)}` : ""}`
-                  : "Bank + platforms − debt",
-              tone:
-                cashTotal != null &&
-                outstandingTotal != null &&
-                cashTotal - outstandingTotal < 0
-                  ? "text-rose-600"
-                  : "text-emerald-600",
-              ring: "hover:border-emerald-400",
-              target: "section-cash",
-            },
-          ].map((b) => (
-            <button
-              key={b.key}
-              onClick={() => {
-                const el = document.getElementById(b.target);
-                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className={`rounded-xl border border-neutral-200 bg-white p-5 text-left transition ${b.ring}`}
-            >
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                {b.label}
-              </div>
-              <div className={`mt-2 text-[24px] font-semibold tabular-nums leading-none ${b.tone}`}>
-                {fmt(b.value)}
-              </div>
-              <div className="mt-2 text-[11px] text-neutral-400">{b.sub}</div>
-            </button>
-          ))}
+          ]).map((b) => {
+            const isActive = activeBlock === b.key;
+            return (
+              <button
+                key={b.key}
+                onClick={() => setActiveBlock(isActive ? null : b.key)}
+                className={`rounded-xl border bg-white p-5 text-left transition ${b.ring} ${
+                  isActive ? "border-neutral-900 shadow-sm" : "border-neutral-200"
+                }`}
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                  {b.label}
+                </div>
+                <div className={`mt-2 text-[24px] font-semibold tabular-nums leading-none ${b.tone}`}>
+                  {fmt(b.value)}
+                </div>
+                <div className="mt-2 text-[11px] text-neutral-400">{b.sub}</div>
+                <div className="mt-3 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                  {isActive ? "▾ Showing line items" : "▸ Click for line items"}
+                </div>
+              </button>
+            );
+          })}
         </section>
 
         {/* Ratios */}
