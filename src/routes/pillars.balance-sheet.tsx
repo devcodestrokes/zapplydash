@@ -1078,7 +1078,7 @@ function BalanceSheetPage() {
             <Row label="Current period result (YTD)" sub="EBITDA YTD" value={fmt(ytdResult)} />
             <Row label="Total equity" value={fmt(totalEquity)} bold divider />
           </div>
-        </Card>
+        </Card></div>
 
         <div className="text-center text-[11px] text-neutral-400">
           Synced ·{" "}
