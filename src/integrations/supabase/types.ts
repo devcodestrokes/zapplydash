@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      cash_positions: {
+        Row: {
+          account_name: string
+          account_type: string
+          balance_eur: number
+          created_at: string
+          currency: string
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_type?: string
+          balance_eur?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_type?: string
+          balance_eur?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       data_cache: {
         Row: {
           cache_key: string
@@ -65,6 +119,42 @@ export type Database = {
           provider?: string
           refresh_token?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      inventory_positions: {
+        Row: {
+          created_at: string
+          id: string
+          location: string
+          name: string
+          notes: string | null
+          pieces: number
+          sku: string
+          unit_cost_eur: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location?: string
+          name: string
+          notes?: string | null
+          pieces?: number
+          sku: string
+          unit_cost_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location?: string
+          name?: string
+          notes?: string | null
+          pieces?: number
+          sku?: string
+          unit_cost_eur?: number
+          updated_at?: string
         }
         Relationships: []
       }
