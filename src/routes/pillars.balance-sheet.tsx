@@ -1056,9 +1056,9 @@ function BalanceSheetPage() {
             />
             <Row label="Total fixed" value={fmt(fixedAssetsNet)} bold divider neg={(fixedAssetsNet ?? 0) < 0} />
           </div>
-        </Card>
+        </Card></div>
 
-        <Card className="p-6">
+        <div id="section-liab"><Card className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold">Liabilities &amp; Equity</div>
             <div className="text-[18px] font-semibold tabular-nums">{fmt(totalLiabEquity)}</div>
