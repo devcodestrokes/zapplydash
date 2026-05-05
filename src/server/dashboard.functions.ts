@@ -248,6 +248,30 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   collectError("jortt", jorttCache);
   collectError("xero", xeroCache);
 
+  // Manual data (cash positions, inventory, settings) — surfaces on Balance Sheet & Forecast.
+  let manual: { cashPositions: any[]; inventoryPositions: any[]; settings: Record<string, any> } = {
+    cashPositions: [],
+    inventoryPositions: [],
+    settings: {},
+  };
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [c, i, s] = await Promise.all([
+      supabaseAdmin.from("cash_positions").select("*"),
+      supabaseAdmin.from("inventory_positions").select("*"),
+      supabaseAdmin.from("app_settings").select("*"),
+    ]);
+    const settingsMap: Record<string, any> = {};
+    for (const r of s.data ?? []) settingsMap[r.key] = r.value;
+    manual = {
+      cashPositions: c.data ?? [],
+      inventoryPositions: i.data ?? [],
+      settings: settingsMap,
+    };
+  } catch (err: any) {
+    console.error("getDashboardData manual data failed:", err?.message);
+  }
+
   return {
     shopifyMarkets: shopifyMarketsCache?.payload ?? null,
     shopifyMonthly: shopifyMonthlyCache?.payload ?? null,
@@ -268,6 +292,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     dataIsStale,
     hasAnyData,
     errors,
+    manual,
   };
 });
 
