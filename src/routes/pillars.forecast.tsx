@@ -479,6 +479,88 @@ function ForecastPage() {
               </div>
             </Card>
 
+            {/* Min cash buffer warning */}
+            {minBuffer > 0 && totals.ending < minBuffer && (
+              <Card className="mt-3 p-4 border-rose-200 bg-rose-50/40">
+                <div className="text-[13px] font-semibold text-rose-800">
+                  ⚠ Projected ending cash {fmtMoney(totals.ending)} is below the safety buffer ({fmtMoney(minBuffer)}).
+                </div>
+                <div className="mt-1 text-[12px] text-rose-700/80">
+                  Cut flex spend or accelerate inflows to stay above the minimum.
+                </div>
+              </Card>
+            )}
+
+            {/* Per-market forecast */}
+            {perMarketForecast.length > 0 && (
+              <Card className="mt-3 p-5">
+                <div className="text-[14px] font-semibold">Per-market forecast (next 13w)</div>
+                <div className="mt-1 text-[12px] text-neutral-500">
+                  Inflow allocated by market revenue share · contribution margin from latest period
+                </div>
+                <div className="mt-4 overflow-hidden rounded-lg border border-neutral-100">
+                  <div className="grid grid-cols-[1.5fr_0.7fr_1fr_0.8fr_1fr] bg-neutral-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <div>Market</div>
+                    <div className="text-right">Share</div>
+                    <div className="text-right">Projected revenue</div>
+                    <div className="text-right">Margin %</div>
+                    <div className="text-right">Projected CM</div>
+                  </div>
+                  {perMarketForecast.map((m) => (
+                    <div key={m.name} className="grid grid-cols-[1.5fr_0.7fr_1fr_0.8fr_1fr] items-center border-t border-neutral-100 px-3 py-2 text-[12px]">
+                      <div className="font-medium">{m.name}</div>
+                      <div className="text-right tabular-nums text-neutral-600">{(m.share * 100).toFixed(1)}%</div>
+                      <div className="text-right tabular-nums">{fmtMoney(m.projectedRevenue)}</div>
+                      <div className={`text-right tabular-nums ${m.marginPct < 0 ? "text-rose-600" : "text-neutral-700"}`}>
+                        {m.marginPct ? `${m.marginPct.toFixed(1)}%` : "—"}
+                      </div>
+                      <div className={`text-right tabular-nums font-semibold ${m.projectedCM < 0 ? "text-rose-600" : ""}`}>
+                        {fmtMoney(m.projectedCM)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Forecast vs actuals */}
+            {forecastVsActuals.length > 0 && (
+              <Card className="mt-3 p-5">
+                <div className="text-[14px] font-semibold">Forecast vs actuals</div>
+                <div className="mt-1 text-[12px] text-neutral-500">
+                  Last 3 months · trend forecast (3 months prior × MoM growth) compared to actual revenue
+                </div>
+                <div className="mt-4 overflow-hidden rounded-lg border border-neutral-100">
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr_0.8fr] bg-neutral-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <div>Month</div>
+                    <div className="text-right">Forecast</div>
+                    <div className="text-right">Actual</div>
+                    <div className="text-right">Variance</div>
+                    <div className="text-right">%</div>
+                  </div>
+                  {forecastVsActuals.map((r) => {
+                    const pos = (r.variance ?? 0) >= 0;
+                    return (
+                      <div key={r.label} className="grid grid-cols-[1fr_1fr_1fr_1fr_0.8fr] items-center border-t border-neutral-100 px-3 py-2 text-[12px]">
+                        <div className="font-medium">{r.label}</div>
+                        <div className="text-right tabular-nums text-neutral-600">{fmtMoney(r.forecast)}</div>
+                        <div className="text-right tabular-nums">{fmtMoney(r.actual)}</div>
+                        <div className={`text-right tabular-nums font-medium ${pos ? "text-emerald-600" : "text-rose-600"}`}>
+                          {fmtSigned(r.variance)}
+                        </div>
+                        <div className={`text-right tabular-nums ${pos ? "text-emerald-600" : "text-rose-600"}`}>
+                          {r.variancePct == null ? "—" : `${pos ? "+" : ""}${r.variancePct.toFixed(1)}%`}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 text-[11px] text-neutral-400">
+                  ⓘ Payout-cycle timing: Shopify payouts arrive 2–3 days delayed, Meta/Google bills are weekly, VAT is quarterly. Weekly inflow is smoothed across the cycle.
+                </div>
+              </Card>
+            )}
+
             {/* Spending allowance */}
             <Card className="mt-3 p-5 bg-emerald-50/30 border-emerald-100/60">
               <div className="flex items-start justify-between flex-wrap gap-3">
