@@ -768,6 +768,7 @@ function BalanceSheetPage() {
             </div>
           </div>
         </Card></div>
+        )}
 
         {/* Cash & assets · week over week */}
         <Card className="p-6">
