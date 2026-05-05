@@ -695,6 +695,7 @@ function BalanceSheetPage() {
         </section>
 
         {/* Cash & platform positions */}
+        {activeBlock === "cash" && (
         <div id="section-cash"><Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
