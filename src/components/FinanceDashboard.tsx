@@ -2223,6 +2223,9 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                 <th className="px-3 py-2.5 font-medium text-right">CAC</th>
                 <th className="px-3 py-2.5 font-medium text-right">Gross M%</th>
                 <th className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-neutral-900" onClick={() => setSortBy("contributionMargin")}>Contrib M%</th>
+                <th className="px-3 py-2.5 font-medium text-right">Contrib (€)</th>
+                <th className="px-3 py-2.5 font-medium text-right">Refund %</th>
+                <th className="px-3 py-2.5 font-medium text-right">Δ vs prev mo</th>
                 <th className="px-5 py-2.5 font-medium">Share</th>
               </tr>
             </thead>
@@ -2255,6 +2258,25 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                       {m.contributionMargin != null ? (
                         <span className={m.contributionMargin >= 30 ? "text-emerald-600 font-medium" : m.contributionMargin >= 20 ? "text-neutral-900" : "text-amber-600 font-medium"}>
                           {m.contributionMargin}%
+                        </span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.contributionMarginAbs != null ? (
+                        <span className={m.contributionMarginAbs >= 0 ? "text-neutral-900 font-medium" : "text-rose-600 font-medium"}>
+                          €{m.contributionMarginAbs.toLocaleString()}
+                        </span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.refundRate != null ? (
+                        <span className={m.refundRate > 5 ? "text-rose-600 font-medium" : "text-neutral-700"}>{m.refundRate}%</span>
+                      ) : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums">
+                      {m.revDeltaPct != null ? (
+                        <span className={m.revDeltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                          {m.revDeltaPct >= 0 ? "+" : ""}{m.revDeltaPct}%
                         </span>
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
