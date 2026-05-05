@@ -89,12 +89,18 @@ function ForecastPage() {
     };
   }, []);
 
-  const { weeks, totals, startCash, monthlyAvgRev, momTrend } = useMemo(() => {
+  const { weeks, totals, startCash, monthlyAvgRev, momTrend, minBuffer, perMarketForecast, forecastVsActuals } = useMemo(() => {
     const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
+    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets?.markets)
+      ? data.shopifyMarkets.markets
+      : Array.isArray(data?.shopifyMarkets)
+        ? data.shopifyMarkets
+        : [];
     const xero =
       data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
         ? data.xero
         : null;
+    const minBuffer = Number((data as any)?.manual?.settings?.min_cash_buffer_eur?.amount ?? 0);
 
     const lastN = shopifyMonthly.slice(-3);
     const avgRev = lastN.length
@@ -107,10 +113,8 @@ function ForecastPage() {
     const mom = prevAvg > 0 ? (avgRev - prevAvg) / prevAvg : 0.04;
 
     const cash0 = xero?.cashBalance ?? 0;
-
-    // Weekly inflow ~ monthly rev / 4.33, weekly outflow ~ 88% of inflow baseline
     const baseInflow = avgRev > 0 ? avgRev / 4.33 : 0;
-    const baseOutflow = baseInflow * 0.39; // matches mockup ratio €76k vs €30k
+    const baseOutflow = baseInflow * 0.39;
 
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
@@ -144,6 +148,45 @@ function ForecastPage() {
     const totalIn = rows.reduce((s, r) => s + r.inflow, 0);
     const totalOut = rows.reduce((s, r) => s + r.outflow, 0);
 
+    // Per-market 13-week forecast (rev + share + projected EBITDA at avg margin)
+    const totalMarketsRev = shopifyMarkets.reduce(
+      (s: number, m: any) => s + Number(m?.revenue ?? 0),
+      0,
+    );
+    const perMarketForecast = shopifyMarkets
+      .filter((m: any) => Number(m?.revenue ?? 0) > 0)
+      .map((m: any) => {
+        const share = totalMarketsRev > 0 ? Number(m.revenue) / totalMarketsRev : 0;
+        const project13w = Math.round(totalIn * share);
+        const margin = Number(m?.contributionMarginPct ?? m?.marginPct ?? 0);
+        const projectedCM = Math.round(project13w * (margin / 100));
+        return {
+          name: String(m?.name ?? m?.market ?? "Market"),
+          share,
+          projectedRevenue: project13w,
+          marginPct: margin,
+          projectedCM,
+        };
+      })
+      .sort((a: any, b: any) => b.projectedRevenue - a.projectedRevenue);
+
+    // Forecast vs actuals — last 3 months
+    const fva = shopifyMonthly.slice(-6).map((m: any, idx: number, arr: any[]) => {
+      const prev = idx >= 3 ? arr[idx - 3] : null;
+      const trendForecast = prev ? Math.round(Number(prev.revenue ?? 0) * (1 + mom)) : null;
+      const actual = Number(m.revenue ?? 0);
+      const variance = trendForecast != null ? actual - trendForecast : null;
+      const variancePct =
+        trendForecast && trendForecast !== 0 ? (variance! / trendForecast) * 100 : null;
+      return {
+        label: String(m.label ?? m.month ?? ""),
+        forecast: trendForecast,
+        actual,
+        variance,
+        variancePct,
+      };
+    }).filter((r: any) => r.forecast != null).slice(-3);
+
     return {
       weeks: rows,
       totals: {
@@ -156,6 +199,9 @@ function ForecastPage() {
       startCash: cash0,
       monthlyAvgRev: avgRev,
       momTrend: mom,
+      minBuffer,
+      perMarketForecast,
+      forecastVsActuals: fva,
     };
   }, [data]);
 
