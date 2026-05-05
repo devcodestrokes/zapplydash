@@ -947,8 +947,21 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               )}
             </div>
             <div className="mt-1 text-[12px] text-neutral-400">{rangeRevenue !== null ? revenueSourceLabel : "Shopify not connected"}</div>
-            {effectiveMarkets && effectiveMarkets.filter(m => m.live && m.currency !== "EUR").length > 0 && (
-              <div className="mt-1 text-[11px] text-neutral-400">Hover total for per-store breakdown · all values converted to EUR</div>
+            {revenueBreakdownMarkets.length > 0 && rangeRevenue !== null && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {revenueBreakdownMarkets.map(m => {
+                  const eur = m.revenue ?? 0;
+                  const pct = rangeRevenue > 0 ? (eur / rangeRevenue) * 100 : 0;
+                  return (
+                    <div key={m.code} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px]">
+                      <span>{m.flag}</span>
+                      <span className="font-medium text-neutral-600">{m.code}</span>
+                      <span className="font-semibold tabular-nums text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
+                      <span className="text-neutral-400 tabular-nums">{pct.toFixed(0)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
           <div className="hidden items-center gap-6 md:flex">
