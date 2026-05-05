@@ -895,7 +895,8 @@ function BalanceSheetPage() {
           </div>
         </Card>
 
-        {/* Outstanding payments */}
+        {/* Outstanding payments — To be Paid drilldown */}
+        {activeBlock === "topay" && (
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
