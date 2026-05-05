@@ -584,7 +584,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
               )}
             </div>
             <div className="mt-1 text-[12px] text-neutral-400">
-              vs. yesterday {fmtEur0(metrics.yesterday)} · 30-day avg {fmtEur0(avg30)}
+              vs. same day last week {fmtEur0(metrics.sameDayLastWeek ?? metrics.yesterday)} · 30-day avg {fmtEur0(avg30)}
             </div>
           </div>
         </div>
@@ -798,10 +798,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     const now = new Date();
     const todayKey = now.toISOString().split("T")[0];
     const today = dayProfit(todayKey);
-    const yesterday = (() => {
-      const y = new Date(now); y.setUTCDate(y.getUTCDate() - 1);
+    // Same day last week (like-for-like, removes day-of-week effects)
+    const sameDayLastWeek = (() => {
+      const y = new Date(now); y.setUTCDate(y.getUTCDate() - 7);
       return dayProfit(y.toISOString().split("T")[0]);
     })();
+    const yesterday = sameDayLastWeek; // alias kept for backwards compat in shape
 
     // This week (Monday → today, UTC)
     const weekStart = new Date(now);
@@ -826,12 +828,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       series.push({ date: k, profit: p ?? 0 });
     }
     const avg30 = series.length ? series.reduce((s, x) => s + x.profit, 0) / series.length : null;
-    const todayVsYesterdayPct = (today != null && yesterday != null && yesterday !== 0)
-      ? ((today - yesterday) / Math.abs(yesterday)) * 100
+    const todayVsYesterdayPct = (today != null && sameDayLastWeek != null && sameDayLastWeek !== 0)
+      ? ((today - sameDayLastWeek) / Math.abs(sameDayLastWeek)) * 100
       : null;
 
     const hasAnyDaily = Object.keys(rev).length > 0 || Object.keys(tw).length > 0;
-    return { today, yesterday, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
+    return { today, yesterday, sameDayLastWeek, week, mtd, ytd, series, avg30, todayVsYesterdayPct, hasAnyDaily };
   }, [shopifyDaily, tripleWhaleDaily]);
 
   const dashboardDiagnostics = useMemo(() => {
