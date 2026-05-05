@@ -227,6 +227,20 @@ function BalanceSheetPage() {
       });
     }
 
+    // Augment with manually-entered cash positions (admin form)
+    const manualCash: any[] = Array.isArray((data as any)?.manual?.cashPositions)
+      ? (data as any).manual.cashPositions
+      : [];
+    for (const m of manualCash) {
+      const acct = {
+        name: String(m.account_name ?? "Account"),
+        balance: Number(m.balance_eur ?? 0),
+        currency: String(m.currency ?? "EUR"),
+      };
+      if (m.account_type && m.account_type !== "bank") platformPending.push(acct);
+      else bankAccountsBank.push(acct);
+    }
+
     const cashBank = bankAccountsBank.length
       ? bankAccountsBank.reduce((s, b) => s + (b.balance ?? 0), 0)
       : null;
@@ -261,6 +275,24 @@ function BalanceSheetPage() {
         };
       })
       .sort((a, b) => b.value - a.value);
+
+    // Augment with manually-entered inventory positions
+    const manualInv: any[] = Array.isArray((data as any)?.manual?.inventoryPositions)
+      ? (data as any).manual.inventoryPositions
+      : [];
+    for (const m of manualInv) {
+      const qty = Number(m.pieces ?? 0);
+      const cost = Number(m.unit_cost_eur ?? 0);
+      inventoryItems.push({
+        name: String(m.name ?? m.sku ?? "Item"),
+        location: String(m.location ?? "NL"),
+        unitCost: cost,
+        pieces: qty,
+        value: qty * cost,
+      });
+    }
+    inventoryItems.sort((a, b) => b.value - a.value);
+
     const inventoryTotal = inventoryItems.length
       ? inventoryItems.reduce((s, i) => s + i.value, 0)
       : null;
@@ -406,7 +438,7 @@ function BalanceSheetPage() {
       quickRatio,
       suppliersInvoices,
     };
-  }, [xero, jortt, shopifyPayouts, syncedAt]);
+  }, [xero, jortt, shopifyPayouts, syncedAt, data]);
 
   // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
   type WeekRow = {

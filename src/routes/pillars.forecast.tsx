@@ -11,6 +11,7 @@ import {
   Bar,
   Line,
   Area,
+  ReferenceLine,
 } from "recharts";
 import {
   Sparkles,
@@ -89,12 +90,18 @@ function ForecastPage() {
     };
   }, []);
 
-  const { weeks, totals, startCash, monthlyAvgRev, momTrend } = useMemo(() => {
+  const { weeks, totals, startCash, monthlyAvgRev, momTrend, minBuffer, perMarketForecast, forecastVsActuals } = useMemo(() => {
     const shopifyMonthly: any[] = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
+    const shopifyMarkets: any[] = Array.isArray(data?.shopifyMarkets?.markets)
+      ? data.shopifyMarkets.markets
+      : Array.isArray(data?.shopifyMarkets)
+        ? data.shopifyMarkets
+        : [];
     const xero =
       data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
         ? data.xero
         : null;
+    const minBuffer = Number((data as any)?.manual?.settings?.min_cash_buffer_eur?.amount ?? 0);
 
     const lastN = shopifyMonthly.slice(-3);
     const avgRev = lastN.length
@@ -107,10 +114,8 @@ function ForecastPage() {
     const mom = prevAvg > 0 ? (avgRev - prevAvg) / prevAvg : 0.04;
 
     const cash0 = xero?.cashBalance ?? 0;
-
-    // Weekly inflow ~ monthly rev / 4.33, weekly outflow ~ 88% of inflow baseline
     const baseInflow = avgRev > 0 ? avgRev / 4.33 : 0;
-    const baseOutflow = baseInflow * 0.39; // matches mockup ratio €76k vs €30k
+    const baseOutflow = baseInflow * 0.39;
 
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
@@ -144,6 +149,45 @@ function ForecastPage() {
     const totalIn = rows.reduce((s, r) => s + r.inflow, 0);
     const totalOut = rows.reduce((s, r) => s + r.outflow, 0);
 
+    // Per-market 13-week forecast (rev + share + projected EBITDA at avg margin)
+    const totalMarketsRev = shopifyMarkets.reduce(
+      (s: number, m: any) => s + Number(m?.revenue ?? 0),
+      0,
+    );
+    const perMarketForecast = shopifyMarkets
+      .filter((m: any) => Number(m?.revenue ?? 0) > 0)
+      .map((m: any) => {
+        const share = totalMarketsRev > 0 ? Number(m.revenue) / totalMarketsRev : 0;
+        const project13w = Math.round(totalIn * share);
+        const margin = Number(m?.contributionMarginPct ?? m?.marginPct ?? 0);
+        const projectedCM = Math.round(project13w * (margin / 100));
+        return {
+          name: String(m?.name ?? m?.market ?? "Market"),
+          share,
+          projectedRevenue: project13w,
+          marginPct: margin,
+          projectedCM,
+        };
+      })
+      .sort((a: any, b: any) => b.projectedRevenue - a.projectedRevenue);
+
+    // Forecast vs actuals — last 3 months
+    const fva = shopifyMonthly.slice(-6).map((m: any, idx: number, arr: any[]) => {
+      const prev = idx >= 3 ? arr[idx - 3] : null;
+      const trendForecast = prev ? Math.round(Number(prev.revenue ?? 0) * (1 + mom)) : null;
+      const actual = Number(m.revenue ?? 0);
+      const variance = trendForecast != null ? actual - trendForecast : null;
+      const variancePct =
+        trendForecast && trendForecast !== 0 ? (variance! / trendForecast) * 100 : null;
+      return {
+        label: String(m.label ?? m.month ?? ""),
+        forecast: trendForecast,
+        actual,
+        variance,
+        variancePct,
+      };
+    }).filter((r: any) => r.forecast != null).slice(-3);
+
     return {
       weeks: rows,
       totals: {
@@ -156,6 +200,9 @@ function ForecastPage() {
       startCash: cash0,
       monthlyAvgRev: avgRev,
       momTrend: mom,
+      minBuffer,
+      perMarketForecast,
+      forecastVsActuals: fva,
     };
   }, [data]);
 
@@ -414,10 +461,105 @@ function ForecastPage() {
                       strokeWidth={2.5}
                       dot={{ r: 3 }}
                     />
+                    {minBuffer > 0 && (
+                      <ReferenceLine
+                        y={minBuffer}
+                        stroke="#f43f5e"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: `Min cash €${Math.round(minBuffer / 1000)}k`,
+                          position: "insideTopRight",
+                          fill: "#f43f5e",
+                          fontSize: 10,
+                        }}
+                      />
+                    )}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </Card>
+
+            {/* Min cash buffer warning */}
+            {minBuffer > 0 && totals.ending < minBuffer && (
+              <Card className="mt-3 p-4 border-rose-200 bg-rose-50/40">
+                <div className="text-[13px] font-semibold text-rose-800">
+                  ⚠ Projected ending cash {fmtMoney(totals.ending)} is below the safety buffer ({fmtMoney(minBuffer)}).
+                </div>
+                <div className="mt-1 text-[12px] text-rose-700/80">
+                  Cut flex spend or accelerate inflows to stay above the minimum.
+                </div>
+              </Card>
+            )}
+
+            {/* Per-market forecast */}
+            {perMarketForecast.length > 0 && (
+              <Card className="mt-3 p-5">
+                <div className="text-[14px] font-semibold">Per-market forecast (next 13w)</div>
+                <div className="mt-1 text-[12px] text-neutral-500">
+                  Inflow allocated by market revenue share · contribution margin from latest period
+                </div>
+                <div className="mt-4 overflow-hidden rounded-lg border border-neutral-100">
+                  <div className="grid grid-cols-[1.5fr_0.7fr_1fr_0.8fr_1fr] bg-neutral-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <div>Market</div>
+                    <div className="text-right">Share</div>
+                    <div className="text-right">Projected revenue</div>
+                    <div className="text-right">Margin %</div>
+                    <div className="text-right">Projected CM</div>
+                  </div>
+                  {perMarketForecast.map((m) => (
+                    <div key={m.name} className="grid grid-cols-[1.5fr_0.7fr_1fr_0.8fr_1fr] items-center border-t border-neutral-100 px-3 py-2 text-[12px]">
+                      <div className="font-medium">{m.name}</div>
+                      <div className="text-right tabular-nums text-neutral-600">{(m.share * 100).toFixed(1)}%</div>
+                      <div className="text-right tabular-nums">{fmtMoney(m.projectedRevenue)}</div>
+                      <div className={`text-right tabular-nums ${m.marginPct < 0 ? "text-rose-600" : "text-neutral-700"}`}>
+                        {m.marginPct ? `${m.marginPct.toFixed(1)}%` : "—"}
+                      </div>
+                      <div className={`text-right tabular-nums font-semibold ${m.projectedCM < 0 ? "text-rose-600" : ""}`}>
+                        {fmtMoney(m.projectedCM)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Forecast vs actuals */}
+            {forecastVsActuals.length > 0 && (
+              <Card className="mt-3 p-5">
+                <div className="text-[14px] font-semibold">Forecast vs actuals</div>
+                <div className="mt-1 text-[12px] text-neutral-500">
+                  Last 3 months · trend forecast (3 months prior × MoM growth) compared to actual revenue
+                </div>
+                <div className="mt-4 overflow-hidden rounded-lg border border-neutral-100">
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr_0.8fr] bg-neutral-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <div>Month</div>
+                    <div className="text-right">Forecast</div>
+                    <div className="text-right">Actual</div>
+                    <div className="text-right">Variance</div>
+                    <div className="text-right">%</div>
+                  </div>
+                  {forecastVsActuals.map((r) => {
+                    const pos = (r.variance ?? 0) >= 0;
+                    return (
+                      <div key={r.label} className="grid grid-cols-[1fr_1fr_1fr_1fr_0.8fr] items-center border-t border-neutral-100 px-3 py-2 text-[12px]">
+                        <div className="font-medium">{r.label}</div>
+                        <div className="text-right tabular-nums text-neutral-600">{fmtMoney(r.forecast)}</div>
+                        <div className="text-right tabular-nums">{fmtMoney(r.actual)}</div>
+                        <div className={`text-right tabular-nums font-medium ${pos ? "text-emerald-600" : "text-rose-600"}`}>
+                          {fmtSigned(r.variance)}
+                        </div>
+                        <div className={`text-right tabular-nums ${pos ? "text-emerald-600" : "text-rose-600"}`}>
+                          {r.variancePct == null ? "—" : `${pos ? "+" : ""}${r.variancePct.toFixed(1)}%`}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 text-[11px] text-neutral-400">
+                  ⓘ Payout-cycle timing: Shopify payouts arrive 2–3 days delayed, Meta/Google bills are weekly, VAT is quarterly. Weekly inflow is smoothed across the cycle.
+                </div>
+              </Card>
+            )}
 
             {/* Spending allowance */}
             <Card className="mt-3 p-5 bg-emerald-50/30 border-emerald-100/60">
