@@ -28,6 +28,7 @@ import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
 import { Route as ApiJorttRouteImport } from './routes/api.jortt'
+import { Route as AdminManualDataRouteImport } from './routes/admin.manual-data'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
@@ -134,6 +135,11 @@ const ApiJorttRoute = ApiJorttRouteImport.update({
   path: '/api/jortt',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminManualDataRoute = AdminManualDataRouteImport.update({
+  id: '/admin/manual-data',
+  path: '/admin/manual-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiShopifyInstallRoute = ApiShopifyInstallRouteImport.update({
   id: '/api/shopify/install',
   path: '/api/shopify/install',
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
+  '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
+  '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -250,6 +258,7 @@ export interface FileRoutesById {
   '/store': typeof StoreRoute
   '/subscriptions': typeof SubscriptionsRoute
   '/triple-whale': typeof TripleWhaleRoute
+  '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -282,6 +291,7 @@ export interface FileRouteTypes {
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
+    | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
+    | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -342,6 +353,7 @@ export interface FileRouteTypes {
     | '/store'
     | '/subscriptions'
     | '/triple-whale'
+    | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
     | '/auth/callback'
@@ -373,6 +385,7 @@ export interface RootRouteChildren {
   StoreRoute: typeof StoreRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
   TripleWhaleRoute: typeof TripleWhaleRoute
+  AdminManualDataRoute: typeof AdminManualDataRoute
   ApiJorttRoute: typeof ApiJorttRouteWithChildren
   ApiSyncRoute: typeof ApiSyncRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -527,6 +540,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiJorttRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/manual-data': {
+      id: '/admin/manual-data'
+      path: '/admin/manual-data'
+      fullPath: '/admin/manual-data'
+      preLoaderRoute: typeof AdminManualDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/shopify/install': {
       id: '/api/shopify/install'
       path: '/api/shopify/install'
@@ -628,6 +648,7 @@ const rootRouteChildren: RootRouteChildren = {
   StoreRoute: StoreRoute,
   SubscriptionsRoute: SubscriptionsRoute,
   TripleWhaleRoute: TripleWhaleRoute,
+  AdminManualDataRoute: AdminManualDataRoute,
   ApiJorttRoute: ApiJorttRouteWithChildren,
   ApiSyncRoute: ApiSyncRoute,
   AuthCallbackRoute: AuthCallbackRoute,
