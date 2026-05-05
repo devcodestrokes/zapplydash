@@ -2075,9 +2075,21 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
+
+  // Trend vs previous period — derive from shopifyMonthly cache.
+  // Compute previous-month CM% per market for delta. Best-effort.
+  const prevMonthByMarket: Record<string, { revenue: number; refunds: number }> = (() => {
+    const out: Record<string, { revenue: number; refunds: number }> = {};
+    if (!Array.isArray(shopifyMonthly) || shopifyMonthly.length < 2) return out;
+    const sorted = [...shopifyMonthly].sort((a, b) => (a.month ?? "").localeCompare(b.month ?? ""));
+    const prev = sorted[sorted.length - 2];
+    const bm = prev?.byMarket ?? {};
+    for (const code of Object.keys(bm)) out[code] = { revenue: bm[code].revenue ?? 0, refunds: bm[code].refunds ?? 0 };
+    return out;
+  })();
 
   const activeMarkets = (liveMarkets ?? [])
     .filter(m => m.live && m.code !== "DE")
@@ -2085,10 +2097,29 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
       const adSpend = tw?.adSpend ?? null;
-      const grossMarginPct = tw?.grossProfit != null && revenue > 0 ? +(tw.grossProfit / revenue * 100).toFixed(1) : null;
-      const contributionMarginPct = tw?.grossProfit != null && adSpend != null && revenue > 0
-        ? +((tw.grossProfit - adSpend) / revenue * 100).toFixed(1) : null;
-      return { ...m, adSpend, grossMargin: grossMarginPct, contributionMargin: contributionMarginPct, roas: tw?.roas ?? null, cac: tw?.ncpa ?? null };
+      const grossProfit = tw?.grossProfit ?? null;
+      const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
+      const contributionMarginAbs = grossProfit != null && adSpend != null ? +(grossProfit - adSpend).toFixed(0) : null;
+      const contributionMarginPct = contributionMarginAbs != null && revenue > 0
+        ? +(contributionMarginAbs / revenue * 100).toFixed(1) : null;
+      // Refund rate per market
+      const refunds = m.refunds ?? 0;
+      const grossRevenue = revenue + refunds; // revenue is net-of-refunds
+      const refundRate = grossRevenue > 0 ? +(refunds / grossRevenue * 100).toFixed(1) : null;
+      // Trend: prev-month rev delta
+      const prev = prevMonthByMarket[m.code];
+      const revDeltaPct = prev && prev.revenue > 0 ? +((revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : null;
+      return {
+        ...m,
+        adSpend,
+        grossMargin: grossMarginPct,
+        contributionMargin: contributionMarginPct,
+        contributionMarginAbs,
+        refundRate,
+        revDeltaPct,
+        roas: tw?.roas ?? null,
+        cac: tw?.ncpa ?? null,
+      };
     });
   if (activeMarkets.length === 0) {
     return (
