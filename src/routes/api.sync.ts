@@ -19,7 +19,7 @@ export const Route = createFileRoute("/api/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = verifySyncSecret(request);
+        const denied = await verifyAllowedUser(request);
         if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const fromDate = searchParams.get("from") ?? undefined;
