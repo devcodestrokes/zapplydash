@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { fetchJortt } from "@/server/fetchers.server";
 import { writeCache } from "@/server/cache.server";
+import { verifySyncSecret } from "@/server/sync-auth.server";
 
 // On-demand Jortt fetch — also writes to cache so the dashboard reflects it next load.
 export const Route = createFileRoute("/api/jortt")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        const denied = verifySyncSecret(request);
+        if (denied) return denied;
         try {
           const data = await fetchJortt();
           if (!data) {
