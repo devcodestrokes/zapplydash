@@ -652,11 +652,29 @@ export async function fetchShopifyGrowthYear(year: number) {
       }
     }
 
-    const dailyDates = Object.keys(mergedDaily).sort();
-    const returnedMonths = shopifyMonthly.map((m: any) => m.month);
-    const expectedMonths = Array.from({ length: 12 }, (_, i) =>
+    const returnedMonths = new Set(shopifyMonthly.map((m: any) => m.month));
+    const expectedMonths = Array.from({ length: lastActualMonthIdx + 1 }, (_, i) =>
       new Date(Date.UTC(year, i, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " '")
     );
+    const missingActualMonths = expectedMonths.filter((m) => !returnedMonths.has(m));
+
+    if (missingActualMonths.length > 0) {
+      const fallbackRows = await fetchTripleWhaleGrowthMonths(year, missingActualMonths);
+      for (const row of fallbackRows) {
+        if (!returnedMonths.has(row.month)) {
+          shopifyMonthly.push(row);
+          returnedMonths.add(row.month);
+        }
+      }
+      shopifyMonthly.sort(
+        (a: any, b: any) =>
+          new Date("1 " + a.month.replace("'", "20")).getTime() -
+          new Date("1 " + b.month.replace("'", "20")).getTime(),
+      );
+    }
+
+    const dailyDates = Object.keys(mergedDaily).sort();
+    const finalReturnedMonths = shopifyMonthly.map((m: any) => m.month);
 
     return {
       year,
@@ -670,8 +688,8 @@ export async function fetchShopifyGrowthYear(year: number) {
       coverage: {
         dataStart: dailyDates[0] ?? null,
         dataEnd: dailyDates.at(-1) ?? null,
-        returnedMonths,
-        missingMonths: expectedMonths.filter((m) => !returnedMonths.includes(m)),
+        returnedMonths: finalReturnedMonths,
+        missingMonths: expectedMonths.filter((m) => !finalReturnedMonths.includes(m)),
       },
     };
   } catch (err: any) {
