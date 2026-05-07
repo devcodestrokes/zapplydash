@@ -830,12 +830,15 @@ async function fetchTripleWhaleGrowthMonths(year: number, monthLabels: string[])
 
     await Promise.all(planned.map(async ({ market, shop }) => {
       try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8_000);
         const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
           method: "POST",
           headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+          signal: ctrl.signal,
           cache: "no-store",
-        });
+        }).finally(() => clearTimeout(timer));
         if (!res.ok) return;
         const data = await res.json();
         const metrics = data.metrics ?? [];
