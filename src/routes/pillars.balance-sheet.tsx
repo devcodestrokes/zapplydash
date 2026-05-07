@@ -130,7 +130,7 @@ function BalanceSheetPage() {
     };
   }, []);
 
-  const { xero, jortt, shopifyPayouts, syncedAt } = useMemo(() => {
+  const { xero, jortt, shopifyPayouts, paypalBalances, mollieBalances, syncedAt } = useMemo(() => {
     const xero =
       data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error
         ? data.xero
@@ -139,14 +139,18 @@ function BalanceSheetPage() {
       data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error
         ? data.jortt
         : null;
-    const sp =
-      (data as any)?.shopifyPayouts &&
-      typeof (data as any).shopifyPayouts === "object" &&
-      !(data as any).shopifyPayouts.__empty &&
-      !(data as any).shopifyPayouts.__error
-        ? (data as any).shopifyPayouts
-        : null;
-    return { xero, jortt, shopifyPayouts: sp, syncedAt: data?.syncedAt ?? null };
+    const pickLive = (k: string) => {
+      const v = (data as any)?.[k];
+      return v && typeof v === "object" && !v.__empty && !v.__error ? v : null;
+    };
+    return {
+      xero,
+      jortt,
+      shopifyPayouts: pickLive("shopifyPayouts"),
+      paypalBalances: pickLive("paypalBalances"),
+      mollieBalances: pickLive("mollieBalances"),
+      syncedAt: data?.syncedAt ?? null,
+    };
   }, [data]);
 
   // ── derive figures (real data only, "—" otherwise) ──
@@ -228,7 +232,30 @@ function BalanceSheetPage() {
       });
     }
 
-    // Augment with manually-entered cash positions (admin form)
+    // Augment with PayPal balances
+    const ppAccounts: any[] = Array.isArray(paypalBalances?.accounts) ? paypalBalances.accounts : [];
+    for (const a of ppAccounts) {
+      const bal = Number(a.balance ?? 0);
+      if (!bal) continue;
+      platformPending.push({
+        name: String(a.name ?? "PayPal"),
+        balance: bal,
+        currency: String(a.currency ?? "EUR"),
+      });
+    }
+
+    // Augment with Mollie balances
+    const mlAccounts: any[] = Array.isArray(mollieBalances?.accounts) ? mollieBalances.accounts : [];
+    for (const a of mlAccounts) {
+      const bal = Number(a.balance ?? 0);
+      if (!bal) continue;
+      platformPending.push({
+        name: String(a.name ?? "Mollie"),
+        balance: bal,
+        currency: String(a.currency ?? "EUR"),
+      });
+    }
+
     const manualCash: any[] = Array.isArray((data as any)?.manual?.cashPositions)
       ? (data as any).manual.cashPositions
       : [];
@@ -439,7 +466,7 @@ function BalanceSheetPage() {
       quickRatio,
       suppliersInvoices,
     };
-  }, [xero, jortt, shopifyPayouts, syncedAt, data]);
+  }, [xero, jortt, shopifyPayouts, paypalBalances, mollieBalances, syncedAt, data]);
 
   // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
   type WeekRow = {

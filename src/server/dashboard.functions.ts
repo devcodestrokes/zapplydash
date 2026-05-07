@@ -106,6 +106,8 @@ function getConnections(): Record<string, string> {
     connections["loop"] = "connected";
   if (process.env.TRIPLE_WHALE_API_KEY) connections["triplewhale"] = "connected";
   if (process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET) connections["xero"] = "connected";
+  if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) connections["paypal"] = "connected";
+  if (process.env.MOLLIE_API_KEY) connections["mollie"] = "connected";
   return connections;
 }
 
@@ -146,6 +148,9 @@ function buildSourceStatus(cache: CacheMap) {
     entry("shopify", "today", "Shopify Plus · Today", "Today orders and revenue", 15),
     entry("shopify", "daily", "Shopify Plus · Daily", "Daily revenue for profit math", 720),
     entry("shopify", "repeat_funnel", "Shopify Plus · Repeat funnel", "Customer order-history cohorts", 720),
+    entry("shopify", "payouts", "Shopify Payments · Payouts", "Pending balances and scheduled payouts per market", 60),
+    entry("paypal", "balances", "PayPal · Balances", "Live PayPal account balances", 60),
+    entry("mollie", "balances", "Mollie · Balances", "Live Mollie balances (available + pending)", 60),
     entry("triplewhale", "summary", "Triple Whale · Summary", "Ad spend, ROAS, MER and gross profit", 30),
     entry("triplewhale", "customer_economics", "Triple Whale · Customer economics", "NCPA, 90D LTV and 365D LTV", 720),
     entry("triplewhale", "daily", "Triple Whale · Daily", "Daily ad spend for profit math", 720),
@@ -171,6 +176,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     ["shopify", "daily"],
     ["shopify", "repeat_funnel"],
     ["shopify", "payouts"],
+    ["paypal", "balances"],
+    ["mollie", "balances"],
     ["triplewhale", "summary"],
     ["triplewhale", "customer_economics"],
     ["triplewhale", "daily"],
@@ -192,6 +199,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   const shopifyDailyCache = get("shopify", "daily");
   const shopifyRepeatFunnelCache = get("shopify", "repeat_funnel");
   const shopifyPayoutsCache = get("shopify", "payouts");
+  const paypalBalancesCache = get("paypal", "balances");
+  const mollieBalancesCache = get("mollie", "balances");
   const tripleWhaleCache = get("triplewhale", "summary");
   const tripleWhaleCustomerEconomicsCache = get("triplewhale", "customer_economics");
   const tripleWhaleDailyCache = get("triplewhale", "daily");
@@ -240,6 +249,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   collectError("shopifyDaily", shopifyDailyCache);
   collectError("shopifyRepeatFunnel", shopifyRepeatFunnelCache);
   collectError("shopifyPayouts", shopifyPayoutsCache);
+  collectError("paypalBalances", paypalBalancesCache);
+  collectError("mollieBalances", mollieBalancesCache);
   collectError("tripleWhale", tripleWhaleCache);
   collectError("tripleWhaleCustomerEconomics", tripleWhaleCustomerEconomicsCache);
   collectError("tripleWhaleDaily", tripleWhaleDailyCache);
@@ -279,6 +290,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     shopifyDaily: shopifyDailyCache?.payload ?? null,
     shopifyRepeatFunnel: shopifyRepeatFunnelCache?.payload ?? null,
     shopifyPayouts: shopifyPayoutsCache?.payload ?? null,
+    paypalBalances: paypalBalancesCache?.payload ?? null,
+    mollieBalances: mollieBalancesCache?.payload ?? null,
     tripleWhale: tripleWhaleCache?.payload ?? null,
     tripleWhaleCustomerEconomics,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,

@@ -27,6 +27,22 @@ const API_KEY_SOURCES = [
     docsUrl: "https://developers.triplewhale.com",
   },
   {
+    id: "paypal",
+    name: "PayPal",
+    desc: "Live account balances · 'To be Received'",
+    api: "OAuth2 · PAYPAL_CLIENT_ID/SECRET",
+    color: "#003087",
+    docsUrl: "https://developer.paypal.com/api/rest/",
+  },
+  {
+    id: "mollie",
+    name: "Mollie",
+    desc: "Live balances (available + pending) · 'To be Received'",
+    api: "REST v2 · MOLLIE_API_KEY",
+    color: "#0F2D40",
+    docsUrl: "https://docs.mollie.com/reference/v2/balances-api/list-balances",
+  },
+  {
     id: "jortt",
     name: "Jortt",
     desc: "Revenue reconciliation · invoice data",
