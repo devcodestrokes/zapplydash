@@ -171,6 +171,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
     ["shopify", "daily"],
     ["shopify", "repeat_funnel"],
     ["shopify", "payouts"],
+    ["paypal", "balances"],
+    ["mollie", "balances"],
     ["triplewhale", "summary"],
     ["triplewhale", "customer_economics"],
     ["triplewhale", "daily"],
