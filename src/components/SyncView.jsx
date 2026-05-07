@@ -1,3 +1,4 @@
+import { authedFetch } from "@/lib/authed-fetch";
 import { useState, useEffect, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink, Bug, CheckCircle2, AlertTriangle, XCircle, MinusCircle } from "lucide-react";
@@ -169,7 +170,7 @@ export default function SyncView({ initialConnections = {} }) {
     try {
       // Try /api/sync first; fall back to /api/public/sync (which is exposed
       // without auth in published builds).
-      let res = await fetch("/api/sync", { method: "POST" }).catch(() => null);
+      let res = await authedFetch("/api/sync", { method: "POST" }).catch(() => null);
       if (!res || !res.ok) {
         res = await fetch("/api/public/sync", { method: "POST" }).catch(() => null);
       }
