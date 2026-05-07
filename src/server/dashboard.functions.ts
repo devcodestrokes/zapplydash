@@ -345,14 +345,14 @@ export const getGrowthYearData = createServerFn({ method: "POST" })
           `Growth Year ${year}`,
         );
         if (!result) return { ok: false, error: "No Shopify data for that year" } as const;
-        growthYearCache.set(year, { data: result, fetchedAt: Date.now() });
+        growthYearCache.set(cacheKey, { data: result, fetchedAt: Date.now() });
         return { ok: true, ...result } as const;
       } catch (err: any) {
         return { ok: false, error: err?.message ?? "fetch failed" } as const;
       } finally {
-        growthYearInflight.delete(year);
+        growthYearInflight.delete(cacheKey);
       }
     })();
-    growthYearInflight.set(year, task);
+    growthYearInflight.set(cacheKey, task);
     return await task;
   });
