@@ -6,6 +6,8 @@ import {
   fetchShopifyDaily,
   fetchShopifyRepeatFunnel,
   fetchShopifyPayouts,
+  fetchPaypalBalances,
+  fetchMollieBalances,
   fetchTripleWhale,
   fetchTripleWhaleCustomerEconomics,
   fetchTripleWhaleDaily,
