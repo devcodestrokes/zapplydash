@@ -282,9 +282,37 @@ function DailyPnlPage() {
         : `${dKey.slice(5)}`;
       points.push({ label, selected: dayRev(dKey), previous: dayRev(bKey) });
     }
+    // Fallback: shopifyDaily only has data through T-1, so for ranges that
+    // include today (or end on today) the most recent point comes back as 0
+    // and the chart shows the "syncing" placeholder. Backfill those points
+    // with live totals from Shopify "today" + Triple Whale ranges so the
+    // chart renders immediately instead of waiting for the nightly daily sync.
+    const todayKey = todayIso();
+    const sumTwRev = (arr: TwRow[]) =>
+      arr.reduce((s, r: any) => s + (typeof r?.revenue === "number" ? r.revenue : 0), 0);
+    if (len === 1) {
+      // Single-day view: backfill selected & previous from the live totals.
+      const liveSelected =
+        today.reduce((s, r) => s + (r.revenue || 0), 0) || sumTwRev(twRange);
+      const livePrevious = sumTwRev(twBase);
+      if (points[0]) {
+        if (!points[0].selected && liveSelected) points[0].selected = liveSelected;
+        if (!points[0].previous && livePrevious) points[0].previous = livePrevious;
+      }
+    } else {
+      // Multi-day view: only the trailing today point is missing — patch it.
+      const lastIdx = points.findIndex((p, i) => {
+        const d = new Date(start); d.setUTCDate(d.getUTCDate() + i);
+        return fmtIso(d) === todayKey;
+      });
+      if (lastIdx >= 0 && !points[lastIdx].selected) {
+        const liveToday = today.reduce((s, r) => s + (r.revenue || 0), 0);
+        if (liveToday) points[lastIdx].selected = liveToday;
+      }
+    }
     const hasAny = points.some((p) => p.selected > 0 || p.previous > 0);
     return { points, hasAny, len };
-  }, [shopifyDaily, dateRange.from, dateRange.to]);
+  }, [shopifyDaily, today, twRange, twBase, dateRange.from, dateRange.to]);
 
   // ---- Full P&L breakdown rows (sourced from existing data) ----
   const pnlBreakdown = useMemo(() => {
