@@ -806,6 +806,59 @@ function tripleWhaleTodayHour(): number {
   return Math.min(25, Math.max(1, (Number.isFinite(hour) ? hour : 0) + 1));
 }
 
+async function fetchTripleWhaleGrowthMonths(year: number, monthLabels: string[]) {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  if (!apiKey || monthLabels.length === 0) return [];
+
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const rows: Record<string, { month: string; revenue: number; orders: number; refunds: number; byMarket: Record<string, { revenue: number; orders: number; refunds: number }>; calcVersion: number; source: string }> = {};
+  for (const label of monthLabels) rows[label] = { month: label, revenue: 0, orders: 0, refunds: 0, byMarket: {}, calcVersion: 3, source: "triplewhale_fallback" };
+
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
+
+  for (const label of monthLabels) {
+    const match = label.match(/^([A-Za-z]{3})\s+'(\d{2})$/);
+    const monthIdx = match ? monthNames.findIndex((m) => m.toLowerCase() === match[1].toLowerCase()) : -1;
+    if (monthIdx < 0) continue;
+    const month = String(monthIdx + 1).padStart(2, "0");
+    const endDay = String(new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate()).padStart(2, "0");
+    const start = `${year}-${month}-01`;
+    const end = `${year}-${month}-${endDay}`;
+
+    await Promise.all(planned.map(async ({ market, shop }) => {
+      try {
+        const res = await fetch("https://api.triplewhale.com/api/v2/summary-page/get-data", {
+          method: "POST",
+          headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ shopDomain: shop, period: { start, end }, todayHour: tripleWhaleTodayHour() }),
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const metrics = data.metrics ?? [];
+        const fxRate = await getEurRate(MARKET_CURRENCY[market] ?? "EUR", start, end);
+        const revenue = (twMetric(metrics, "netSales") ?? twMetric(metrics, "sales") ?? 0) * fxRate;
+        const orders = Math.round(twMetric(metrics, "shopifyOrders") ?? 0);
+        if (revenue <= 0 && orders <= 0) return;
+        const row = rows[label];
+        const marketRow = { revenue: +revenue.toFixed(2), orders, refunds: 0 };
+        row.byMarket[market] = marketRow;
+        row.revenue += marketRow.revenue;
+        row.orders += marketRow.orders;
+      } catch (err: any) {
+        console.warn(`TW growth fallback ${market} ${label}:`, err?.message);
+      }
+    }));
+  }
+
+  return Object.values(rows)
+    .filter((r) => r.revenue > 0 || r.orders > 0)
+    .map((r) => ({ ...r, revenue: +r.revenue.toFixed(2) }));
+}
+
 // Triple Whale: Summary Page endpoint
 // POST https://api.triplewhale.com/api/v2/summary-page/get-data
 // Docs: https://triplewhale.readme.io/reference/get-summary-page-data
