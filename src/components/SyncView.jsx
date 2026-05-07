@@ -168,12 +168,7 @@ export default function SyncView({ initialConnections = {} }) {
   async function syncAll() {
     setSyncing(true);
     try {
-      // Try /api/sync first; fall back to /api/public/sync (which is exposed
-      // without auth in published builds).
-      let res = await authedFetch("/api/sync", { method: "POST" }).catch(() => null);
-      if (!res || !res.ok) {
-        res = await fetch("/api/public/sync", { method: "POST" }).catch(() => null);
-      }
+      await authedFetch("/api/sync", { method: "POST" }).catch(() => null);
     } finally {
       // Poll the debug endpoint a few times so the panel updates as
       // background jobs finish writing to the cache.
