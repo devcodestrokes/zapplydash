@@ -38,6 +38,7 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
         const url = new URL(request.url);
         const code = url.searchParams.get("code");
         const error = url.searchParams.get("error");
+        const stateParam = url.searchParams.get("state");
 
         const appUrl =
           process.env.NEXT_PUBLIC_APP_URL ??
@@ -45,15 +46,45 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
           url.origin;
         const redirectUri = `${appUrl}/api/auth/xero/callback`;
 
+        // CSRF: validate state against signed cookie
+        const cookieHeader = request.headers.get("cookie") ?? "";
+        const stateCookie = cookieHeader
+          .split(";")
+          .map((c) => c.trim())
+          .find((c) => c.startsWith("xero_state="))
+          ?.slice("xero_state=".length);
+
+        const clearStateCookie =
+          "xero_state=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax";
+
+        if (!stateParam || !stateCookie || stateParam !== stateCookie) {
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: `${appUrl}/?xero_error=invalid_state`,
+              "Set-Cookie": clearStateCookie,
+            },
+          });
+        }
+
         if (error) {
           console.error("Xero OAuth error:", error);
-          return Response.redirect(
-            `${appUrl}/?xero_error=${encodeURIComponent(error)}`,
-            302,
-          );
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: `${appUrl}/?xero_error=${encodeURIComponent(error)}`,
+              "Set-Cookie": clearStateCookie,
+            },
+          });
         }
         if (!code) {
-          return Response.redirect(`${appUrl}/?xero_error=no_code`, 302);
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: `${appUrl}/?xero_error=no_code`,
+              "Set-Cookie": clearStateCookie,
+            },
+          });
         }
 
         const clientId = process.env.XERO_CLIENT_ID;
