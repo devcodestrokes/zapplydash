@@ -74,6 +74,20 @@ const ALL_JOBS: Job[] = [
     maxAgeMin: 30,
   },
   {
+    name: "paypal_balances",
+    provider: "paypal",
+    key: "balances",
+    fn: fetchPaypalBalances,
+    maxAgeMin: 30,
+  },
+  {
+    name: "mollie_balances",
+    provider: "mollie",
+    key: "balances",
+    fn: fetchMollieBalances,
+    maxAgeMin: 30,
+  },
+  {
     name: "triplewhale",
     provider: "triplewhale",
     key: "summary",
