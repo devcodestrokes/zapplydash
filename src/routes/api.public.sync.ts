@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { runAll, runAllInBackground } from "@/server/sync.server";
+import { verifySyncSecret } from "@/server/sync-auth.server";
 
 // POST /api/public/sync
 //   Public-prefixed sync trigger. Bypasses auth on published deployments
