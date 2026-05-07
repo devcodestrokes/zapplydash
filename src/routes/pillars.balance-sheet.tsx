@@ -466,7 +466,7 @@ function BalanceSheetPage() {
       quickRatio,
       suppliersInvoices,
     };
-  }, [xero, jortt, shopifyPayouts, syncedAt, data]);
+  }, [xero, jortt, shopifyPayouts, paypalBalances, mollieBalances, syncedAt, data]);
 
   // ── Weekly trend (last 8 weeks) — derived from Xero monthly net profit ──
   type WeekRow = {
