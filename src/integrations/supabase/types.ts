@@ -19,18 +19,21 @@ export type Database = {
           description: string | null
           key: string
           updated_at: string
+          user_id: string | null
           value: Json
         }
         Insert: {
           description?: string | null
           key: string
           updated_at?: string
+          user_id?: string | null
           value?: Json
         }
         Update: {
           description?: string | null
           key?: string
           updated_at?: string
+          user_id?: string | null
           value?: Json
         }
         Relationships: []
@@ -45,6 +48,7 @@ export type Database = {
           id: string
           notes: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           account_name: string
@@ -55,6 +59,7 @@ export type Database = {
           id?: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           account_name?: string
@@ -65,6 +70,7 @@ export type Database = {
           id?: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -99,6 +105,7 @@ export type Database = {
           provider: string
           refresh_token: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           access_token: string
@@ -109,6 +116,7 @@ export type Database = {
           provider: string
           refresh_token?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           access_token?: string
@@ -119,6 +127,7 @@ export type Database = {
           provider?: string
           refresh_token?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -133,6 +142,7 @@ export type Database = {
           sku: string
           unit_cost_eur: number
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -144,6 +154,7 @@ export type Database = {
           sku: string
           unit_cost_eur?: number
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -155,6 +166,7 @@ export type Database = {
           sku?: string
           unit_cost_eur?: number
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
