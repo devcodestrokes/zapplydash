@@ -176,10 +176,15 @@ export async function runAll(): Promise<Record<string, string>> {
   return results;
 }
 
-/** Fire-and-forget — caller does NOT await individual jobs. */
+/** Fire-and-forget — caller does NOT await individual jobs. Uses waitUntil where available so Workers don't kill the promise. */
 export function runAllInBackground(): void {
-  // Intentionally not awaited; runJob() handles errors internally.
-  void runAll();
+  const p = runAll().catch((e) => console.error("[sync] runAll background error:", e));
+  const ER = (globalThis as any).EdgeRuntime;
+  if (ER && typeof ER.waitUntil === "function") {
+    ER.waitUntil(p);
+    return;
+  }
+  void p;
 }
 
 /**
