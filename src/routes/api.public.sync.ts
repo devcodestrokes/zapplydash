@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { runAll, runAllInBackground } from "@/server/sync.server";
+import { verifySyncSecret } from "@/server/sync-auth.server";
 
 // POST /api/public/sync
 //   Public-prefixed sync trigger. Bypasses auth on published deployments
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/api/public/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const denied = verifySyncSecret(request);
+        if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const isAsync = searchParams.get("async") === "1";
         const startedAt = new Date().toISOString();
@@ -40,6 +43,8 @@ export const Route = createFileRoute("/api/public/sync")({
         });
       },
       GET: async ({ request }) => {
+        const denied = verifySyncSecret(request);
+        if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const isSync = searchParams.get("async") === "0" || searchParams.get("wait") === "1";
         const startedAt = new Date().toISOString();

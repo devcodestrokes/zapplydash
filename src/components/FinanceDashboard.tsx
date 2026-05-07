@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authedFetch } from "@/lib/authed-fetch";
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "@tanstack/react-router";
 import SyncView from "./SyncView";
@@ -3456,7 +3457,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     setRangeSyncing(true);
     setRangeData(null);
     try {
-      const res  = await fetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
+      const res  = await authedFetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
       const json = await res.json();
       setRangeData(json.rangeData ?? null);
     } catch {
@@ -3476,7 +3477,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
     setSyncError(null);
     try {
       // /api/sync now returns immediately (~50ms) and runs in the background.
-      const res = await fetch("/api/sync", { method: "POST" });
+      const res = await authedFetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
       // Poll the dashboard a few times so cards fill in as jobs complete.
       // Background jobs typically finish within 60s.

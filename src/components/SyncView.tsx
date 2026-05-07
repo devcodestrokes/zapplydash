@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { authedFetch } from "@/lib/authed-fetch";
 import { useState, useEffect } from "react";
 import { RefreshCw, Plug, CircleAlert, ChevronRight, LayoutDashboard, ExternalLink } from "lucide-react";
 
@@ -86,7 +87,7 @@ export default function SyncView({ initialConnections = {} }) {
 
   async function syncAll() {
     setSyncing(true);
-    await fetch("/api/jortt").catch(() => {});
+    await authedFetch("/api/jortt").catch(() => {});
     setTimeout(() => setSyncing(false), 1500);
   }
 

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireAllowedUser } from "./auth.middleware";
 import { z } from "zod";
 import {
   fetchShopifyStoreDetail,
@@ -153,7 +154,7 @@ async function cacheFirst<T>(
 }
 
 // ─── Store dashboard (Shopify) ──────────────────────────────────────────────
-export const getStoreDashboard = createServerFn({ method: "GET" })
+export const getStoreDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(
     dateRangeSchema.extend({
       storeCode: z.enum(["NL", "UK", "US", "EU"]),
@@ -177,7 +178,7 @@ export const getStoreDashboard = createServerFn({ method: "GET" })
   });
 
 // ─── Triple Whale dashboard ─────────────────────────────────────────────────
-export const getTripleWhaleDashboard = createServerFn({ method: "GET" })
+export const getTripleWhaleDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(dateRangeSchema)
   .handler(async ({ data }) => {
     const cacheKey = `summary_${data.from}_${data.to}`;
@@ -197,7 +198,7 @@ export const getTripleWhaleDashboard = createServerFn({ method: "GET" })
   });
 
 // ─── Subscription dashboard (Loop UK/US/EU OR Juo NL) ───────────────────────
-export const getSubscriptionDashboard = createServerFn({ method: "GET" })
+export const getSubscriptionDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(
     dateRangeSchema.extend({
       storeCode: z.enum(["NL", "UK", "US", "EU"]),
@@ -243,7 +244,7 @@ export const getSubscriptionDashboard = createServerFn({ method: "GET" })
   });
 
 // ─── Invoice dashboard (Jortt) ──────────────────────────────────────────────
-export const getInvoiceDashboard = createServerFn({ method: "GET" })
+export const getInvoiceDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(dateRangeSchema)
   .handler(async ({ data }) => {
     const cacheKey = `detail_${data.from}_${data.to}`;
@@ -263,7 +264,7 @@ export const getInvoiceDashboard = createServerFn({ method: "GET" })
   });
 
 // ─── Accounting dashboard (Xero) ────────────────────────────────────────────
-export const getAccountingDashboard = createServerFn({ method: "GET" })
+export const getAccountingDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(z.object({ force: z.boolean().optional() }).optional())
   .handler(async ({ data }) => {
     const force = data?.force === true;
@@ -297,7 +298,7 @@ export interface XeroReportStatus {
   diagnostics?: any;
 }
 
-export const syncXeroAll = createServerFn({ method: "POST" }).handler(async () => {
+export const syncXeroAll = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
   const live: any = await fetchXero();
 
   if (!live) {

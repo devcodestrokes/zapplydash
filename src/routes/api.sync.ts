@@ -4,6 +4,7 @@ import {
   fetchTripleWhale,
 } from "@/server/fetchers.server";
 import { runAllInBackground } from "@/server/sync.server";
+import { verifyAllowedUser } from "@/server/user-auth.server";
 
 // POST /api/sync
 //   Fires the full sync in the background and returns immediately (~50ms).
@@ -18,6 +19,8 @@ export const Route = createFileRoute("/api/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const denied = await verifyAllowedUser(request);
+        if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const fromDate = searchParams.get("from") ?? undefined;
         const toDate = searchParams.get("to") ?? undefined;

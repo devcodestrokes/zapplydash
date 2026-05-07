@@ -1,3 +1,4 @@
+import { authedFetch } from "@/lib/authed-fetch";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
@@ -60,7 +61,7 @@ function MarginPerMarketPage() {
   useEffect(() => {
     let alive = true;
     setRangeSyncing(true);
-    fetch(`/api/sync?from=${daysAgoStr(30)}&to=${todayStr()}`, { method: "POST" })
+    authedFetch(`/api/sync?from=${daysAgoStr(30)}&to=${todayStr()}`, { method: "POST" })
       .then((r) => r.json())
       .then((json) => { if (alive) setRangeData(json.rangeData ?? null); })
       .catch(() => { if (alive) setRangeData(null); })
@@ -78,7 +79,7 @@ function MarginPerMarketPage() {
     setRangeSyncing(true);
     setRangeData(null);
     try {
-      const res = await fetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
+      const res = await authedFetch(`/api/sync?from=${from}&to=${to}`, { method: "POST" });
       const json = await res.json();
       setRangeData(json.rangeData ?? null);
     } catch {

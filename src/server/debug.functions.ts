@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireAllowedUser } from "./auth.middleware";
 import { readAllCache, ageMinutes, getWriteErrors } from "./cache.server";
 
 export interface ProviderDebug {
@@ -26,7 +27,7 @@ const TRACKED: Array<{ provider: string; key: string }> = [
   { provider: "xero", key: "accounting" },
 ];
 
-export const getSyncDebug = createServerFn({ method: "GET" }).handler(async () => {
+export const getSyncDebug = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const cache = await readAllCache();
   const writeErrors = getWriteErrors();
 
