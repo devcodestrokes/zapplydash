@@ -244,6 +244,8 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   collectError("shopifyDaily", shopifyDailyCache);
   collectError("shopifyRepeatFunnel", shopifyRepeatFunnelCache);
   collectError("shopifyPayouts", shopifyPayoutsCache);
+  collectError("paypalBalances", paypalBalancesCache);
+  collectError("mollieBalances", mollieBalancesCache);
   collectError("tripleWhale", tripleWhaleCache);
   collectError("tripleWhaleCustomerEconomics", tripleWhaleCustomerEconomicsCache);
   collectError("tripleWhaleDaily", tripleWhaleDailyCache);
