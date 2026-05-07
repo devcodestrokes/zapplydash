@@ -3278,25 +3278,32 @@ export async function fetchShopifyPayouts() {
 // Uses OAuth client_credentials to call /v1/reporting/balances. Requires the
 // Reports scope on the PayPal REST app.
 export async function fetchPaypalBalances() {
-  const clientId = process.env.PAYPAL_CLIENT_ID;
-  const secret = process.env.PAYPAL_CLIENT_SECRET;
+  const clientId = (process.env.PAYPAL_CLIENT_ID ?? "").trim();
+  const secret = (process.env.PAYPAL_CLIENT_SECRET ?? "").trim();
   if (!clientId || !secret) {
     return { live: false, reason: "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET not set", accounts: [] };
   }
-  const base = "https://api-m.paypal.com";
-  try {
-    const tokRes = await fetch(`${base}/v1/oauth2/token`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: "grant_type=client_credentials",
-    });
-    if (!tokRes.ok) {
-      return { live: false, reason: `PayPal token HTTP ${tokRes.status}`, accounts: [] };
-    }
+  const envPref = (process.env.PAYPAL_ENV ?? "live").toLowerCase();
+  const bases = envPref === "sandbox"
+    ? ["https://api-m.sandbox.paypal.com", "https://api-m.paypal.com"]
+    : ["https://api-m.paypal.com", "https://api-m.sandbox.paypal.com"];
+  let lastErr = "PayPal auth failed";
+  for (const base of bases) {
+    try {
+      const tokRes = await fetch(`${base}/v1/oauth2/token`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: "grant_type=client_credentials",
+      });
+      if (!tokRes.ok) {
+        const txt = await tokRes.text().catch(() => "");
+        lastErr = `PayPal token HTTP ${tokRes.status} on ${base.includes("sandbox") ? "sandbox" : "live"}${txt ? `: ${txt.slice(0, 160)}` : ""}`;
+        continue;
+      }
     const tokJson: any = await tokRes.json();
     const accessToken = tokJson?.access_token;
     if (!accessToken) return { live: false, reason: "PayPal token missing", accounts: [] };
