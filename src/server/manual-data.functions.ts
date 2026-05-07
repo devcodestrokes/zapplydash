@@ -4,7 +4,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // ───────── Cash positions ─────────
-export const listCashPositions = createServerFn({ method: "GET" }).handler(async () => {
+export const listCashPositions = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const { data, error } = await supabaseAdmin
     .from("cash_positions")
     .select("*")
@@ -22,7 +22,7 @@ const cashSchema = z.object({
   notes: z.string().max(500).nullable().optional(),
 });
 
-export const upsertCashPosition = createServerFn({ method: "POST" })
+export const upsertCashPosition = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((d: unknown) => cashSchema.parse(d))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin.from("cash_positions").upsert(data);
@@ -30,7 +30,7 @@ export const upsertCashPosition = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const deleteCashPosition = createServerFn({ method: "POST" })
+export const deleteCashPosition = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin.from("cash_positions").delete().eq("id", data.id);
@@ -39,7 +39,7 @@ export const deleteCashPosition = createServerFn({ method: "POST" })
   });
 
 // ───────── Inventory positions ─────────
-export const listInventoryPositions = createServerFn({ method: "GET" }).handler(async () => {
+export const listInventoryPositions = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const { data, error } = await supabaseAdmin
     .from("inventory_positions")
     .select("*")
@@ -58,7 +58,7 @@ const invSchema = z.object({
   notes: z.string().max(500).nullable().optional(),
 });
 
-export const upsertInventoryPosition = createServerFn({ method: "POST" })
+export const upsertInventoryPosition = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((d: unknown) => invSchema.parse(d))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin.from("inventory_positions").upsert(data);
@@ -66,7 +66,7 @@ export const upsertInventoryPosition = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const deleteInventoryPosition = createServerFn({ method: "POST" })
+export const deleteInventoryPosition = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin.from("inventory_positions").delete().eq("id", data.id);
@@ -75,7 +75,7 @@ export const deleteInventoryPosition = createServerFn({ method: "POST" })
   });
 
 // ───────── App settings ─────────
-export const getAppSettings = createServerFn({ method: "GET" }).handler(async () => {
+export const getAppSettings = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const { data, error } = await supabaseAdmin.from("app_settings").select("*");
   if (error) throw new Error(error.message);
   const map: Record<string, any> = {};
@@ -83,7 +83,7 @@ export const getAppSettings = createServerFn({ method: "GET" }).handler(async ()
   return map;
 });
 
-export const setAppSetting = createServerFn({ method: "POST" })
+export const setAppSetting = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((d: unknown) =>
     z.object({ key: z.string().min(1).max(80), value: z.any() }).parse(d),
   )
@@ -96,7 +96,7 @@ export const setAppSetting = createServerFn({ method: "POST" })
   });
 
 // ───────── Combined snapshot for dashboards ─────────
-export const getManualDataSnapshot = createServerFn({ method: "GET" }).handler(async () => {
+export const getManualDataSnapshot = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const [cash, inv, settings] = await Promise.all([
     supabaseAdmin.from("cash_positions").select("*"),
     supabaseAdmin.from("inventory_positions").select("*"),

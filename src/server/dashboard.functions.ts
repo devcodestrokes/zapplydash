@@ -28,7 +28,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-export const getTripleWhaleRange = createServerFn({ method: "POST" })
+export const getTripleWhaleRange = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((input: { from: string; to: string }) => input)
   .handler(async ({ data }) => {
     const key = `${data.from}|${data.to}`;
@@ -72,7 +72,7 @@ export const getTripleWhaleRange = createServerFn({ method: "POST" })
     return await task;
   });
 
-export const getTripleWhaleProgress = createServerFn({ method: "POST" })
+export const getTripleWhaleProgress = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((input: { from: string; to: string }) => input)
   .handler(async ({ data }) => {
     const key = `${data.from}|${data.to}`;
@@ -169,7 +169,7 @@ function buildSourceStatus(cache: CacheMap) {
   };
 }
 
-export const getDashboardData = createServerFn({ method: "GET" }).handler(async () => {
+export const getDashboardData = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const cache = await readCacheKeys([
     ["shopify", "markets"],
     ["shopify", "monthly"],
@@ -310,7 +310,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).handler(async 
   };
 });
 
-export const getSyncStatus = createServerFn({ method: "GET" }).handler(async () => {
+export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requireAllowedUser]).handler(async () => {
   const cache = await readCacheKeys([
     ["shopify", "markets"],
     ["shopify", "monthly"],
@@ -338,7 +338,7 @@ const GROWTH_YEAR_CACHE_VERSION = 3;
 const growthYearCache = new Map<string, { data: any; fetchedAt: number }>();
 const growthYearInflight = new Map<string, Promise<any>>();
 
-export const getGrowthYearData = createServerFn({ method: "POST" })
+export const getGrowthYearData = createServerFn({ method: "POST" }).middleware([requireAllowedUser])
   .inputValidator((input: { year: number }) => ({ year: Number(input.year) }))
   .handler(async ({ data }) => {
     const year = data.year;
