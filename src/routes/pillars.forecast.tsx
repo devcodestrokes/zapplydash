@@ -1137,8 +1137,7 @@ function GrowthPlan2026({ data }: { data: any }) {
             )}
             {model.missingMonths.length > 0 && (
               <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                Shopify returned data only for {model.returnedMonths.join(", ") || "no months"}.
-                Missing from the API response: {model.missingMonths.join(", ")}.
+                Missing completed historical months: {model.missingMonths.join(", ")}.
               </div>
             )}
           </div>
