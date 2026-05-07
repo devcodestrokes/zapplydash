@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireAllowedUser } from "./auth.middleware";
 import { readCacheKeys, writeCache, ageMinutes, type CacheMap } from "./cache.server";
 import { refreshStaleInBackground } from "./sync.server";
 import {

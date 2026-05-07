@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireAllowedUser } from "./auth.middleware";
 import { readAllCache, ageMinutes, getWriteErrors } from "./cache.server";
 
 export interface ProviderDebug {
