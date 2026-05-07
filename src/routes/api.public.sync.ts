@@ -15,6 +15,8 @@ export const Route = createFileRoute("/api/public/sync")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const denied = verifySyncSecret(request);
+        if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const isAsync = searchParams.get("async") === "1";
         const startedAt = new Date().toISOString();
