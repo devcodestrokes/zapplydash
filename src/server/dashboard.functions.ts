@@ -315,9 +315,11 @@ export const getSyncStatus = createServerFn({ method: "GET" }).handler(async () 
 });
 
 // In-memory cache for Growth Plan year data — 10 minutes per year.
+// Bump GROWTH_YEAR_CACHE_VERSION to invalidate previously cached partial fetches.
 const GROWTH_YEAR_TTL_MS = 10 * 60 * 1000;
-const growthYearCache = new Map<number, { data: any; fetchedAt: number }>();
-const growthYearInflight = new Map<number, Promise<any>>();
+const GROWTH_YEAR_CACHE_VERSION = 2;
+const growthYearCache = new Map<string, { data: any; fetchedAt: number }>();
+const growthYearInflight = new Map<string, Promise<any>>();
 
 export const getGrowthYearData = createServerFn({ method: "POST" })
   .inputValidator((input: { year: number }) => ({ year: Number(input.year) }))
@@ -326,12 +328,13 @@ export const getGrowthYearData = createServerFn({ method: "POST" })
     if (!Number.isInteger(year) || year < 2015 || year > 2100) {
       return { ok: false, error: "Invalid year" } as const;
     }
+    const cacheKey = `${GROWTH_YEAR_CACHE_VERSION}:${year}`;
     const now = Date.now();
-    const cached = growthYearCache.get(year);
+    const cached = growthYearCache.get(cacheKey);
     if (cached && now - cached.fetchedAt < GROWTH_YEAR_TTL_MS) {
       return { ok: true, ...cached.data } as const;
     }
-    const pending = growthYearInflight.get(year);
+    const pending = growthYearInflight.get(cacheKey);
     if (pending) return await pending;
 
     const task = (async () => {
@@ -342,14 +345,14 @@ export const getGrowthYearData = createServerFn({ method: "POST" })
           `Growth Year ${year}`,
         );
         if (!result) return { ok: false, error: "No Shopify data for that year" } as const;
-        growthYearCache.set(year, { data: result, fetchedAt: Date.now() });
+        growthYearCache.set(cacheKey, { data: result, fetchedAt: Date.now() });
         return { ok: true, ...result } as const;
       } catch (err: any) {
         return { ok: false, error: err?.message ?? "fetch failed" } as const;
       } finally {
-        growthYearInflight.delete(year);
+        growthYearInflight.delete(cacheKey);
       }
     })();
-    growthYearInflight.set(year, task);
+    growthYearInflight.set(cacheKey, task);
     return await task;
   });

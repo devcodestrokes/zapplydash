@@ -498,7 +498,7 @@ export async function fetchShopifyGrowthYear(year: number) {
         const token = await getShopifyToken(store);
         if (!token) return { code, monthlySums: {}, dailySums: {} };
 
-        const monthResults = await mapWithConcurrency(monthIndices, 2, async (monthIdx) => {
+        const monthResults = await mapWithConcurrency(monthIndices, 1, async (monthIdx) => {
           const { since, until } = monthWindow(monthIdx);
           const monthlySums: Record<string, { revenue: number; orders: number; refunds: number }> = {};
           const dailySums: Record<string, { revenue: number; orders: number }> = {};
@@ -508,14 +508,43 @@ export async function fetchShopifyGrowthYear(year: number) {
           const maxPages = 120;
 
           while (hasNextPage && page < maxPages) {
-            const res: Response = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
-              method: "POST",
-              headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
-              body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
-              cache: "no-store",
-            });
-            if (!res.ok) break;
-            const json = await res.json();
+            // Throttle-aware fetch with up to 4 retries on 429 / GQL THROTTLED errors
+            let res: Response | null = null;
+            let json: any = null;
+            let attempt = 0;
+            while (attempt < 5) {
+              res = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+                method: "POST",
+                headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+                body: JSON.stringify({ query: SHOPIFY_GQL_PAGE(since, cursor, until) }),
+                cache: "no-store",
+              });
+              if (res.status === 429 || res.status === 502 || res.status === 503) {
+                const wait = Math.min(8000, 500 * Math.pow(2, attempt));
+                await new Promise((r) => setTimeout(r, wait));
+                attempt++;
+                continue;
+              }
+              if (!res.ok) break;
+              json = await res.json();
+              const throttled =
+                json?.errors?.[0]?.extensions?.code === "THROTTLED" ||
+                /throttle/i.test(json?.errors?.[0]?.message ?? "");
+              if (throttled) {
+                const wait = Math.min(8000, 500 * Math.pow(2, attempt));
+                await new Promise((r) => setTimeout(r, wait));
+                attempt++;
+                json = null;
+                continue;
+              }
+              break;
+            }
+            if (!res || !res.ok || !json) {
+              console.warn(
+                `Shopify growth-month ${year}-${monthIdx + 1} ${code}: gave up after ${attempt} retries (status=${res?.status})`,
+              );
+              break;
+            }
             if (json.errors) {
               console.error(`Shopify growth-month ${year}-${monthIdx + 1} ${code}:`, json.errors[0]?.message);
               break;
