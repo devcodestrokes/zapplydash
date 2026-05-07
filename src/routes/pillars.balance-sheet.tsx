@@ -232,7 +232,30 @@ function BalanceSheetPage() {
       });
     }
 
-    // Augment with manually-entered cash positions (admin form)
+    // Augment with PayPal balances
+    const ppAccounts: any[] = Array.isArray(paypalBalances?.accounts) ? paypalBalances.accounts : [];
+    for (const a of ppAccounts) {
+      const bal = Number(a.balance ?? 0);
+      if (!bal) continue;
+      platformPending.push({
+        name: String(a.name ?? "PayPal"),
+        balance: bal,
+        currency: String(a.currency ?? "EUR"),
+      });
+    }
+
+    // Augment with Mollie balances
+    const mlAccounts: any[] = Array.isArray(mollieBalances?.accounts) ? mollieBalances.accounts : [];
+    for (const a of mlAccounts) {
+      const bal = Number(a.balance ?? 0);
+      if (!bal) continue;
+      platformPending.push({
+        name: String(a.name ?? "Mollie"),
+        balance: bal,
+        currency: String(a.currency ?? "EUR"),
+      });
+    }
+
     const manualCash: any[] = Array.isArray((data as any)?.manual?.cashPositions)
       ? (data as any).manual.cashPositions
       : [];
