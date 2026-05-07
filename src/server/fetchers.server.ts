@@ -3304,46 +3304,49 @@ export async function fetchPaypalBalances() {
         lastErr = `PayPal token HTTP ${tokRes.status} on ${base.includes("sandbox") ? "sandbox" : "live"}${txt ? `: ${txt.slice(0, 160)}` : ""}`;
         continue;
       }
-    const tokJson: any = await tokRes.json();
-    const accessToken = tokJson?.access_token;
-    if (!accessToken) return { live: false, reason: "PayPal token missing", accounts: [] };
+      const tokJson: any = await tokRes.json();
+      const accessToken = tokJson?.access_token;
+      if (!accessToken) {
+        lastErr = `PayPal token missing on ${base.includes("sandbox") ? "sandbox" : "live"}`;
+        continue;
+      }
 
-    const balRes = await fetch(`${base}/v1/reporting/balances?currency_code=ALL`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-    });
-    if (!balRes.ok) {
-      const txt = await balRes.text().catch(() => "");
+      const balRes = await fetch(`${base}/v1/reporting/balances?currency_code=ALL`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (!balRes.ok) {
+        const txt = await balRes.text().catch(() => "");
+        lastErr = `PayPal balances HTTP ${balRes.status} on ${base.includes("sandbox") ? "sandbox" : "live"}${txt ? `: ${txt.slice(0, 160)}` : ""}`;
+        continue;
+      }
+      const balJson: any = await balRes.json();
+      const balances: any[] = balJson?.balances ?? [];
+      const accounts = balances
+        .map((b: any) => {
+          const total = Number(b?.total_balance?.value ?? 0);
+          const available = Number(b?.available_balance?.value ?? 0);
+          return {
+            name: `PayPal ${b?.currency ?? ""}`.trim(),
+            currency: String(b?.currency ?? "EUR"),
+            balance: total,
+            available,
+          };
+        })
+        .filter((a) => a.balance !== 0 || a.available !== 0);
       return {
-        live: false,
-        reason: `PayPal balances HTTP ${balRes.status}${txt ? `: ${txt.slice(0, 120)}` : ""}`,
-        accounts: [],
+        live: true,
+        env: base.includes("sandbox") ? "sandbox" : "live",
+        calcVersion: 2,
+        fetchedAt: new Date().toISOString(),
+        accountId: balJson?.account_id ?? null,
+        asOf: balJson?.as_of_time ?? null,
+        accounts,
       };
+    } catch (err: any) {
+      lastErr = err?.message ?? "PayPal fetch failed";
     }
-    const balJson: any = await balRes.json();
-    const balances: any[] = balJson?.balances ?? [];
-    const accounts = balances
-      .map((b: any) => {
-        const total = Number(b?.total_balance?.value ?? 0);
-        const available = Number(b?.available_balance?.value ?? 0);
-        return {
-          name: `PayPal ${b?.currency ?? ""}`.trim(),
-          currency: String(b?.currency ?? "EUR"),
-          balance: total,
-          available,
-        };
-      })
-      .filter((a) => a.balance !== 0 || a.available !== 0);
-    return {
-      live: true,
-      calcVersion: 1,
-      fetchedAt: new Date().toISOString(),
-      accountId: balJson?.account_id ?? null,
-      asOf: balJson?.as_of_time ?? null,
-      accounts,
-    };
-  } catch (err: any) {
-    return { live: false, reason: err?.message ?? "PayPal fetch failed", accounts: [] };
   }
+  return { live: false, reason: lastErr, accounts: [] };
 }
 
 // ─── Mollie — balances (live) ─────────────────────────────────────────────
