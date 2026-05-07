@@ -4,6 +4,7 @@ import {
   fetchTripleWhale,
 } from "@/server/fetchers.server";
 import { runAllInBackground } from "@/server/sync.server";
+import { verifySyncSecret } from "@/server/sync-auth.server";
 
 // POST /api/sync
 //   Fires the full sync in the background and returns immediately (~50ms).
