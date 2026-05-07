@@ -106,6 +106,8 @@ function getConnections(): Record<string, string> {
     connections["loop"] = "connected";
   if (process.env.TRIPLE_WHALE_API_KEY) connections["triplewhale"] = "connected";
   if (process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET) connections["xero"] = "connected";
+  if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) connections["paypal"] = "connected";
+  if (process.env.MOLLIE_API_KEY) connections["mollie"] = "connected";
   return connections;
 }
 
