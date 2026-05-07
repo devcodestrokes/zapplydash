@@ -3273,3 +3273,111 @@ export async function fetchShopifyPayouts() {
 
   return { calcVersion: 1, fetchedAt: new Date().toISOString(), markets: results };
 }
+
+// ─── PayPal — pending balances (live) ─────────────────────────────────────
+// Uses OAuth client_credentials to call /v1/reporting/balances. Requires the
+// Reports scope on the PayPal REST app.
+export async function fetchPaypalBalances() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const secret = process.env.PAYPAL_CLIENT_SECRET;
+  if (!clientId || !secret) {
+    return { live: false, reason: "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET not set", accounts: [] };
+  }
+  const base = "https://api-m.paypal.com";
+  try {
+    const tokRes = await fetch(`${base}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: "grant_type=client_credentials",
+    });
+    if (!tokRes.ok) {
+      return { live: false, reason: `PayPal token HTTP ${tokRes.status}`, accounts: [] };
+    }
+    const tokJson: any = await tokRes.json();
+    const accessToken = tokJson?.access_token;
+    if (!accessToken) return { live: false, reason: "PayPal token missing", accounts: [] };
+
+    const balRes = await fetch(`${base}/v1/reporting/balances?currency_code=ALL`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    });
+    if (!balRes.ok) {
+      const txt = await balRes.text().catch(() => "");
+      return {
+        live: false,
+        reason: `PayPal balances HTTP ${balRes.status}${txt ? `: ${txt.slice(0, 120)}` : ""}`,
+        accounts: [],
+      };
+    }
+    const balJson: any = await balRes.json();
+    const balances: any[] = balJson?.balances ?? [];
+    const accounts = balances
+      .map((b: any) => {
+        const total = Number(b?.total_balance?.value ?? 0);
+        const available = Number(b?.available_balance?.value ?? 0);
+        return {
+          name: `PayPal ${b?.currency ?? ""}`.trim(),
+          currency: String(b?.currency ?? "EUR"),
+          balance: total,
+          available,
+        };
+      })
+      .filter((a) => a.balance !== 0 || a.available !== 0);
+    return {
+      live: true,
+      calcVersion: 1,
+      fetchedAt: new Date().toISOString(),
+      accountId: balJson?.account_id ?? null,
+      asOf: balJson?.as_of_time ?? null,
+      accounts,
+    };
+  } catch (err: any) {
+    return { live: false, reason: err?.message ?? "PayPal fetch failed", accounts: [] };
+  }
+}
+
+// ─── Mollie — balances (live) ─────────────────────────────────────────────
+// Uses GET /v2/balances. Returns one row per balance/currency.
+export async function fetchMollieBalances() {
+  const key = process.env.MOLLIE_API_KEY;
+  if (!key) return { live: false, reason: "MOLLIE_API_KEY not set", accounts: [] };
+  try {
+    const res = await fetch("https://api.mollie.com/v2/balances?limit=250", {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return {
+        live: false,
+        reason: `Mollie HTTP ${res.status}${txt ? `: ${txt.slice(0, 120)}` : ""}`,
+        accounts: [],
+      };
+    }
+    const json: any = await res.json();
+    const items: any[] = json?._embedded?.balances ?? [];
+    const accounts = items.map((b: any) => {
+      const available = Number(b?.availableAmount?.value ?? 0);
+      const pending = Number(b?.pendingAmount?.value ?? 0);
+      const currency = String(b?.availableAmount?.currency ?? b?.currency ?? "EUR");
+      return {
+        id: b?.id,
+        name: `Mollie ${currency}`,
+        currency,
+        balance: available + pending,
+        available,
+        pending,
+      };
+    });
+    return {
+      live: true,
+      calcVersion: 1,
+      fetchedAt: new Date().toISOString(),
+      accounts,
+    };
+  } catch (err: any) {
+    return { live: false, reason: err?.message ?? "Mollie fetch failed", accounts: [] };
+  }
+}
