@@ -3278,72 +3278,89 @@ export async function fetchShopifyPayouts() {
 // Uses OAuth client_credentials to call /v1/reporting/balances. Requires the
 // Reports scope on the PayPal REST app.
 export async function fetchPaypalBalances() {
-  const clientId = process.env.PAYPAL_CLIENT_ID;
-  const secret = process.env.PAYPAL_CLIENT_SECRET;
+  const clientId = (process.env.PAYPAL_CLIENT_ID ?? "").trim();
+  const secret = (process.env.PAYPAL_CLIENT_SECRET ?? "").trim();
   if (!clientId || !secret) {
     return { live: false, reason: "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET not set", accounts: [] };
   }
-  const base = "https://api-m.paypal.com";
-  try {
-    const tokRes = await fetch(`${base}/v1/oauth2/token`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: "grant_type=client_credentials",
-    });
-    if (!tokRes.ok) {
-      return { live: false, reason: `PayPal token HTTP ${tokRes.status}`, accounts: [] };
-    }
-    const tokJson: any = await tokRes.json();
-    const accessToken = tokJson?.access_token;
-    if (!accessToken) return { live: false, reason: "PayPal token missing", accounts: [] };
+  const envPref = (process.env.PAYPAL_ENV ?? "live").toLowerCase();
+  const bases = envPref === "sandbox"
+    ? ["https://api-m.sandbox.paypal.com", "https://api-m.paypal.com"]
+    : ["https://api-m.paypal.com", "https://api-m.sandbox.paypal.com"];
+  let lastErr = "PayPal auth failed";
+  for (const base of bases) {
+    try {
+      const tokRes = await fetch(`${base}/v1/oauth2/token`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: "grant_type=client_credentials",
+      });
+      if (!tokRes.ok) {
+        const txt = await tokRes.text().catch(() => "");
+        lastErr = `PayPal token HTTP ${tokRes.status} on ${base.includes("sandbox") ? "sandbox" : "live"}${txt ? `: ${txt.slice(0, 160)}` : ""}`;
+        continue;
+      }
+      const tokJson: any = await tokRes.json();
+      const accessToken = tokJson?.access_token;
+      if (!accessToken) {
+        lastErr = `PayPal token missing on ${base.includes("sandbox") ? "sandbox" : "live"}`;
+        continue;
+      }
 
-    const balRes = await fetch(`${base}/v1/reporting/balances?currency_code=ALL`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-    });
-    if (!balRes.ok) {
-      const txt = await balRes.text().catch(() => "");
+      const balRes = await fetch(`${base}/v1/reporting/balances?currency_code=ALL`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (!balRes.ok) {
+        const txt = await balRes.text().catch(() => "");
+        lastErr = `PayPal balances HTTP ${balRes.status} on ${base.includes("sandbox") ? "sandbox" : "live"}${txt ? `: ${txt.slice(0, 160)}` : ""}`;
+        continue;
+      }
+      const balJson: any = await balRes.json();
+      const balances: any[] = balJson?.balances ?? [];
+      const accounts = balances
+        .map((b: any) => {
+          const total = Number(b?.total_balance?.value ?? 0);
+          const available = Number(b?.available_balance?.value ?? 0);
+          return {
+            name: `PayPal ${b?.currency ?? ""}`.trim(),
+            currency: String(b?.currency ?? "EUR"),
+            balance: total,
+            available,
+          };
+        })
+        .filter((a) => a.balance !== 0 || a.available !== 0);
       return {
-        live: false,
-        reason: `PayPal balances HTTP ${balRes.status}${txt ? `: ${txt.slice(0, 120)}` : ""}`,
-        accounts: [],
+        live: true,
+        env: base.includes("sandbox") ? "sandbox" : "live",
+        calcVersion: 2,
+        fetchedAt: new Date().toISOString(),
+        accountId: balJson?.account_id ?? null,
+        asOf: balJson?.as_of_time ?? null,
+        accounts,
       };
+    } catch (err: any) {
+      lastErr = err?.message ?? "PayPal fetch failed";
     }
-    const balJson: any = await balRes.json();
-    const balances: any[] = balJson?.balances ?? [];
-    const accounts = balances
-      .map((b: any) => {
-        const total = Number(b?.total_balance?.value ?? 0);
-        const available = Number(b?.available_balance?.value ?? 0);
-        return {
-          name: `PayPal ${b?.currency ?? ""}`.trim(),
-          currency: String(b?.currency ?? "EUR"),
-          balance: total,
-          available,
-        };
-      })
-      .filter((a) => a.balance !== 0 || a.available !== 0);
-    return {
-      live: true,
-      calcVersion: 1,
-      fetchedAt: new Date().toISOString(),
-      accountId: balJson?.account_id ?? null,
-      asOf: balJson?.as_of_time ?? null,
-      accounts,
-    };
-  } catch (err: any) {
-    return { live: false, reason: err?.message ?? "PayPal fetch failed", accounts: [] };
   }
+  return { live: false, reason: lastErr, accounts: [] };
 }
 
 // ─── Mollie — balances (live) ─────────────────────────────────────────────
 // Uses GET /v2/balances. Returns one row per balance/currency.
 export async function fetchMollieBalances() {
-  const key = process.env.MOLLIE_API_KEY;
+  const key = (process.env.MOLLIE_API_KEY ?? "").trim();
   if (!key) return { live: false, reason: "MOLLIE_API_KEY not set", accounts: [] };
+  if (!/^(live|test)_[A-Za-z0-9]+$/.test(key)) {
+    return {
+      live: false,
+      reason: `MOLLIE_API_KEY has wrong shape (expected live_… or test_…, got ${key.length} chars)`,
+      accounts: [],
+    };
+  }
   try {
     const res = await fetch("https://api.mollie.com/v2/balances?limit=250", {
       headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
