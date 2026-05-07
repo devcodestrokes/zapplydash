@@ -317,7 +317,7 @@ export const getSyncStatus = createServerFn({ method: "GET" }).handler(async () 
 // In-memory cache for Growth Plan year data — 10 minutes per year.
 // Bump GROWTH_YEAR_CACHE_VERSION to invalidate previously cached partial fetches.
 const GROWTH_YEAR_TTL_MS = 10 * 60 * 1000;
-const GROWTH_YEAR_CACHE_VERSION = 2;
+const GROWTH_YEAR_CACHE_VERSION = 3;
 const growthYearCache = new Map<string, { data: any; fetchedAt: number }>();
 const growthYearInflight = new Map<string, Promise<any>>();
 
