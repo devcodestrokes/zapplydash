@@ -3352,8 +3352,15 @@ export async function fetchPaypalBalances() {
 // ─── Mollie — balances (live) ─────────────────────────────────────────────
 // Uses GET /v2/balances. Returns one row per balance/currency.
 export async function fetchMollieBalances() {
-  const key = process.env.MOLLIE_API_KEY;
+  const key = (process.env.MOLLIE_API_KEY ?? "").trim();
   if (!key) return { live: false, reason: "MOLLIE_API_KEY not set", accounts: [] };
+  if (!/^(live|test)_[A-Za-z0-9]+$/.test(key)) {
+    return {
+      live: false,
+      reason: `MOLLIE_API_KEY has wrong shape (expected live_… or test_…, got ${key.length} chars)`,
+      accounts: [],
+    };
+  }
   try {
     const res = await fetch("https://api.mollie.com/v2/balances?limit=250", {
       headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
