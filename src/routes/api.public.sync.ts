@@ -43,6 +43,8 @@ export const Route = createFileRoute("/api/public/sync")({
         });
       },
       GET: async ({ request }) => {
+        const denied = verifySyncSecret(request);
+        if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const isSync = searchParams.get("async") === "0" || searchParams.get("wait") === "1";
         const startedAt = new Date().toISOString();
