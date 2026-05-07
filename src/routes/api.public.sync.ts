@@ -39,15 +39,30 @@ export const Route = createFileRoute("/api/public/sync")({
           results,
         });
       },
-      GET: async () => {
+      GET: async ({ request }) => {
+        const { searchParams } = new URL(request.url);
+        const isSync = searchParams.get("async") === "0" || searchParams.get("wait") === "1";
         const startedAt = new Date().toISOString();
-        const results = await runAll();
+
+        if (isSync) {
+          const results = await runAll();
+          return Response.json({
+            ok: true,
+            completed: true,
+            mode: "sync",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            results,
+          });
+        }
+
+        runAllInBackground();
         return Response.json({
           ok: true,
-          completed: true,
+          started: true,
+          mode: "async",
+          message: "Sync started in background. Add ?wait=1 to wait for completion.",
           startedAt,
-          finishedAt: new Date().toISOString(),
-          results,
         });
       },
     },
