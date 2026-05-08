@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAllowedUser } from "./auth.middleware";
 import { readCacheKeys, writeCache, ageMinutes, type CacheMap } from "./cache.server";
-import { refreshStaleInBackground } from "./sync.server";
+import { refreshStaleInBackground, runAll } from "./sync.server";
 import {
   fetchTripleWhale,
   fetchTripleWhaleCustomerEconomics,
@@ -329,6 +329,11 @@ export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requi
     ["xero", "accounting"],
   ]);
   return buildSourceStatus(cache);
+});
+
+export const triggerSyncNow = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
+  const results = await runAll();
+  return { ok: true, finishedAt: new Date().toISOString(), results };
 });
 
 // In-memory cache for Growth Plan year data — 10 minutes per year.

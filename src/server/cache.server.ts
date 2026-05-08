@@ -38,7 +38,10 @@ export interface CacheEntry {
 
 export type CacheMap = Record<string, CacheEntry | null>;
 
-const MEMORY_TTL_MS = 30_000;
+// Keep a server-memory fallback long enough for preview/dev syncs to be visible.
+// If Supabase rejects writes because the service-role key is unavailable, the
+// dashboard can still show the freshly fetched data in the current runtime.
+const MEMORY_TTL_MS = 30 * 60_000;
 const rowMemory = new Map<string, { entry: CacheEntry; readAt: number }>();
 
 function cacheId(provider: string, key: string) {
@@ -179,11 +182,13 @@ export async function writeCache(provider: string, key: string, payload: any): P
     lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
     return;
   }
+  const fetchedAt = new Date().toISOString();
+  remember(provider, key, { payload, fetchedAt });
   try {
     const { error } = await (serviceClient() as any)
       .from("data_cache")
       .upsert(
-        { provider, cache_key: key, payload, fetched_at: new Date().toISOString() },
+        { provider, cache_key: key, payload, fetched_at: fetchedAt },
         { onConflict: "provider,cache_key" }
       );
     if (error) {
@@ -191,7 +196,6 @@ export async function writeCache(provider: string, key: string, payload: any): P
       console.error(`writeCache ${id} db error:`, msg);
       lastWriteErrors.set(id, { message: msg, at: new Date().toISOString() });
     } else {
-      remember(provider, key, { payload, fetchedAt: new Date().toISOString() });
       // Clear any previous error after a successful write.
       lastWriteErrors.delete(id);
     }
