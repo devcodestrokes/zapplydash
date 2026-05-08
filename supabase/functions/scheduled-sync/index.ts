@@ -20,10 +20,18 @@ Deno.serve(async (req) => {
   const startedAt = new Date().toISOString();
   console.log(`[scheduled-sync] tick ${startedAt} -> ${APP_URL}`);
 
+  const SYNC_SECRET = Deno.env.get("SYNC_SECRET") ?? "";
+  if (!SYNC_SECRET) {
+    console.error("[scheduled-sync] SYNC_SECRET env var not set — request will be rejected by /api/public/sync");
+  }
+
   try {
     const res = await fetch(APP_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Sync-Token": SYNC_SECRET,
+      },
       // Fire-and-return: the app endpoint kicks the sync in the background
       // and responds immediately. We don't need to wait for completion.
       body: JSON.stringify({ source: "supabase-cron", at: startedAt }),
