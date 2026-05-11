@@ -725,13 +725,12 @@ function ForecastPage() {
 
 // =============== Growth Plan 2026 ===============
 
-type MarketCode = "NL" | "UK" | "US" | "EU";
+type MarketCode = "NL" | "UK" | "US";
 type Market = { code: MarketCode; name: string; color: string; bar: string };
 const MARKETS: Market[] = [
   { code: "NL", name: "Netherlands", color: "bg-neutral-900", bar: "bg-neutral-900" },
   { code: "UK", name: "United Kingdom", color: "bg-indigo-500", bar: "bg-indigo-500" },
   { code: "US", name: "United States", color: "bg-amber-500", bar: "bg-amber-500" },
-  { code: "EU", name: "Germany / EU", color: "bg-emerald-500", bar: "bg-emerald-500" },
 ];
 
 function GrowthCard({
