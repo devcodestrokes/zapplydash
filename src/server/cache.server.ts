@@ -1,4 +1,5 @@
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
+import { getRequestHeader } from "@tanstack/react-start/server";
 
 // Resolve Supabase credentials with sensible fallbacks.
 // In the TanStack Worker runtime, only VITE_* vars are injected reliably;
@@ -29,6 +30,25 @@ function serviceClient() {
     _client = createSupabaseJS(url, key, { auth: { persistSession: false } });
   }
   return _client;
+}
+
+function requestClient() {
+  try {
+    const auth = getRequestHeader("authorization");
+    if (!auth?.startsWith("Bearer ")) return serviceClient();
+    const { url } = resolveCreds();
+    const publishableKey =
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+    if (!url || !publishableKey) return serviceClient();
+    return createSupabaseJS(url, publishableKey, {
+      global: { headers: { Authorization: auth } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  } catch {
+    return serviceClient();
+  }
 }
 
 export interface CacheEntry {
@@ -68,7 +88,7 @@ export async function readCache(provider: string, key: string): Promise<CacheEnt
   if (remembered) return remembered;
 
   try {
-    const { data, error } = await (serviceClient() as any)
+    const { data, error } = await (requestClient() as any)
       .from("data_cache")
       .select("payload, fetched_at")
       .eq("provider", provider)
@@ -106,7 +126,7 @@ export async function readCacheKeys(keys: Array<[string, string]>): Promise<Cach
   const wanted = new Set(missing.map(([provider, key]) => cacheId(provider, key)));
 
   try {
-    const { data, error } = await (serviceClient() as any)
+    const { data, error } = await (requestClient() as any)
       .from("data_cache")
       .select("provider, cache_key, payload, fetched_at")
       .in("provider", providers)
@@ -135,7 +155,7 @@ export async function readCacheKeys(keys: Array<[string, string]>): Promise<Cach
  */
 export async function readAllCache(): Promise<CacheMap> {
   try {
-    const { data, error } = await (serviceClient() as any)
+    const { data, error } = await (requestClient() as any)
       .from("data_cache")
       .select("provider, cache_key, payload, fetched_at");
     if (error) {
@@ -185,7 +205,7 @@ export async function writeCache(provider: string, key: string, payload: any): P
   const fetchedAt = new Date().toISOString();
   remember(provider, key, { payload, fetchedAt });
   try {
-    const { error } = await (serviceClient() as any)
+    const { error } = await (requestClient() as any)
       .from("data_cache")
       .upsert(
         { provider, cache_key: key, payload, fetched_at: fetchedAt },
