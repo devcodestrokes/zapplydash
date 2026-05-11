@@ -7,7 +7,7 @@ const SHOPIFY_STORES = [
   { id: "shopify_zapply-nl",      name: "Shopify NL", flag: "🇳🇱", shop: "zapply-nl.myshopify.com",      desc: "Netherlands · orders, revenue" },
   { id: "shopify_zapplyde",       name: "Shopify UK", flag: "🇬🇧", shop: "zapplyde.myshopify.com",       desc: "United Kingdom · orders, revenue" },
   { id: "shopify_zapply-usa",     name: "Shopify US", flag: "🇺🇸", shop: "zapply-usa.myshopify.com",     desc: "United States · orders, revenue" },
-  { id: "shopify_zapplygermany",  name: "Shopify EU", flag: "🇩🇪", shop: "zapplygermany.myshopify.com",  desc: "Germany / EU · orders, revenue" },
+  
 ];
 
 const API_KEY_SOURCES = [

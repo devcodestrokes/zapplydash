@@ -96,7 +96,7 @@ const SHOPIFY_STORES = [
     storeKey: "SHOPIFY_US_STORE",
     status: "scaling",
   },
-  { code: "EU", flag: "🇩🇪", name: "Germany / EU", storeKey: "SHOPIFY_EU_STORE" },
+  
 ] as const;
 
 async function getShopifyToken(store: string): Promise<string | null> {
@@ -735,7 +735,7 @@ const TW_SHOPS = [
   { market: "NL", flag: "🇳🇱", envKeys: ["SHOPIFY_NL_STORE"] },
   { market: "UK", flag: "🇬🇧", envKeys: ["SHOPIFY_UK_STORE"] },
   { market: "US", flag: "🇺🇸", envKeys: ["SHOPIFY_US_STORE", "TRIPLE_WHALE_SHOP_US"] },
-  { market: "EU", flag: "🇩🇪", envKeys: ["SHOPIFY_EU_STORE"] },
+  
 ] as const;
 
 function toNumber(v: unknown): number | null {
@@ -1456,7 +1456,7 @@ async function _fetchJuo() {
 const LOOP_STORES = [
   { market: "UK", flag: "🇬🇧", envKey: "LOOP_UK_API_KEY" },
   { market: "US", flag: "🇺🇸", envKey: "LOOP_US_API_KEY" },
-  { market: "EU", flag: "🇩🇪", envKey: "LOOP_EU_API_KEY" },
+  
 ] as const;
 
 async function fetchLoopStore(market: string, flag: string, key: string) {

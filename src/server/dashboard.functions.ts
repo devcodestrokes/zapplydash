@@ -92,7 +92,7 @@ export const getTripleWhaleProgress = createServerFn({ method: "POST" }).middlew
 function getConnections(): Record<string, string> {
   const connections: Record<string, string> = {};
   if (process.env.SHOPIFY_APP_CLIENT_ID && process.env.SHOPIFY_APP_CLIENT_SECRET) {
-    const stores = ["SHOPIFY_NL_STORE", "SHOPIFY_UK_STORE", "SHOPIFY_US_STORE", "SHOPIFY_EU_STORE"];
+    const stores = ["SHOPIFY_NL_STORE", "SHOPIFY_UK_STORE", "SHOPIFY_US_STORE"];
     for (const key of stores) {
       const v = process.env[key];
       if (v) {

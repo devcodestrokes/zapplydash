@@ -725,13 +725,12 @@ function ForecastPage() {
 
 // =============== Growth Plan 2026 ===============
 
-type MarketCode = "NL" | "UK" | "US" | "EU";
+type MarketCode = "NL" | "UK" | "US";
 type Market = { code: MarketCode; name: string; color: string; bar: string };
 const MARKETS: Market[] = [
   { code: "NL", name: "Netherlands", color: "bg-neutral-900", bar: "bg-neutral-900" },
   { code: "UK", name: "United Kingdom", color: "bg-indigo-500", bar: "bg-indigo-500" },
   { code: "US", name: "United States", color: "bg-amber-500", bar: "bg-amber-500" },
-  { code: "EU", name: "Germany / EU", color: "bg-emerald-500", bar: "bg-emerald-500" },
 ];
 
 function GrowthCard({
@@ -882,7 +881,7 @@ function GrowthPlan2026({ data }: { data: any }) {
         : {};
 
     const actualByMonth = MONTHS.map(
-      (m, i) => ({ m, i, NL: 0, UK: 0, US: 0, EU: 0 }) as Record<string, any>,
+      (m, i) => ({ m, i, NL: 0, UK: 0, US: 0 }) as Record<string, any>,
     );
     const availableDailyDates: string[] = [];
 
@@ -912,7 +911,7 @@ function GrowthPlan2026({ data }: { data: any }) {
       }
     }
 
-    const currentMtd: Record<MarketCode, number> = { NL: 0, UK: 0, US: 0, EU: 0 };
+    const currentMtd: Record<MarketCode, number> = { NL: 0, UK: 0, US: 0 };
     for (const mk of MARKETS) {
       const live = shopifyMarkets.find((m: any) => m?.code === mk.code);
       currentMtd[mk.code] = Number(live?.revenue ?? 0);
@@ -927,7 +926,7 @@ function GrowthPlan2026({ data }: { data: any }) {
         .filter((r) => r.date.startsWith(`${year}-`) && isFinite(r.revenue) && r.revenue > 0)
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    const plan: Record<MarketCode, any> = { NL: {}, UK: {}, US: {}, EU: {} };
+    const plan: Record<MarketCode, any> = { NL: {}, UK: {}, US: {} };
     for (const mk of MARKETS) {
       const dailyRows = dailyForMarket(mk.code);
       const recent30 = dailyRows.slice(-30).reduce((s, r) => s + r.revenue, 0);
@@ -1226,10 +1225,10 @@ function GrowthPlan2026({ data }: { data: any }) {
             </div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalTarget)}</div>
             <div className="text-[11px] text-neutral-500">
-              Combined NL + UK + US + EU · Jan–Dec {year}
+              Combined NL + UK + US · Jan–Dec {year}
             </div>
             <div className="mt-3 h-px bg-neutral-100" />
-            <div className="mt-3 grid grid-cols-4 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
                   <div className="text-[10px] font-semibold uppercase text-neutral-400">
@@ -1330,7 +1329,7 @@ function GrowthPlan2026({ data }: { data: any }) {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={rows.map((r) => {
-                if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US, EU: r.EU };
+                if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US };
                 if (metric === "marketing") {
                   return Object.fromEntries([
                     ["m", r.m],
@@ -1367,8 +1366,7 @@ function GrowthPlan2026({ data }: { data: any }) {
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="NL" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
               <Bar dataKey="UK" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="EU" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

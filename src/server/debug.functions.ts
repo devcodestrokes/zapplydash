@@ -88,7 +88,7 @@ export const getSyncDebug = createServerFn({ method: "GET" }).middleware([requir
     NL: "shopify_zapply-nl",
     UK: "shopify_zapplyde",
     US: "shopify_zapply-usa",
-    EU: "shopify_zapplygermany",
+    
   };
   if (Array.isArray(shopifyPayload)) {
     for (const market of shopifyPayload) {
