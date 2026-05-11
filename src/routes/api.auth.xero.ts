@@ -3,28 +3,26 @@ import { createFileRoute } from "@tanstack/react-router";
 // Initiates the Xero OAuth 2.0 Authorization Code flow.
 // Visit /api/auth/xero while logged in to connect your Xero organization.
 
-// Xero OAuth 2.0 scopes — every scope listed here MUST be enabled in your
-// Xero app at https://developer.xero.com/app/manage. If any scope is not
-// enabled on the app, Xero returns: unauthorized_client / "Invalid scope for client".
-// Allow override via env var so you can quickly trim scopes without redeploying code logic.
-// NOTE: Xero is replacing broad/deprecated scopes with granular scopes. Apps using
-// the new scope model must request the specific resources they read, not the old
-// umbrella scopes like accounting.transactions.read or accounting.reports.read.
-const XERO_SCOPES =
-  process.env.XERO_SCOPES ??
-  [
-    "openid",
-    "profile",
-    "email",
-    "offline_access",
-    // Minimum granular read scopes needed by the Xero dashboard fetcher.
-    "accounting.invoices.read",
-    "accounting.reports.profitandloss.read",
-    "accounting.reports.balancesheet.read",
-    "accounting.reports.banksummary.read",
-    "accounting.contacts.read",
-    "accounting.journals.read",
-  ].join(" ");
+// Xero OAuth 2.0 scopes validated against the official docs:
+// https://developer.xero.com/documentation/guides/oauth2/scopes/
+// Keep this list to the exact read-only Accounting scopes used by fetchXero().
+// Requesting unused or unassigned scopes is what causes Xero's invalid_scope screen.
+const XERO_DEFAULT_SCOPES = [
+  "openid",
+  "profile",
+  "email",
+  "offline_access",
+  "accounting.invoices.read",
+  "accounting.banktransactions.read",
+  "accounting.manualjournals.read",
+  "accounting.contacts.read",
+  "accounting.settings.read",
+  "accounting.reports.profitandloss.read",
+  "accounting.reports.balancesheet.read",
+  "accounting.reports.banksummary.read",
+];
+
+const XERO_SCOPES = process.env.XERO_SCOPES ?? XERO_DEFAULT_SCOPES.join(" ");
 
 export const Route = createFileRoute("/api/auth/xero")({
   server: {
@@ -52,8 +50,9 @@ export const Route = createFileRoute("/api/auth/xero")({
           state,
         });
 
-        const authUrl = `https://login.xero.com/identity/connect/authorize?${params}`;
+        const authUrl = `https://login.xero.com/identity/connect/authorize?${params.toString().replace(/\+/g, "%20")}`;
         console.log("[Xero OAuth] redirect_uri:", redirectUri);
+        console.log("[Xero OAuth] scopes:", XERO_SCOPES);
 
         return new Response(null, {
           status: 302,
