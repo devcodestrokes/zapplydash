@@ -3,6 +3,7 @@
  * Each fetcher returns null when the source is not configured or errors.
  */
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
+import { resolveSupabaseServiceKey, resolveSupabaseUrl } from "./supabase-env.server";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,46 +28,9 @@ function daysAgo(n: number): string {
 // Vite inlines these as string literals at build time, so the Worker bundle
 // always has them available regardless of runtime env injection.
 // The integrations + data_cache tables have permissive RLS for this use case.
-const VITE_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-const VITE_SUPABASE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as
-  | string
-  | undefined;
-
-function firstEnvValue(...names: string[]) {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function resolveSupabaseKey() {
-  const direct = firstEnvValue(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_SECRET_KEY",
-    "SUPABASE_ANON_KEY",
-    "SUPABASE_PUBLISHABLE_KEY",
-    "VITE_SUPABASE_ANON_KEY",
-    "VITE_SUPABASE_PUBLISHABLE_KEY",
-  );
-  if (direct) return direct;
-
-  const packed = process.env.SUPABASE_SECRET_KEYS;
-  if (!packed) return VITE_SUPABASE_PUBLISHABLE_KEY;
-  try {
-    const parsed = JSON.parse(packed);
-    const values = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
-    const key = values.find((v) => typeof v === "string" && v.length > 20);
-    if (typeof key === "string") return key;
-  } catch {
-    return packed;
-  }
-  return VITE_SUPABASE_PUBLISHABLE_KEY;
-}
-
 function serviceClient() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || VITE_SUPABASE_URL;
-  const key = resolveSupabaseKey();
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseServiceKey();
   if (!url || !key) {
     throw new Error(`Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`);
   }
@@ -1603,14 +1567,20 @@ async function getXeroToken(): Promise<string | null> {
   // Load stored row from Supabase
   let row: any = null;
   try {
-    const { data } = await serviceClient()
+    const { data, error } = await serviceClient()
       .from("integrations")
       .select("access_token, refresh_token, expires_at, metadata")
       .eq("provider", "xero")
       .single();
+    if (error) {
+      __xeroLastTokenError = `Could not read Xero token from integrations: ${error.message}`;
+      console.error("Xero token lookup failed:", error.message);
+      return null;
+    }
     row = data;
-  } catch {
-    /* no row yet */
+  } catch (err: any) {
+    __xeroLastTokenError = `Could not read Xero token from integrations: ${err?.message ?? String(err)}`;
+    return null;
   }
 
   if (!row) {
@@ -1666,7 +1636,7 @@ async function getXeroToken(): Promise<string | null> {
     }
 
     const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
-    await serviceClient()
+    const { error: updateError } = await serviceClient()
       .from("integrations")
       .upsert(
         {
@@ -1679,6 +1649,11 @@ async function getXeroToken(): Promise<string | null> {
         },
         { onConflict: "provider" },
       );
+    if (updateError) {
+      __xeroLastTokenError = `Token refreshed, but saving the rotated token failed: ${updateError.message}`;
+      console.error("Xero token save failed:", updateError.message);
+      return null;
+    }
     return access_token;
   } catch (err: any) {
     __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
@@ -1690,14 +1665,35 @@ async function getXeroToken(): Promise<string | null> {
 async function getXeroTenantId(): Promise<string | null> {
   // tenantId is stored in metadata during the OAuth callback
   try {
-    const { data } = await serviceClient()
+    const { data, error } = await serviceClient()
       .from("integrations")
       .select("metadata")
       .eq("provider", "xero")
       .single();
+    if (error) {
+      console.error("Xero tenant lookup failed:", error.message);
+      return null;
+    }
     return (data?.metadata?.tenant_id as string) ?? null;
-  } catch {
+  } catch (err: any) {
+    console.error("Xero tenant lookup exception:", err?.message ?? String(err));
     return null;
+  }
+}
+
+function extractXeroError(body: string) {
+  try {
+    const json = JSON.parse(body);
+    const message =
+      json?.Detail ??
+      json?.Message ??
+      json?.ErrorNumber ??
+      json?.error_description ??
+      json?.error ??
+      body;
+    return typeof message === "string" ? message : JSON.stringify(message);
+  } catch {
+    return body;
   }
 }
 
@@ -1814,6 +1810,7 @@ export async function fetchXero() {
   })();
   const toDateStr = today();
   const monthStartStr = startOfMonth();
+  const endpointErrors: string[] = [];
 
   // Helper: fetch + log status & body snippet on failure so we can diagnose
   // exactly which Xero endpoint rejects the request (scopes, params, etc).
@@ -1822,12 +1819,16 @@ export async function fetchXero() {
       const r = await fetch(url, { headers: h, cache: "no-store" });
       if (!r.ok) {
         const body = await r.text().catch(() => "");
-        console.error(`Xero ${label} ${r.status}: ${body.slice(0, 300)}`);
+        const detail = extractXeroError(body).slice(0, 300);
+        endpointErrors.push(`${label} failed with HTTP ${r.status}: ${detail}`);
+        console.error(`Xero ${label} ${r.status}: ${detail}`);
         return null;
       }
       return await r.json();
     } catch (err: any) {
-      console.error(`Xero ${label} fetch error:`, err?.message);
+      const detail = err?.message ?? String(err);
+      endpointErrors.push(`${label} request failed: ${detail}`);
+      console.error(`Xero ${label} fetch error:`, detail);
       return null;
     }
   };
@@ -2361,6 +2362,15 @@ export async function fetchXero() {
     const live =
       Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
+    if (!live) {
+      const reason = endpointErrors.length
+        ? endpointErrors.slice(0, 4).join(" | ")
+        : "Xero responded, but Profit & Loss, Balance Sheet, and Bank Summary contained no usable values.";
+      throw new Error(
+        `Xero sync returned no dashboard data. ${reason} Check that the connected organisation (${tenantId}) has data for the selected period and that these scopes are approved in the Xero app: accounting.invoices.read, accounting.banktransactions.read, accounting.manualjournals.read, accounting.contacts.read, accounting.settings.read, accounting.reports.profitandloss.read, accounting.reports.balancesheet.read, accounting.reports.banksummary.read.`,
+      );
+    }
+
     return {
       live,
       tenantId,
@@ -2432,7 +2442,7 @@ export async function fetchXero() {
     };
   } catch (err: any) {
     console.error("Xero fetch error:", err.message);
-    return null;
+    throw err;
   }
 }
 

@@ -115,7 +115,7 @@ function getConnections(): Record<string, string> {
 function describePayload(payload: any): { ok: boolean; reason: string | null; rows: number | null } {
   if (payload == null) return { ok: false, reason: "No data cached yet", rows: null };
   if (typeof payload === "object") {
-    if (payload.__error) return { ok: false, reason: String(payload.message ?? payload.__error).slice(0, 200), rows: null };
+    if (payload.__error) return { ok: false, reason: String(payload.message ?? payload.__error).slice(0, 700), rows: null };
     if (payload.__empty) return { ok: false, reason: "Provider returned empty payload", rows: 0 };
   }
   const rows = Array.isArray(payload)
@@ -239,7 +239,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     const p = c?.payload;
     if (!p || typeof p !== "object") return;
     if ((p as any).__error) {
-      errors[label] = String((p as any).message ?? "fetch failed").slice(0, 200);
+      errors[label] = String((p as any).message ?? "fetch failed").slice(0, 700);
     } else if ((p as any).__empty) {
       errors[label] = "Source returned empty payload";
     }

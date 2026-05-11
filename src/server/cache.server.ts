@@ -1,48 +1,14 @@
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
 import { getRequestHeader } from "@tanstack/react-start/server";
-
-function firstEnvValue(...names: string[]) {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function resolveSupabaseKey() {
-  const direct = firstEnvValue(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_SECRET_KEY",
-    "SUPABASE_ANON_KEY",
-    "SUPABASE_PUBLISHABLE_KEY",
-    "VITE_SUPABASE_ANON_KEY",
-    "VITE_SUPABASE_PUBLISHABLE_KEY",
-  );
-  if (direct) return direct;
-
-  const packed = process.env.SUPABASE_SECRET_KEYS;
-  if (!packed) return (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
-  try {
-    const parsed = JSON.parse(packed);
-    const values = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
-    const key = values.find((v) => typeof v === "string" && v.length > 20);
-    if (typeof key === "string") return key;
-  } catch {
-    return packed;
-  }
-  return (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
-}
+import { resolveSupabasePublishableKey, resolveSupabaseServiceKey, resolveSupabaseUrl } from "./supabase-env.server";
 
 // Resolve Supabase credentials with sensible fallbacks.
 // In the TanStack Worker runtime, only VITE_* vars are injected reliably;
 // SUPABASE_SERVICE_ROLE_KEY may be unavailable. The data_cache table has
 // permissive RLS for authenticated users, so the publishable/anon key works.
 function resolveCreds() {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    (import.meta as any).env?.VITE_SUPABASE_URL;
-  const key = resolveSupabaseKey();
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseServiceKey();
   return { url, key };
 }
 
@@ -65,10 +31,7 @@ function requestClient() {
     const auth = getRequestHeader("authorization");
     if (!auth?.startsWith("Bearer ")) return serviceClient();
     const { url } = resolveCreds();
-    const publishableKey =
-      process.env.SUPABASE_PUBLISHABLE_KEY ||
-      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-      (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const publishableKey = resolveSupabasePublishableKey();
     if (!url || !publishableKey) return serviceClient();
     return createSupabaseJS(url, publishableKey, {
       global: { headers: { Authorization: auth } },
