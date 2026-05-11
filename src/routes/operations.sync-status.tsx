@@ -121,6 +121,34 @@ const CONNECTORS: Connector[] = [
     },
   },
   {
+    id: "paypal",
+    name: "PayPal",
+    api: "REST · Reporting",
+    iconBg: "bg-sky-50",
+    iconColor: "text-sky-700",
+    providerKeys: ["paypal"],
+    unit: (data) => {
+      const accts = Array.isArray(data?.paypalBalances?.accounts)
+        ? data.paypalBalances.accounts.length
+        : 0;
+      return accts > 0 ? `${accts} ${accts === 1 ? "balance" : "balances"}` : "—";
+    },
+  },
+  {
+    id: "mollie",
+    name: "Mollie",
+    api: "REST v2",
+    iconBg: "bg-indigo-50",
+    iconColor: "text-indigo-600",
+    providerKeys: ["mollie"],
+    unit: (data) => {
+      const accts = Array.isArray(data?.mollieBalances?.accounts)
+        ? data.mollieBalances.accounts.length
+        : 0;
+      return accts > 0 ? `${accts} ${accts === 1 ? "balance" : "balances"}` : "—";
+    },
+  },
+  {
     id: "fulfillment",
     name: "Fulfillment partner",
     api: "REST",
