@@ -213,48 +213,66 @@ function BalanceSheetPage() {
     }
     const bankAccountsAll = Array.from(merged.values());
     const isPlatform = (n: string) =>
-      /(mollie|shopify|paypal|stripe|adyen|klarna|amazon)/i.test(n);
+      /(mollie|shopify|paypal|stripe|adyen|klarna|amazon|revolut pay)/i.test(n);
     const bankAccountsBank = bankAccountsAll.filter((b) => !isPlatform(b.name));
     const platformPending = bankAccountsAll.filter((b) => isPlatform(b.name));
 
-    // Augment with live Shopify Payments pending balances per market
+    // Helper to ensure a platform row appears even with zero balance
+    const seen = new Set(platformPending.map((p) => p.name.toLowerCase()));
+    const pushPlatform = (row: { name: string; balance: number; currency: string }) => {
+      const key = row.name.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      platformPending.push(row);
+    };
+
+    // Shopify Payments — one row per market (live or not)
     const spMarkets: any[] = Array.isArray(shopifyPayouts?.markets)
       ? shopifyPayouts.markets
       : [];
-    for (const m of spMarkets) {
-      if (!m?.live) continue;
-      const pending = Number(m.pendingBalance ?? 0) + Number(m.scheduledPayouts ?? 0);
-      if (!pending) continue;
-      platformPending.push({
-        name: m.name ?? `Shopify Payments ${m.market}`,
-        balance: pending,
-        currency: String(m.currency ?? "EUR"),
-      });
+    if (spMarkets.length === 0) {
+      pushPlatform({ name: "Shopify Payments", balance: 0, currency: "EUR" });
+    } else {
+      for (const m of spMarkets) {
+        const pending = Number(m.pendingBalance ?? 0) + Number(m.scheduledPayouts ?? 0);
+        pushPlatform({
+          name: m.name ?? `Shopify Payments ${m.market ?? ""}`.trim(),
+          balance: pending,
+          currency: String(m.currency ?? "EUR"),
+        });
+      }
     }
 
-    // Augment with PayPal balances
+    // PayPal balances
     const ppAccounts: any[] = Array.isArray(paypalBalances?.accounts) ? paypalBalances.accounts : [];
-    for (const a of ppAccounts) {
-      const bal = Number(a.balance ?? 0);
-      if (!bal) continue;
-      platformPending.push({
-        name: String(a.name ?? "PayPal"),
-        balance: bal,
-        currency: String(a.currency ?? "EUR"),
-      });
+    if (ppAccounts.length === 0) {
+      pushPlatform({ name: "PayPal", balance: 0, currency: "EUR" });
+    } else {
+      for (const a of ppAccounts) {
+        pushPlatform({
+          name: String(a.name ?? "PayPal"),
+          balance: Number(a.balance ?? 0),
+          currency: String(a.currency ?? "EUR"),
+        });
+      }
     }
 
-    // Augment with Mollie balances
+    // Mollie balances
     const mlAccounts: any[] = Array.isArray(mollieBalances?.accounts) ? mollieBalances.accounts : [];
-    for (const a of mlAccounts) {
-      const bal = Number(a.balance ?? 0);
-      if (!bal) continue;
-      platformPending.push({
-        name: String(a.name ?? "Mollie"),
-        balance: bal,
-        currency: String(a.currency ?? "EUR"),
-      });
+    if (mlAccounts.length === 0) {
+      pushPlatform({ name: "Mollie", balance: 0, currency: "EUR" });
+    } else {
+      for (const a of mlAccounts) {
+        pushPlatform({
+          name: String(a.name ?? "Mollie"),
+          balance: Number(a.balance ?? 0),
+          currency: String(a.currency ?? "EUR"),
+        });
+      }
     }
+
+    // Revolut Pay (merchant payouts) — manual until API is wired
+    pushPlatform({ name: "Revolut Pay", balance: 0, currency: "EUR" });
 
     const manualCash: any[] = Array.isArray((data as any)?.manual?.cashPositions)
       ? (data as any).manual.cashPositions
