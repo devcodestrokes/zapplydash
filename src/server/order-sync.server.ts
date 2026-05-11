@@ -287,12 +287,11 @@ async function syncStore(
 
 export async function syncAllShopifyOrders(maxPagesPerStore = DEFAULT_MAX_PAGES_PER_STORE): Promise<StoreSyncResult[]> {
   const sb = adminClient();
-  const out: StoreSyncResult[] = [];
   const maxPages = Math.max(1, Math.min(10, Math.floor(maxPagesPerStore)));
-  for (const { code, storeKey } of STORES) {
+  return Promise.all(STORES.map(async ({ code, storeKey }) => {
     const store = process.env[storeKey];
     if (!store) {
-      out.push({
+      return {
         store: "(unset)",
         storeCode: code,
         pages: 0,
@@ -301,13 +300,10 @@ export async function syncAllShopifyOrders(maxPagesPerStore = DEFAULT_MAX_PAGES_
         lastUpdatedAt: null,
         backfillComplete: false,
         error: `env ${storeKey} not set`,
-      });
-      continue;
+      };
     }
-    const r = await syncStore(sb, code, store, maxPages);
-    out.push(r);
-  }
-  return out;
+    return syncStore(sb, code, store, maxPages);
+  }));
 }
 
 export async function snapshotSubscriptions(): Promise<{ provider: string; ok: boolean; message?: string }[]> {
