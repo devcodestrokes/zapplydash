@@ -1456,7 +1456,7 @@ async function _fetchJuo() {
 const LOOP_STORES = [
   { market: "UK", flag: "🇬🇧", envKey: "LOOP_UK_API_KEY" },
   { market: "US", flag: "🇺🇸", envKey: "LOOP_US_API_KEY" },
-  { market: "EU", flag: "🇩🇪", envKey: "LOOP_EU_API_KEY" },
+  
 ] as const;
 
 async function fetchLoopStore(market: string, flag: string, key: string) {
