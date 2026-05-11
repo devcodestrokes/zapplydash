@@ -3570,14 +3570,19 @@ export async function fetchSubscriptionRepeatFunnel() {
   const [juo, loop] = await Promise.all([
     fetchAllJuoSubsForFunnel().catch((e) => {
       console.error("subscription funnel — Juo fetch failed:", e?.message);
-      return [] as Array<{ createdAt: string; cycles: number }>;
+      return [] as Array<{ id: string; createdAt: string; cycles: number }>;
     }),
     fetchAllLoopSubsForFunnel().catch((e) => {
       console.error("subscription funnel — Loop fetch failed:", e?.message);
-      return [] as Array<{ createdAt: string; cycles: number }>;
+      return [] as Array<{ id: string; createdAt: string; cycles: number }>;
     }),
   ]);
-  const all = [...juo, ...loop];
+  const byId = new Map<string, { id: string; createdAt: string; cycles: number }>();
+  for (const sub of [...juo, ...loop]) {
+    const existing = byId.get(sub.id);
+    if (!existing || sub.cycles > existing.cycles) byId.set(sub.id, sub);
+  }
+  const all = Array.from(byId.values());
   if (all.length === 0) return null;
 
   // Bucket by cohort month
@@ -3657,6 +3662,8 @@ export async function fetchSubscriptionRepeatFunnel() {
     funnel,
     monthlyCohorts,
     totalCustomersAnalyzed: totalCohortSize,
+    rawSubscriptionsFetched: juo.length + loop.length,
+    dedupedSubscriptions: totalCohortSize,
     fetchedAt: new Date().toISOString(),
   };
 }
