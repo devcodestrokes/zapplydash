@@ -1762,10 +1762,15 @@ function xRowsByLabels(rows: any[], fragments: string[], colIdx = 1) {
 
 export async function fetchXero() {
   const [token, tenantId] = await Promise.all([getXeroToken(), getXeroTenantId()]);
-  if (!token) return null;
+  if (!token) {
+    throw new Error(
+      "Xero not connected or refresh failed. Visit /api/auth/xero to (re)connect — the stored access token has expired and the refresh_token could not obtain a new one.",
+    );
+  }
   if (!tenantId) {
-    console.error("Xero: no tenantId — visit /api/auth/xero to connect your organization");
-    return null;
+    throw new Error(
+      "Xero connected but no tenantId stored — reconnect via /api/auth/xero so the organization is recorded.",
+    );
   }
 
   const h = {
