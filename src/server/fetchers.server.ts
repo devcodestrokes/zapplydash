@@ -1810,6 +1810,7 @@ export async function fetchXero() {
   })();
   const toDateStr = today();
   const monthStartStr = startOfMonth();
+  const endpointErrors: string[] = [];
 
   // Helper: fetch + log status & body snippet on failure so we can diagnose
   // exactly which Xero endpoint rejects the request (scopes, params, etc).
@@ -1818,12 +1819,16 @@ export async function fetchXero() {
       const r = await fetch(url, { headers: h, cache: "no-store" });
       if (!r.ok) {
         const body = await r.text().catch(() => "");
-        console.error(`Xero ${label} ${r.status}: ${body.slice(0, 300)}`);
+        const detail = extractXeroError(body).slice(0, 300);
+        endpointErrors.push(`${label} failed with HTTP ${r.status}: ${detail}`);
+        console.error(`Xero ${label} ${r.status}: ${detail}`);
         return null;
       }
       return await r.json();
     } catch (err: any) {
-      console.error(`Xero ${label} fetch error:`, err?.message);
+      const detail = err?.message ?? String(err);
+      endpointErrors.push(`${label} request failed: ${detail}`);
+      console.error(`Xero ${label} fetch error:`, detail);
       return null;
     }
   };
