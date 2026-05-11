@@ -1225,7 +1225,7 @@ function GrowthPlan2026({ data }: { data: any }) {
             </div>
             <div className="mt-1 text-[22px] font-semibold tabular-nums">{fmtM(totalTarget)}</div>
             <div className="text-[11px] text-neutral-500">
-              Combined NL + UK + US + EU · Jan–Dec {year}
+              Combined NL + UK + US · Jan–Dec {year}
             </div>
             <div className="mt-3 h-px bg-neutral-100" />
             <div className="mt-3 grid grid-cols-4 gap-2">
