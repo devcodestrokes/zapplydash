@@ -1383,8 +1383,8 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
               <div className="mt-0.5 text-[12px] text-neutral-500">
                 {hasCohort
-                  ? `${f.cohortMonth ?? fallbackCohort?.month ?? "Selected cohort"} first-time buyers · ${(f.cohortWindowDays ?? 0) || "latest"} days observed`
-                  : "Monthly Shopify cohorts loaded · no mature repeat cohort yet"}
+                  ? `Lifetime first-time buyers across all Shopify cohorts${f.sourceStart && f.sourceEnd ? ` · ${f.sourceStart}–${f.sourceEnd}` : ""}`
+                  : "Loading Shopify customer history…"}
               </div>
             </div>
             <div className="text-right text-[11px] text-neutral-400">

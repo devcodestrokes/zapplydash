@@ -3115,10 +3115,11 @@ export async function fetchShopifyRepeatFunnel() {
     cohortBuckets.get(key)!.push(orders);
   }
 
-  // ── Repeat funnel from the newest fully mature cohort ─────────────────────
-  // The dashboard headline is "Repeat to 3rd order", so a cohort needs a real
-  // 3rd-order observation window. Showing a 30/60-day cohort here makes the
-  // number look precise while it is still materially incomplete.
+  // ── Repeat funnel from ALL first-time buyers (lifetime) ───────────────────
+  // Computed across every customer in the Shopify dataset whose first order
+  // falls inside our lookback window. This mirrors the order-frequency
+  // distribution Shopify itself exposes — no maturity gating, no fallback to
+  // Juo/Loop.
   const allCohortCandidates = Array.from(cohortBuckets.entries())
     .map(([key, orders]) => {
       const start = monthStartFromKey(key);
@@ -3128,31 +3129,30 @@ export async function fetchShopifyRepeatFunnel() {
     .filter((c) => c.orders.length > 0)
     .sort((a, b) => b.start.getTime() - a.start.getTime());
 
-  const selectedCohort =
-    allCohortCandidates.find((c) => c.daysSinceEnd >= 90) ??
-    allCohortCandidates.find((c) => c.daysSinceEnd >= 30) ??
-    allCohortCandidates[0] ??
-    null;
-  const cohortOrders = selectedCohort?.orders ?? [];
+  // Lifetime headline = every first-time buyer across all cohorts.
+  const lifetimeOrders: string[][] = [];
+  for (const arr of cohortBuckets.values()) for (const o of arr) lifetimeOrders.push(o);
+  const cohortOrders = lifetimeOrders;
   const cohortSize = cohortOrders.length;
-  const selectedSecondMatured = (selectedCohort?.daysSinceEnd ?? 0) >= 30;
-  const selectedDeepMatured = (selectedCohort?.daysSinceEnd ?? 0) >= 90;
+  const selectedSecondMatured = true;
+  const selectedDeepMatured = true;
   const reachedN = [0, 0, 0, 0, 0, 0, 0];
   for (const orders of cohortOrders) {
     const reached = Math.min(orders.length, 7);
     for (let i = 0; i < reached; i++) reachedN[i]++;
   }
+  // 7th+ bucket: customers with >=7 orders
+  // (reachedN[6] already counts >=7 via Math.min(orders.length, 7))
 
   const funnel = reachedN.map((c, i) => ({
     order: i + 1,
     customers: c,
-    rate:
-      cohortSize > 0 &&
-      (i === 0 || (i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured))
-        ? +((c / cohortSize) * 100).toFixed(1)
-        : null,
-    maturing: i > 0 && !((i === 1 && selectedSecondMatured) || (i >= 2 && selectedDeepMatured)),
+    rate: cohortSize > 0 ? +((c / cohortSize) * 100).toFixed(1) : null,
+    maturing: false,
   }));
+
+  // Newest cohort kept only for the "as of" label on the card.
+  const selectedCohort = allCohortCandidates[0] ?? null;
 
   // ── Monthly cohort table — last 6 calendar months ───────────────────
   const monthlyCohorts: Array<{
