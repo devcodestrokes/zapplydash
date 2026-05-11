@@ -1567,14 +1567,20 @@ async function getXeroToken(): Promise<string | null> {
   // Load stored row from Supabase
   let row: any = null;
   try {
-    const { data } = await serviceClient()
+    const { data, error } = await serviceClient()
       .from("integrations")
       .select("access_token, refresh_token, expires_at, metadata")
       .eq("provider", "xero")
       .single();
+    if (error) {
+      __xeroLastTokenError = `Could not read Xero token from integrations: ${error.message}`;
+      console.error("Xero token lookup failed:", error.message);
+      return null;
+    }
     row = data;
-  } catch {
-    /* no row yet */
+  } catch (err: any) {
+    __xeroLastTokenError = `Could not read Xero token from integrations: ${err?.message ?? String(err)}`;
+    return null;
   }
 
   if (!row) {
@@ -1630,7 +1636,7 @@ async function getXeroToken(): Promise<string | null> {
     }
 
     const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
-    await serviceClient()
+    const { error: updateError } = await serviceClient()
       .from("integrations")
       .upsert(
         {
@@ -1643,6 +1649,11 @@ async function getXeroToken(): Promise<string | null> {
         },
         { onConflict: "provider" },
       );
+    if (updateError) {
+      __xeroLastTokenError = `Token refreshed, but saving the rotated token failed: ${updateError.message}`;
+      console.error("Xero token save failed:", updateError.message);
+      return null;
+    }
     return access_token;
   } catch (err: any) {
     __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
