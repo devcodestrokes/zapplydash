@@ -1329,7 +1329,7 @@ function GrowthPlan2026({ data }: { data: any }) {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={rows.map((r) => {
-                if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US, EU: r.EU };
+                if (metric === "revenue") return { m: r.m, NL: r.NL, UK: r.UK, US: r.US };
                 if (metric === "marketing") {
                   return Object.fromEntries([
                     ["m", r.m],
