@@ -17,13 +17,13 @@ const XERO_SCOPES =
     "profile",
     "email",
     "offline_access",
-    // Minimum granular read scopes needed by the Xero dashboard fetcher.
-    "accounting.invoices.read",
-    "accounting.reports.profitandloss.read",
-    "accounting.reports.balancesheet.read",
-    "accounting.reports.banksummary.read",
-    "accounting.contacts.read",
+    // Valid Xero OAuth 2.0 scopes (see https://developer.xero.com/documentation/guides/oauth2/scopes/).
+    // Invoices are read via accounting.transactions.read. Xero does NOT expose
+    // per-report granular scopes — accounting.reports.read covers P&L, Balance
+    // Sheet, Bank Summary, etc.
     "accounting.transactions.read",
+    "accounting.reports.read",
+    "accounting.contacts.read",
     "accounting.settings.read",
     "accounting.journals.read",
   ].join(" ");
