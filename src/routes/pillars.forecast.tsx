@@ -881,7 +881,7 @@ function GrowthPlan2026({ data }: { data: any }) {
         : {};
 
     const actualByMonth = MONTHS.map(
-      (m, i) => ({ m, i, NL: 0, UK: 0, US: 0, EU: 0 }) as Record<string, any>,
+      (m, i) => ({ m, i, NL: 0, UK: 0, US: 0 }) as Record<string, any>,
     );
     const availableDailyDates: string[] = [];
 
