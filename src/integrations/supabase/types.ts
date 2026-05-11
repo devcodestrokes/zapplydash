@@ -170,6 +170,138 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_orders: {
+        Row: {
+          currency: string | null
+          customer_id: string | null
+          customer_lifetime_orders: number | null
+          financial_status: string | null
+          fulfillment_status: string | null
+          id: string
+          order_number: number | null
+          processed_at: string | null
+          raw: Json | null
+          shop_domain: string
+          shopify_created_at: string
+          shopify_updated_at: string
+          store_code: string
+          subtotal_price: number | null
+          synced_at: string
+          total_discounts: number | null
+          total_price: number | null
+          total_refunded: number | null
+          total_shipping: number | null
+          total_tax: number | null
+        }
+        Insert: {
+          currency?: string | null
+          customer_id?: string | null
+          customer_lifetime_orders?: number | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id: string
+          order_number?: number | null
+          processed_at?: string | null
+          raw?: Json | null
+          shop_domain: string
+          shopify_created_at: string
+          shopify_updated_at: string
+          store_code: string
+          subtotal_price?: number | null
+          synced_at?: string
+          total_discounts?: number | null
+          total_price?: number | null
+          total_refunded?: number | null
+          total_shipping?: number | null
+          total_tax?: number | null
+        }
+        Update: {
+          currency?: string | null
+          customer_id?: string | null
+          customer_lifetime_orders?: number | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          order_number?: number | null
+          processed_at?: string | null
+          raw?: Json | null
+          shop_domain?: string
+          shopify_created_at?: string
+          shopify_updated_at?: string
+          store_code?: string
+          subtotal_price?: number | null
+          synced_at?: string
+          total_discounts?: number | null
+          total_price?: number | null
+          total_refunded?: number | null
+          total_shipping?: number | null
+          total_tax?: number | null
+        }
+        Relationships: []
+      }
+      shopify_sync_state: {
+        Row: {
+          backfill_complete: boolean
+          last_cursor: string | null
+          last_run_at: string | null
+          last_run_message: string | null
+          last_run_status: string | null
+          last_updated_at: string | null
+          shop_domain: string
+          store_code: string
+          total_orders: number
+          updated_at: string
+        }
+        Insert: {
+          backfill_complete?: boolean
+          last_cursor?: string | null
+          last_run_at?: string | null
+          last_run_message?: string | null
+          last_run_status?: string | null
+          last_updated_at?: string | null
+          shop_domain: string
+          store_code: string
+          total_orders?: number
+          updated_at?: string
+        }
+        Update: {
+          backfill_complete?: boolean
+          last_cursor?: string | null
+          last_run_at?: string | null
+          last_run_message?: string | null
+          last_run_status?: string | null
+          last_updated_at?: string | null
+          shop_domain?: string
+          store_code?: string
+          total_orders?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subscription_snapshots: {
+        Row: {
+          id: string
+          payload: Json
+          provider: string
+          store_code: string
+          taken_at: string
+        }
+        Insert: {
+          id?: string
+          payload: Json
+          provider: string
+          store_code: string
+          taken_at?: string
+        }
+        Update: {
+          id?: string
+          payload?: Json
+          provider?: string
+          store_code?: string
+          taken_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
