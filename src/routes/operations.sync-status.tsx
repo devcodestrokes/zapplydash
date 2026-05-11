@@ -296,10 +296,12 @@ function SyncStatusPage() {
                           {c.badge}
                         </div>
                       )}
-                      {!c.badge && matching.some((m) => m.error) && (
-                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-rose-50 ring-1 ring-rose-200 px-2 py-1 text-[11px] text-rose-700">
-                          <AlertCircle className="h-3 w-3" />
-                          {matching.find((m) => m.error)?.error}
+                      {matching.some((m) => m.error) && (
+                        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-rose-50 ring-1 ring-rose-200 px-2 py-1 text-[11px] text-rose-700 max-w-[680px]">
+                          <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                          <span className="break-words whitespace-pre-wrap">
+                            {matching.find((m) => m.error)?.error}
+                          </span>
                         </div>
                       )}
                     </div>
