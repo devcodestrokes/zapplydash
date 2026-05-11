@@ -3224,8 +3224,8 @@ export async function fetchShopifyRepeatFunnel() {
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
-    cohortMatureForSecond: selectedSecondMatured,
-    cohortMatureForThird: selectedDeepMatured,
+    cohortMatureForSecond: true,
+    cohortMatureForThird: true,
     cohortStartedDaysAgo: selectedCohort
       ? Math.floor((now - selectedCohort.start.getTime()) / DAY)
       : 0,
