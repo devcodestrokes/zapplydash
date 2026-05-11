@@ -1383,14 +1383,16 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
               <div className="text-[14px] font-semibold">Repeat purchase funnel</div>
               <div className="mt-0.5 text-[12px] text-neutral-500">
                 {hasCohort
-                  ? `Lifetime first-time buyers across all Shopify cohorts${f.sourceStart && f.sourceEnd ? ` · ${f.sourceStart}–${f.sourceEnd}` : ""}`
-                  : "Loading Shopify customer history…"}
+                  ? (f.source === "subscriptions"
+                      ? `Lifetime subscribers across ${(f.sources ?? ["Juo NL", "Loop UK", "Loop US"]).join(" + ")} cohorts${f.sourceStart && f.sourceEnd ? ` · ${f.sourceStart}–${f.sourceEnd}` : ""}`
+                      : `Lifetime first-time buyers across all Shopify cohorts${f.sourceStart && f.sourceEnd ? ` · ${f.sourceStart}–${f.sourceEnd}` : ""}`)
+                  : "Loading customer history…"}
               </div>
             </div>
             <div className="text-right text-[11px] text-neutral-400">
-              Cohort size: <span className="font-semibold text-neutral-700">{cohortSize.toLocaleString()} first-time buyers</span>
+              Cohort size: <span className="font-semibold text-neutral-700">{cohortSize.toLocaleString()} {f.source === "subscriptions" ? "subscribers" : "first-time buyers"}</span>
               {f.sourceStart && f.sourceEnd && (
-                <div className="mt-1">Source: Shopify orders {f.sourceStart}–{f.sourceEnd}</div>
+                <div className="mt-1">Source: {f.source === "subscriptions" ? `${(f.sources ?? ["Juo", "Loop"]).join(" + ")} subscriptions` : "Shopify orders"} {f.sourceStart}–{f.sourceEnd}</div>
               )}
             </div>
           </div>
