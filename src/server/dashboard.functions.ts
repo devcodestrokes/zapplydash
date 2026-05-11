@@ -330,6 +330,7 @@ export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requi
     ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
+    ["subscription", "repeat_funnel"],
     ["jortt", "invoices"],
     ["xero", "accounting"],
   ]);
