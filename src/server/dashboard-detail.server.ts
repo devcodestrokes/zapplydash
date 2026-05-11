@@ -30,7 +30,7 @@ export const SHOPIFY_STORE_LIST = [
   { code: "NL", flag: "🇳🇱", name: "Netherlands", storeKey: "SHOPIFY_NL_STORE" },
   { code: "UK", flag: "🇬🇧", name: "United Kingdom", storeKey: "SHOPIFY_UK_STORE" },
   { code: "US", flag: "🇺🇸", name: "United States", storeKey: "SHOPIFY_US_STORE" },
-  { code: "EU", flag: "🇩🇪", name: "Germany / EU", storeKey: "SHOPIFY_EU_STORE" },
+  
 ] as const;
 
 async function getShopifyTokenLocal(store: string): Promise<string | null> {
