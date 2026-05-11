@@ -32,6 +32,7 @@ import { Route as AdminManualDataRouteImport } from './routes/admin.manual-data'
 import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.install'
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
+import { Route as ApiPublicNightlySyncRouteImport } from './routes/api.public.nightly-sync'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
@@ -154,6 +155,11 @@ const ApiPublicSyncRoute = ApiPublicSyncRouteImport.update({
   path: '/api/public/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicNightlySyncRoute = ApiPublicNightlySyncRouteImport.update({
+  id: '/api/public/nightly-sync',
+  path: '/api/public/nightly-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiJorttConnectRoute = ApiJorttConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
@@ -205,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -266,6 +274,7 @@ export interface FileRoutesById {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
   '/api/shopify/install': typeof ApiShopifyInstallRoute
@@ -298,6 +307,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -358,6 +369,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
     | '/api/shopify/install'
@@ -387,6 +399,7 @@ export interface RootRouteChildren {
   PillarsMonthlyOverviewRoute: typeof PillarsMonthlyOverviewRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
+  ApiPublicNightlySyncRoute: typeof ApiPublicNightlySyncRoute
   ApiPublicSyncRoute: typeof ApiPublicSyncRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
   ApiShopifyInstallRoute: typeof ApiShopifyInstallRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/nightly-sync': {
+      id: '/api/public/nightly-sync'
+      path: '/api/public/nightly-sync'
+      fullPath: '/api/public/nightly-sync'
+      preLoaderRoute: typeof ApiPublicNightlySyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/jortt/connect': {
       id: '/api/jortt/connect'
       path: '/connect'
@@ -642,6 +662,7 @@ const rootRouteChildren: RootRouteChildren = {
   PillarsMonthlyOverviewRoute: PillarsMonthlyOverviewRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
+  ApiPublicNightlySyncRoute: ApiPublicNightlySyncRoute,
   ApiPublicSyncRoute: ApiPublicSyncRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
   ApiShopifyInstallRoute: ApiShopifyInstallRoute,
