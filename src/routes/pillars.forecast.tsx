@@ -1366,8 +1366,7 @@ function GrowthPlan2026({ data }: { data: any }) {
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="NL" stackId="a" fill="#171717" radius={[0, 0, 0, 0]} />
               <Bar dataKey="UK" stackId="a" fill="#6366f1" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="EU" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="US" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
