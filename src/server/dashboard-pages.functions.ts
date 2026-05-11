@@ -31,7 +31,7 @@ const dateRangeSchema = z.object({
 
 const STALE_MIN = 30; // minutes — refresh cached entries older than this in the background
 
-function subscriptionSummaryFallback(summary: any, storeCode: "NL" | "UK" | "US" | "EU") {
+function subscriptionSummaryFallback(summary: any, storeCode: "NL" | "UK" | "US") {
   const row = (Array.isArray(summary) ? summary : []).find((item) => item?.market === storeCode);
   if (!row) return null;
   return {
@@ -157,7 +157,7 @@ async function cacheFirst<T>(
 export const getStoreDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(
     dateRangeSchema.extend({
-      storeCode: z.enum(["NL", "UK", "US", "EU"]),
+      storeCode: z.enum(["NL", "UK", "US"]),
     })
   )
   .handler(async ({ data }) => {
@@ -201,7 +201,7 @@ export const getTripleWhaleDashboard = createServerFn({ method: "GET" }).middlew
 export const getSubscriptionDashboard = createServerFn({ method: "GET" }).middleware([requireAllowedUser])
   .inputValidator(
     dateRangeSchema.extend({
-      storeCode: z.enum(["NL", "UK", "US", "EU"]),
+      storeCode: z.enum(["NL", "UK", "US"]),
     })
   )
   .handler(async ({ data }) => {
