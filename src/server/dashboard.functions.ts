@@ -185,6 +185,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
+    ["subscription", "repeat_funnel"],
     ["jortt", "invoices"],
     ["xero", "accounting"],
   ]);
