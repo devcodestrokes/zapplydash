@@ -1,6 +1,38 @@
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
 import { getRequestHeader } from "@tanstack/react-start/server";
 
+function firstEnvValue(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function resolveSupabaseKey() {
+  const direct = firstEnvValue(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+  );
+  if (direct) return direct;
+
+  const packed = process.env.SUPABASE_SECRET_KEYS;
+  if (!packed) return (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+  try {
+    const parsed = JSON.parse(packed);
+    const values = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
+    const key = values.find((v) => typeof v === "string" && v.length > 20);
+    if (typeof key === "string") return key;
+  } catch {
+    return packed;
+  }
+  return (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+}
+
 // Resolve Supabase credentials with sensible fallbacks.
 // In the TanStack Worker runtime, only VITE_* vars are injected reliably;
 // SUPABASE_SERVICE_ROLE_KEY may be unavailable. The data_cache table has
@@ -10,11 +42,7 @@ function resolveCreds() {
     process.env.SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
     (import.meta as any).env?.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const key = resolveSupabaseKey();
   return { url, key };
 }
 

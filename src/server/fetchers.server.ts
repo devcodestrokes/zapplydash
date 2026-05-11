@@ -32,13 +32,41 @@ const VITE_SUPABASE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_SUPABASE_PU
   | string
   | undefined;
 
+function firstEnvValue(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function resolveSupabaseKey() {
+  const direct = firstEnvValue(
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "VITE_SUPABASE_ANON_KEY",
+    "VITE_SUPABASE_PUBLISHABLE_KEY",
+  );
+  if (direct) return direct;
+
+  const packed = process.env.SUPABASE_SECRET_KEYS;
+  if (!packed) return VITE_SUPABASE_PUBLISHABLE_KEY;
+  try {
+    const parsed = JSON.parse(packed);
+    const values = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
+    const key = values.find((v) => typeof v === "string" && v.length > 20);
+    if (typeof key === "string") return key;
+  } catch {
+    return packed;
+  }
+  return VITE_SUPABASE_PUBLISHABLE_KEY;
+}
+
 function serviceClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    VITE_SUPABASE_PUBLISHABLE_KEY;
+  const key = resolveSupabaseKey();
   if (!url || !key) {
     throw new Error(`Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`);
   }
