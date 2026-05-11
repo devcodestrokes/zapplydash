@@ -3,6 +3,7 @@
  * Each fetcher returns null when the source is not configured or errors.
  */
 import { createClient as createSupabaseJS } from "@supabase/supabase-js";
+import { resolveSupabaseServiceKey, resolveSupabaseUrl } from "./supabase-env.server";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,46 +28,9 @@ function daysAgo(n: number): string {
 // Vite inlines these as string literals at build time, so the Worker bundle
 // always has them available regardless of runtime env injection.
 // The integrations + data_cache tables have permissive RLS for this use case.
-const VITE_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-const VITE_SUPABASE_PUBLISHABLE_KEY = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as
-  | string
-  | undefined;
-
-function firstEnvValue(...names: string[]) {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function resolveSupabaseKey() {
-  const direct = firstEnvValue(
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_SECRET_KEY",
-    "SUPABASE_ANON_KEY",
-    "SUPABASE_PUBLISHABLE_KEY",
-    "VITE_SUPABASE_ANON_KEY",
-    "VITE_SUPABASE_PUBLISHABLE_KEY",
-  );
-  if (direct) return direct;
-
-  const packed = process.env.SUPABASE_SECRET_KEYS;
-  if (!packed) return VITE_SUPABASE_PUBLISHABLE_KEY;
-  try {
-    const parsed = JSON.parse(packed);
-    const values = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {});
-    const key = values.find((v) => typeof v === "string" && v.length > 20);
-    if (typeof key === "string") return key;
-  } catch {
-    return packed;
-  }
-  return VITE_SUPABASE_PUBLISHABLE_KEY;
-}
-
 function serviceClient() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || VITE_SUPABASE_URL;
-  const key = resolveSupabaseKey();
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabaseServiceKey();
   if (!url || !key) {
     throw new Error(`Supabase creds missing in fetchers (url=${!!url}, key=${!!key})`);
   }
