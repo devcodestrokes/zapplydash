@@ -23,7 +23,6 @@ const XERO_SCOPES =
     "accounting.reports.balancesheet.read",
     "accounting.reports.banksummary.read",
     "accounting.contacts.read",
-    "accounting.settings.read",
     "accounting.journals.read",
   ].join(" ");
 
