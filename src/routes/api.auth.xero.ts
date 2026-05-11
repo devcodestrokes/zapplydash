@@ -3,13 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 // Initiates the Xero OAuth 2.0 Authorization Code flow.
 // Visit /api/auth/xero while logged in to connect your Xero organization.
 
-// Xero OAuth 2.0 scopes — every scope listed here MUST be enabled in your
-// Xero app at https://developer.xero.com/app/manage. If any scope is not
-// enabled on the app, Xero returns: unauthorized_client / "Invalid scope for client".
-// Allow override via env var so you can quickly trim scopes without redeploying code logic.
-// NOTE: Xero is replacing broad/deprecated scopes with granular scopes. Apps using
-// the new scope model must request the specific resources they read, not the old
-// umbrella scopes like accounting.transactions.read or accounting.reports.read.
+// Xero OAuth 2.0 scopes — validated against the official Xero scopes docs:
+// https://developer.xero.com/documentation/guides/oauth2/scopes/
+// Xero now assigns granular Accounting scopes to Web/PKCE apps. Requesting the
+// old broad/deprecated scopes can return invalid_scope on newer Xero apps.
+// Restricted scopes that require certification/partner access and non-tenanted
+// client-credentials scopes are intentionally NOT requested because they also
+// cause invalid_scope for normal authorization-code login flows.
+// Allow override via env var so scopes can be trimmed without code changes.
 const XERO_SCOPES =
   process.env.XERO_SCOPES ??
   [
@@ -17,15 +18,31 @@ const XERO_SCOPES =
     "profile",
     "email",
     "offline_access",
-    // Valid Xero OAuth 2.0 scopes (see https://developer.xero.com/documentation/guides/oauth2/scopes/).
-    // Invoices are read via accounting.transactions.read. Xero does NOT expose
-    // per-report granular scopes — accounting.reports.read covers P&L, Balance
-    // Sheet, Bank Summary, etc.
-    "accounting.transactions.read",
-    "accounting.reports.read",
+
+    // Accounting API — new granular read scopes used by this dashboard.
+    "accounting.invoices.read",
+    "accounting.payments.read",
+    "accounting.banktransactions.read",
+    "accounting.manualjournals.read",
+    "accounting.reports.aged.read",
+    "accounting.reports.balancesheet.read",
+    "accounting.reports.banksummary.read",
+    "accounting.reports.budgetsummary.read",
+    "accounting.reports.executivesummary.read",
+    "accounting.reports.profitandloss.read",
+    "accounting.reports.trialbalance.read",
+    "accounting.reports.taxreports.read",
+    "accounting.reports.tenninetynine.read",
+    "accounting.journals.read",
     "accounting.contacts.read",
     "accounting.settings.read",
-    "accounting.journals.read",
+    "accounting.attachments.read",
+    "accounting.budgets.read",
+
+    // Other generally available organisation APIs from the same Xero docs.
+    "files.read",
+    "assets.read",
+    "projects.read",
   ].join(" ");
 
 export const Route = createFileRoute("/api/auth/xero")({
