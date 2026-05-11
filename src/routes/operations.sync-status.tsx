@@ -121,6 +121,34 @@ const CONNECTORS: Connector[] = [
     },
   },
   {
+    id: "paypal",
+    name: "PayPal",
+    api: "REST · Reporting",
+    iconBg: "bg-sky-50",
+    iconColor: "text-sky-700",
+    providerKeys: ["paypal"],
+    unit: (data) => {
+      const accts = Array.isArray(data?.paypalBalances?.accounts)
+        ? data.paypalBalances.accounts.length
+        : 0;
+      return accts > 0 ? `${accts} ${accts === 1 ? "balance" : "balances"}` : "—";
+    },
+  },
+  {
+    id: "mollie",
+    name: "Mollie",
+    api: "REST v2",
+    iconBg: "bg-indigo-50",
+    iconColor: "text-indigo-600",
+    providerKeys: ["mollie"],
+    unit: (data) => {
+      const accts = Array.isArray(data?.mollieBalances?.accounts)
+        ? data.mollieBalances.accounts.length
+        : 0;
+      return accts > 0 ? `${accts} ${accts === 1 ? "balance" : "balances"}` : "—";
+    },
+  },
+  {
     id: "fulfillment",
     name: "Fulfillment partner",
     api: "REST",
@@ -308,6 +336,8 @@ function SyncStatusPage() {
                 { name: "Triple Whale",  providerKeys: ["triplewhale"], bg: "bg-violet-50",   fg: "text-violet-600" },
                 { name: "Loop",          providerKeys: ["loop"],        bg: "bg-violet-50",   fg: "text-violet-600" },
                 { name: "Juo",           providerKeys: ["juo"],         bg: "bg-fuchsia-50",  fg: "text-fuchsia-600" },
+                { name: "PayPal",        providerKeys: ["paypal"],      bg: "bg-sky-50",      fg: "text-sky-700" },
+                { name: "Mollie",        providerKeys: ["mollie"],      bg: "bg-indigo-50",   fg: "text-indigo-600" },
                 { name: "Jortt",         providerKeys: ["jortt"],       bg: "bg-teal-50",     fg: "text-teal-600", suffix: "→ Xero" },
                 { name: "Xero",          providerKeys: ["xero"],        bg: "bg-sky-50",      fg: "text-sky-600",  suffix: "incoming" },
               ].map((node) => {
