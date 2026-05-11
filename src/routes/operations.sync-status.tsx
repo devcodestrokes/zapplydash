@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Plug, AlertCircle, ChevronRight, LayoutGrid } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getSyncStatus, getDashboardData, triggerSyncNow } from "@/server/dashboard.functions";
+import { getSyncStatus, getDashboardData, triggerSyncNow, triggerXeroSyncNow } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/operations/sync-status")({
   head: () => ({ meta: [{ title: "Sync status — Zapply" }] }),
@@ -234,6 +234,19 @@ function SyncStatusPage() {
     }
   };
 
+  const syncConnector = async (id: string) => {
+    setRefreshing(true);
+    try {
+      if (id === "xero") await triggerXeroSyncNow();
+      else await triggerSyncNow();
+      const [s, d] = await Promise.all([getSyncStatus(), getDashboardData()]);
+      setStatus(s as any);
+      setData(d);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     load();
     const id = setInterval(load, 60_000);
@@ -311,7 +324,7 @@ function SyncStatusPage() {
                       Logs
                     </button>
                     <button
-                      onClick={syncNow}
+                      onClick={() => syncConnector(c.id)}
                       disabled={refreshing}
                       className="inline-flex items-center rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium hover:bg-neutral-50 disabled:opacity-50"
                     >
