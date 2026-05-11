@@ -2362,6 +2362,15 @@ export async function fetchXero() {
     const live =
       Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
+    if (!live) {
+      const reason = endpointErrors.length
+        ? endpointErrors.slice(0, 4).join(" | ")
+        : "Xero responded, but Profit & Loss, Balance Sheet, and Bank Summary contained no usable values.";
+      throw new Error(
+        `Xero sync returned no dashboard data. ${reason} Check that the connected organisation (${tenantId}) has data for the selected period and that these scopes are approved in the Xero app: accounting.invoices.read, accounting.banktransactions.read, accounting.manualjournals.read, accounting.contacts.read, accounting.settings.read, accounting.reports.profitandloss.read, accounting.reports.balancesheet.read, accounting.reports.banksummary.read.`,
+      );
+    }
+
     return {
       live,
       tenantId,
@@ -2433,7 +2442,7 @@ export async function fetchXero() {
     };
   } catch (err: any) {
     console.error("Xero fetch error:", err.message);
-    return null;
+    throw err;
   }
 }
 
