@@ -4,29 +4,14 @@
 // For user-authenticated queries (with RLS), use the auth middleware instead.
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
-
-// In the TanStack Worker runtime, process.env may not contain the Supabase
-// keys at runtime. We read VITE_* values via import.meta.env at MODULE TOP
-// LEVEL so Vite inlines them as string literals at build time. This guarantees
-// the Worker bundle always has them available regardless of runtime env injection.
-const VITE_SUPABASE_URL =
-  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-const VITE_SUPABASE_PUBLISHABLE_KEY =
-  (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+import { resolveSupabaseServiceKey, resolveSupabaseUrl } from '@/server/supabase-env.server';
 
 function createSupabaseAdminClient() {
-  const SUPABASE_URL =
-    process.env.SUPABASE_URL ||
-    process.env.VITE_SUPABASE_URL ||
-    VITE_SUPABASE_URL;
+  const SUPABASE_URL = resolveSupabaseUrl();
   // Prefer service role (bypasses RLS) but fall back to publishable key so
   // the Worker can still operate against tables with permissive RLS when the
   // service role secret is not injected into the runtime.
-  const SUPABASE_KEY =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    VITE_SUPABASE_PUBLISHABLE_KEY;
+  const SUPABASE_KEY = resolveSupabaseServiceKey();
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
