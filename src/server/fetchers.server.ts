@@ -1665,14 +1665,35 @@ async function getXeroToken(): Promise<string | null> {
 async function getXeroTenantId(): Promise<string | null> {
   // tenantId is stored in metadata during the OAuth callback
   try {
-    const { data } = await serviceClient()
+    const { data, error } = await serviceClient()
       .from("integrations")
       .select("metadata")
       .eq("provider", "xero")
       .single();
+    if (error) {
+      console.error("Xero tenant lookup failed:", error.message);
+      return null;
+    }
     return (data?.metadata?.tenant_id as string) ?? null;
-  } catch {
+  } catch (err: any) {
+    console.error("Xero tenant lookup exception:", err?.message ?? String(err));
     return null;
+  }
+}
+
+function extractXeroError(body: string) {
+  try {
+    const json = JSON.parse(body);
+    const message =
+      json?.Detail ??
+      json?.Message ??
+      json?.ErrorNumber ??
+      json?.error_description ??
+      json?.error ??
+      body;
+    return typeof message === "string" ? message : JSON.stringify(message);
+  } catch {
+    return body;
   }
 }
 
