@@ -75,11 +75,26 @@ function ReconciliationPage() {
                       ? -Math.abs(Number(data.jortt.plSummary.costs)) - (cogs ?? 0) - (shipping ?? 0)
                       : null);
 
-    // Triple Whale ad spend
+    // Triple Whale ad spend — cache shape is an array of per-market rows
+    // each with { live, adSpend, facebookSpend, googleSpend, ... }.
     const tw = data?.tripleWhale;
+    const twRows: any[] = Array.isArray(tw)
+      ? tw
+      : Array.isArray(tw?.markets)
+        ? tw.markets
+        : [];
+    const sumField = (rows: any[], ...fields: string[]) =>
+      rows.reduce((s, r) => {
+        if (!r?.live && r?.live !== undefined) return s;
+        for (const f of fields) {
+          const v = Number(r?.[f] ?? 0);
+          if (v) return s + v;
+        }
+        return s;
+      }, 0);
     const adSpendVal =
       Number(tw?.totalSpend ?? tw?.spend ?? tw?.summary?.spend ?? 0) ||
-      (Array.isArray(tw?.markets) ? tw.markets.reduce((s: number, r: any) => s + Number(r.spend ?? 0), 0) : 0);
+      sumField(twRows, "adSpend", "spend");
     const adSpend = adSpendVal > 0 ? -adSpendVal : null;
 
     const rows: Row[] = [
