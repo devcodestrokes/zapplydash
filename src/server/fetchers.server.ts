@@ -96,7 +96,7 @@ const SHOPIFY_STORES = [
     storeKey: "SHOPIFY_US_STORE",
     status: "scaling",
   },
-  { code: "EU", flag: "🇩🇪", name: "Germany / EU", storeKey: "SHOPIFY_EU_STORE" },
+  
 ] as const;
 
 async function getShopifyToken(store: string): Promise<string | null> {
