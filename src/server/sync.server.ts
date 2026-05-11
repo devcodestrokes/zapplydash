@@ -14,6 +14,7 @@ import {
   fetchJortt,
   fetchJuoRaw,
   fetchLoopRaw,
+  fetchSubscriptionRepeatFunnel,
   fetchXero,
 } from "./fetchers.server";
 
