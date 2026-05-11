@@ -911,7 +911,7 @@ function GrowthPlan2026({ data }: { data: any }) {
       }
     }
 
-    const currentMtd: Record<MarketCode, number> = { NL: 0, UK: 0, US: 0, EU: 0 };
+    const currentMtd: Record<MarketCode, number> = { NL: 0, UK: 0, US: 0 };
     for (const mk of MARKETS) {
       const live = shopifyMarkets.find((m: any) => m?.code === mk.code);
       currentMtd[mk.code] = Number(live?.revenue ?? 0);
@@ -926,7 +926,7 @@ function GrowthPlan2026({ data }: { data: any }) {
         .filter((r) => r.date.startsWith(`${year}-`) && isFinite(r.revenue) && r.revenue > 0)
         .sort((a, b) => a.date.localeCompare(b.date));
 
-    const plan: Record<MarketCode, any> = { NL: {}, UK: {}, US: {}, EU: {} };
+    const plan: Record<MarketCode, any> = { NL: {}, UK: {}, US: {} };
     for (const mk of MARKETS) {
       const dailyRows = dailyForMarket(mk.code);
       const recent30 = dailyRows.slice(-30).reduce((s, r) => s + r.revenue, 0);
