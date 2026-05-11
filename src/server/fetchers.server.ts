@@ -3129,20 +3129,19 @@ export async function fetchShopifyRepeatFunnel() {
     .filter((c) => c.orders.length > 0)
     .sort((a, b) => b.start.getTime() - a.start.getTime());
 
-  // Lifetime headline = every first-time buyer across all cohorts.
-  const lifetimeOrders: string[][] = [];
-  for (const arr of cohortBuckets.values()) for (const o of arr) lifetimeOrders.push(o);
-  const cohortOrders = lifetimeOrders;
-  const cohortSize = cohortOrders.length;
-  const selectedSecondMatured = true;
-  const selectedDeepMatured = true;
+  // Lifetime headline = every Shopify customer across all 3 stores, bucketed
+  // by their TRUE lifetime order count (customer.numberOfOrders from Shopify).
+  // This mirrors what Shopify analytics shows as the order-frequency
+  // distribution — independent of our 5-year fetch window.
   const reachedN = [0, 0, 0, 0, 0, 0, 0];
-  for (const orders of cohortOrders) {
-    const reached = Math.min(orders.length, 7);
+  let cohortSize = 0;
+  for (const entry of customerOrders.values()) {
+    const lifetime = Math.max(entry.lifetimeOrders, entry.dates.length);
+    if (lifetime <= 0) continue;
+    cohortSize++;
+    const reached = Math.min(lifetime, 7);
     for (let i = 0; i < reached; i++) reachedN[i]++;
   }
-  // 7th+ bucket: customers with >=7 orders
-  // (reachedN[6] already counts >=7 via Math.min(orders.length, 7))
 
   const funnel = reachedN.map((c, i) => ({
     order: i + 1,
@@ -3225,8 +3224,8 @@ export async function fetchShopifyRepeatFunnel() {
     cohortSize,
     cohortMonth: selectedCohort ? monthLabel(selectedCohort.start) : null,
     cohortWindowDays: selectedCohort ? Math.max(0, selectedCohort.daysSinceEnd) : 0,
-    cohortMatureForSecond: selectedSecondMatured,
-    cohortMatureForThird: selectedDeepMatured,
+    cohortMatureForSecond: true,
+    cohortMatureForThird: true,
     cohortStartedDaysAgo: selectedCohort
       ? Math.floor((now - selectedCohort.start.getTime()) / DAY)
       : 0,
