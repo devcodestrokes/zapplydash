@@ -119,7 +119,7 @@ function ReconciliationPage() {
       { label: "Shopify gross revenue",   source: "Shopify",      value: grossRev,    tone: "pos" },
       { label: "Refunds & returns",       source: "Shopify",      value: refunds,     tone: "neg" },
       { label: "Discounts applied",       source: "Shopify",      value: discounts,   tone: "neg" },
-      { label: "Cost of Goods Sold",      source: "Jortt",        value: cogs,        tone: "neg" },
+      { label: "Cost of Goods Sold",      source: "Triple Whale", value: cogs,        tone: "neg" },
       { label: "Payment processing fees", source: "Shopify",      value: paymentFees, tone: "neg" },
       { label: "Shipping costs",          source: "Jortt",        value: shipping,    tone: "neg" },
       { label: "Ad spend",                source: "Triple Whale", value: adSpend,     tone: "neg" },
