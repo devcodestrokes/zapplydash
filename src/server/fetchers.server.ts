@@ -1787,8 +1787,9 @@ function xRowsByLabels(rows: any[], fragments: string[], colIdx = 1) {
 export async function fetchXero() {
   const [token, tenantId] = await Promise.all([getXeroToken(), getXeroTenantId()]);
   if (!token) {
+    const detail = getXeroLastTokenError();
     throw new Error(
-      "Xero not connected or refresh failed. Visit /api/auth/xero to (re)connect — the stored access token has expired and the refresh_token could not obtain a new one.",
+      `Xero auth failed: ${detail ?? "no access token available"}. Reconnect at /api/auth/xero.`,
     );
   }
   if (!tenantId) {
