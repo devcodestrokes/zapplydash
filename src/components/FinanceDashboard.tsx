@@ -1249,8 +1249,12 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       })();
       const mrrForRange = liveMRR * (rangeDays / 30);
       const subShareRaw = totalRev > 0 ? (mrrForRange / totalRev) * 100 : null;
-      // Cap display at 100% (revenue source can lag vs subs MRR; >100% always means apples-to-oranges)
-      const subShare = subShareRaw !== null ? Math.min(100, Math.max(0, subShareRaw)) : null;
+      // Only show when comparison is apples-to-apples: need ≥14d window and a sensible (<=100%) result.
+      // Otherwise revenue is lagging/partial vs recurring MRR and the % is meaningless.
+      const subShare =
+        subShareRaw !== null && rangeDays >= 14 && subShareRaw <= 100
+          ? subShareRaw
+          : null;
       const sourcesLabel = subData.map(m => m.platform === "juo" ? `Juo (${m.market})` : `Loop (${m.market})`).join(" + ");
       return (
         <Card className="mt-3 p-5">
