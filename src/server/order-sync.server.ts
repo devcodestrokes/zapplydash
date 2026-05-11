@@ -327,7 +327,8 @@ export async function snapshotSubscriptions(): Promise<{ provider: string; ok: b
       const rows = Array.isArray(data) ? data : [data];
       const byStore = new Map<string, any[]>();
       for (const row of rows) {
-        const code = (row?.market ?? row?.store ?? row?.storeCode ?? "ALL") as string;
+        const r = row as any;
+        const code = (r?.market ?? r?.store ?? r?.storeCode ?? "ALL") as string;
         if (!byStore.has(code)) byStore.set(code, []);
         byStore.get(code)!.push(row);
       }
