@@ -6,6 +6,7 @@ import {
   fetchTripleWhale,
   fetchTripleWhaleCustomerEconomics,
   fetchShopifyGrowthYear,
+  fetchXero,
 } from "./fetchers.server";
 import { getProgress } from "./progress.server";
 
@@ -334,6 +335,22 @@ export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requi
 export const triggerSyncNow = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
   const results = await runAll();
   return { ok: true, finishedAt: new Date().toISOString(), results };
+});
+
+export const triggerXeroSyncNow = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
+  try {
+    const live = await withTimeout(fetchXero(), 90_000, "Xero sync");
+    await writeCache("xero", "accounting", live);
+    return { ok: true, finishedAt: new Date().toISOString(), error: null };
+  } catch (err: any) {
+    const message = err?.message ?? "Xero sync failed";
+    await writeCache("xero", "accounting", {
+      __error: true,
+      message,
+      fetchedAt: new Date().toISOString(),
+    });
+    return { ok: false, finishedAt: new Date().toISOString(), error: message };
+  }
 });
 
 // In-memory cache for Growth Plan year data — 10 minutes per year.
