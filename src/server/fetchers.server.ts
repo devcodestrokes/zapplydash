@@ -3471,11 +3471,13 @@ export async function fetchMollieBalances() {
 // Shopify orders. Cohort month = subscription createdAt month. Repeat to Nth
 // order = % of cohort whose subscription has completed ≥ N billing cycles.
 
-const SUB_FUNNEL_CALC_VERSION = 1;
+const SUB_FUNNEL_CALC_VERSION = 2;
 
 function pickCycleCount(s: any): number {
   // Try common field names across Juo + Loop. Fall back to 1 (the signup order itself counts).
   const candidates = [
+    s?.completedOrdersCount,
+    s?.currentCycle,
     s?.cyclesCompleted,
     s?.completedCycles,
     s?.totalCycles,
@@ -3496,50 +3498,42 @@ function pickCycleCount(s: any): number {
   return 1;
 }
 
-async function fetchAllJuoSubsForFunnel(): Promise<Array<{ createdAt: string; cycles: number }>> {
+async function fetchAllJuoSubsForFunnel(): Promise<Array<{ id: string; createdAt: string; cycles: number }>> {
   const apiKey = process.env.JUO_NL_API_KEY;
   if (!apiKey) return [];
   const headers = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
   const JUO_BASE = "https://api.juo.io";
-  const out: Array<{ createdAt: string; cycles: number }> = [];
-  // Pull every status so older cohorts are represented.
-  const statuses = ["active", "paused", "canceled", "expired", "failed"];
-  for (const status of statuses) {
-    let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100&status=${status}`;
-    let pages = 0;
-    while (nextUrl && pages < 300) {
-      const res: Response = await fetch(nextUrl, { headers, cache: "no-store" });
-      if (res.status === 429) {
-        const reset = parseInt(res.headers.get("X-RateLimit-Reset") ?? "2", 10);
-        await new Promise((r) => setTimeout(r, (reset || 2) * 1000));
-        continue;
-      }
-      if (!res.ok) break;
-      const json: any = await res.json();
-      const batch: any[] = json.data ?? json.subscriptions ?? (Array.isArray(json) ? json : []);
-      if (batch.length === 0) break;
-      for (const s of batch) {
-        if (!s?.createdAt) continue;
-        out.push({ createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
-      }
-      const link: string = res.headers.get("Link") ?? "";
-      const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
-      if (m) {
-        nextUrl = m[1].startsWith("http") ? m[1] : new URL(m[1], JUO_BASE).toString();
-      } else {
-        nextUrl = null;
-      }
-      pages++;
+  const out: Array<{ id: string; createdAt: string; cycles: number }> = [];
+  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100`;
+  let pages = 0;
+  while (nextUrl && pages < 600) {
+    const res: Response = await fetch(nextUrl, { headers, cache: "no-store" });
+    if (res.status === 429) {
+      const reset = parseInt(res.headers.get("X-RateLimit-Reset") ?? "2", 10);
+      await new Promise((r) => setTimeout(r, (reset || 2) * 1000));
+      continue;
     }
+    if (!res.ok) break;
+    const json: any = await res.json();
+    const batch: any[] = json.data ?? json.subscriptions ?? (Array.isArray(json) ? json : []);
+    if (batch.length === 0) break;
+    for (const s of batch) {
+      if (!s?.createdAt) continue;
+      out.push({ id: `juo:${s.id ?? s.customer ?? `${s.createdAt}:${out.length}`}`, createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
+    }
+    const link: string = res.headers.get("Link") ?? "";
+    const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
+    nextUrl = m ? (m[1].startsWith("http") ? m[1] : new URL(m[1], JUO_BASE).toString()) : null;
+    pages++;
   }
   return out;
 }
 
-async function fetchAllLoopSubsForFunnel(): Promise<Array<{ createdAt: string; cycles: number }>> {
+async function fetchAllLoopSubsForFunnel(): Promise<Array<{ id: string; createdAt: string; cycles: number }>> {
   const BASE = "https://api.loopsubscriptions.com";
   const PAGE_SIZE = 100;
   const MAX_PAGES = 500;
-  const out: Array<{ createdAt: string; cycles: number }> = [];
+  const out: Array<{ id: string; createdAt: string; cycles: number }> = [];
 
   for (const { market, envKey } of LOOP_STORES) {
     const key = process.env[envKey];
@@ -3560,7 +3554,7 @@ async function fetchAllLoopSubsForFunnel(): Promise<Array<{ createdAt: string; c
         if (batch.length === 0) break;
         for (const s of batch) {
           if (!s?.createdAt) continue;
-          out.push({ createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
+          out.push({ id: `${market}:${s.id ?? s.shopifyId ?? s.originOrderShopifyId ?? `${s.createdAt}:${out.length}`}`, createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
         }
         const hasNext =
           json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
@@ -3576,14 +3570,19 @@ export async function fetchSubscriptionRepeatFunnel() {
   const [juo, loop] = await Promise.all([
     fetchAllJuoSubsForFunnel().catch((e) => {
       console.error("subscription funnel — Juo fetch failed:", e?.message);
-      return [] as Array<{ createdAt: string; cycles: number }>;
+      return [] as Array<{ id: string; createdAt: string; cycles: number }>;
     }),
     fetchAllLoopSubsForFunnel().catch((e) => {
       console.error("subscription funnel — Loop fetch failed:", e?.message);
-      return [] as Array<{ createdAt: string; cycles: number }>;
+      return [] as Array<{ id: string; createdAt: string; cycles: number }>;
     }),
   ]);
-  const all = [...juo, ...loop];
+  const byId = new Map<string, { id: string; createdAt: string; cycles: number }>();
+  for (const sub of [...juo, ...loop]) {
+    const existing = byId.get(sub.id);
+    if (!existing || sub.cycles > existing.cycles) byId.set(sub.id, sub);
+  }
+  const all = Array.from(byId.values());
   if (all.length === 0) return null;
 
   // Bucket by cohort month
@@ -3663,6 +3662,8 @@ export async function fetchSubscriptionRepeatFunnel() {
     funnel,
     monthlyCohorts,
     totalCustomersAnalyzed: totalCohortSize,
+    rawSubscriptionsFetched: juo.length + loop.length,
+    dedupedSubscriptions: totalCohortSize,
     fetchedAt: new Date().toISOString(),
   };
 }

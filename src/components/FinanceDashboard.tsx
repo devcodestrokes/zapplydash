@@ -1377,6 +1377,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
         { order: 7, customers: null, rate: null, maturing: true },
       ] : [];
       const displayFunnel = (f.cohortSize ?? 0) > 0 ? f.funnel : fallbackFunnel;
+      const personLabel = f.source === "subscriptions" ? "subscribers" : "customers";
       // (deeper analysis is always rendered for accuracy)
       const top4 = displayFunnel.slice(0, 4);
       const rest = displayFunnel.slice(4);
@@ -1414,7 +1415,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                   <div className="text-[24px] font-semibold tabular-nums leading-none">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
                   <div className="text-[12px] text-neutral-500">{row.maturing ? "Still maturing" : subs[i]}</div>
                 </div>
-                <div className="mt-2 text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Needs more observation time"}</div>
+                <div className="mt-2 text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} ${personLabel}` : "Needs more observation time"}</div>
                 <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
                   <div className={`h-full ${orderColors[i]} rounded-full`} style={{ width: `${Math.min(100, row.rate ?? 0)}%` }} />
                 </div>
@@ -1440,7 +1441,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                       {labels[i + 4]}
                     </div>
                     <div className="mt-1 text-[18px] font-semibold tabular-nums">{row.rate !== null ? `${row.rate.toFixed(1)}%` : "—"}</div>
-                    <div className="text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} customers` : "Still maturing"}</div>
+                    <div className="text-[11px] text-neutral-400">{row.customers !== null ? `${row.customers.toLocaleString()} ${personLabel}` : "Still maturing"}</div>
                     <div className="mt-2 h-1 w-full rounded-full bg-neutral-100 overflow-hidden">
                       <div className={`h-full ${orderColors[i + 4]} rounded-full`} style={{ width: `${Math.min(100, (row.rate ?? 0) * 4)}%` }} />
                     </div>

@@ -249,7 +249,13 @@ export function refreshStaleInBackground(cache: CacheMap): void {
         payload &&
         !payload.__empty &&
         !payload.__error &&
-        payload.calcVersion !== 6);
+        payload.calcVersion !== 6) ||
+      (job.provider === "subscription" &&
+        job.key === "repeat_funnel" &&
+        payload &&
+        !payload.__empty &&
+        !payload.__error &&
+        payload.calcVersion !== 2);
     if (!entry || age > job.maxAgeMin || needsFreshCalc) {
       void runJob(job);
     }
