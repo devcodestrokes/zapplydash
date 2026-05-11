@@ -336,6 +336,8 @@ function SyncStatusPage() {
                 { name: "Triple Whale",  providerKeys: ["triplewhale"], bg: "bg-violet-50",   fg: "text-violet-600" },
                 { name: "Loop",          providerKeys: ["loop"],        bg: "bg-violet-50",   fg: "text-violet-600" },
                 { name: "Juo",           providerKeys: ["juo"],         bg: "bg-fuchsia-50",  fg: "text-fuchsia-600" },
+                { name: "PayPal",        providerKeys: ["paypal"],      bg: "bg-sky-50",      fg: "text-sky-700" },
+                { name: "Mollie",        providerKeys: ["mollie"],      bg: "bg-indigo-50",   fg: "text-indigo-600" },
                 { name: "Jortt",         providerKeys: ["jortt"],       bg: "bg-teal-50",     fg: "text-teal-600", suffix: "→ Xero" },
                 { name: "Xero",          providerKeys: ["xero"],        bg: "bg-sky-50",      fg: "text-sky-600",  suffix: "incoming" },
               ].map((node) => {
