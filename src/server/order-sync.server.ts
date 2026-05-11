@@ -13,10 +13,9 @@
 //   - When `hasNextPage` is false the store is marked `backfill_complete`.
 //   - Subsequent nightly runs fetch only the new updated_at delta.
 //
-// A single invocation has a soft cap of MAX_PAGES_PER_RUN pages per store
-// (≈ 50k orders/store/run) so we stay well inside the Worker timeout. The
-// nightly cron is enough to keep up after backfill; during the initial
-// backfill of 30k+ orders one or two runs will finish each store.
+// A single invocation intentionally processes a small chunk per store so the
+// public HTTP endpoint returns before the platform/request client times out.
+// Re-run the endpoint until every store returns `hasMore: false`.
 
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -26,7 +25,7 @@ import {
 } from "./fetchers.server";
 
 const PAGE_SIZE = 250;
-const MAX_PAGES_PER_RUN = 200; // ≈ 50,000 orders per store per run
+const DEFAULT_MAX_PAGES_PER_STORE = 1; // 250 orders/store/call; safe for manual Postman runs
 
 const STORES = [
   { code: "NL", storeKey: "SHOPIFY_NL_STORE" },
@@ -145,6 +144,7 @@ async function syncStore(
   sb: ReturnType<typeof adminClient>,
   storeCode: string,
   store: string,
+  maxPages: number,
 ): Promise<StoreSyncResult> {
   const result: StoreSyncResult = {
     store,
@@ -178,7 +178,7 @@ async function syncStore(
   let highestUpdated = state?.last_updated_at ?? null;
 
   try {
-    while (hasNextPage && result.pages < MAX_PAGES_PER_RUN) {
+    while (hasNextPage && result.pages < maxPages) {
       const res = await fetch(
         `https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
         {
@@ -285,13 +285,13 @@ async function syncStore(
   return result;
 }
 
-export async function syncAllShopifyOrders(): Promise<StoreSyncResult[]> {
+export async function syncAllShopifyOrders(maxPagesPerStore = DEFAULT_MAX_PAGES_PER_STORE): Promise<StoreSyncResult[]> {
   const sb = adminClient();
-  const out: StoreSyncResult[] = [];
-  for (const { code, storeKey } of STORES) {
+  const maxPages = Math.max(1, Math.min(10, Math.floor(maxPagesPerStore)));
+  return Promise.all(STORES.map(async ({ code, storeKey }) => {
     const store = process.env[storeKey];
     if (!store) {
-      out.push({
+      return {
         store: "(unset)",
         storeCode: code,
         pages: 0,
@@ -300,13 +300,10 @@ export async function syncAllShopifyOrders(): Promise<StoreSyncResult[]> {
         lastUpdatedAt: null,
         backfillComplete: false,
         error: `env ${storeKey} not set`,
-      });
-      continue;
+      };
     }
-    const r = await syncStore(sb, code, store);
-    out.push(r);
-  }
-  return out;
+    return syncStore(sb, code, store, maxPages);
+  }));
 }
 
 export async function snapshotSubscriptions(): Promise<{ provider: string; ok: boolean; message?: string }[]> {

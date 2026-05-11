@@ -15,18 +15,24 @@ import { runAll } from "@/server/sync.server";
 export const Route = createFileRoute("/api/public/nightly-sync")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
         const startedAt = new Date().toISOString();
-        const orders = await syncAllShopifyOrders();
-        const subs = await snapshotSubscriptions();
-        // Refresh the per-page caches in the background — don't block.
-        runAll().catch((e) => console.error("[nightly-sync] runAll:", e));
+        const { searchParams } = new URL(request.url);
+        const pages = Number(searchParams.get("pages") ?? "1");
+        const orders = await syncAllShopifyOrders(pages);
+        const hasMore = orders.some((store) => store.hasMore);
+        const subs = hasMore ? [] : await snapshotSubscriptions();
+        // Refresh expensive dashboard caches only after the order backfill is caught up.
+        if (!hasMore) runAll().catch((e) => console.error("[nightly-sync] runAll:", e));
         return Response.json({
           ok: true,
           startedAt,
           finishedAt: new Date().toISOString(),
           orders,
           subscriptions: subs,
+          message: hasMore
+            ? "Stored this chunk. Run the endpoint again until hasMore is false for every store."
+            : "Order sync is caught up; subscription snapshots and dashboard cache refresh started.",
         });
       },
       GET: async ({ request }) => {
