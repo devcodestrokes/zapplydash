@@ -51,15 +51,14 @@ type TwRow = {
   roas?: number | null;
 };
 
-const MARKET_ORDER = ["NL", "UK", "US", "EU"];
+const MARKET_ORDER = ["NL", "UK", "US"];
 const NAMES: Record<string, string> = {
   NL: "Netherlands",
   UK: "United Kingdom",
   US: "United States",
-  EU: "Germany / EU",
 };
-const FLAGS: Record<string, string> = { NL: "🇳🇱", UK: "🇬🇧", US: "🇺🇸", EU: "🇩🇪" };
-const DEFAULT_CCY: Record<string, string> = { NL: "EUR", UK: "GBP", US: "USD", EU: "EUR" };
+const FLAGS: Record<string, string> = { NL: "🇳🇱", UK: "🇬🇧", US: "🇺🇸" };
+const DEFAULT_CCY: Record<string, string> = { NL: "EUR", UK: "GBP", US: "USD" };
 
 function fmtMoney(n: number | null | undefined, currency = "EUR") {
   if (n == null || !isFinite(n)) return "—";
