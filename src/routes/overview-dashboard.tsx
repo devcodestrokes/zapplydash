@@ -146,7 +146,11 @@ function OverviewPage() {
             shopifyDaily={data?.shopifyDaily ?? null}
             tripleWhaleCustomerEconomics={data?.tripleWhaleCustomerEconomics ?? null}
             tripleWhaleDaily={data?.tripleWhaleDaily ?? null}
-            shopifyRepeatFunnel={data?.shopifyRepeatFunnel?.calcVersion >= 6 ? data.shopifyRepeatFunnel : null}
+            shopifyRepeatFunnel={(() => {
+              const sub = data?.subscriptionRepeatFunnel;
+              if (sub && !sub.__empty && !sub.__error && (sub.cohortSize ?? 0) > 0) return sub;
+              return data?.shopifyRepeatFunnel?.calcVersion >= 6 ? data.shopifyRepeatFunnel : null;
+            })()}
             sourceStatus={data?.sourceStatus ?? null}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">

@@ -185,6 +185,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
+    ["subscription", "repeat_funnel"],
     ["jortt", "invoices"],
     ["xero", "accounting"],
   ]);
@@ -208,6 +209,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   const tripleWhaleDailyCache = get("triplewhale", "daily");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
+  const subscriptionRepeatFunnelCache = get("subscription", "repeat_funnel");
   const jorttCache = get("jortt", "invoices");
   const xeroCache = get("xero", "accounting");
 
@@ -258,6 +260,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   collectError("tripleWhaleDaily", tripleWhaleDailyCache);
   collectError("juo", juoCache);
   collectError("loop", loopCache);
+  collectError("subscriptionRepeatFunnel", subscriptionRepeatFunnelCache);
   collectError("jortt", jorttCache);
   collectError("xero", xeroCache);
 
@@ -299,6 +302,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
+    subscriptionRepeatFunnel: subscriptionRepeatFunnelCache?.payload ?? null,
     jortt: jorttCache?.payload ?? null,
     xero: xeroCache?.payload ?? null,
     connections: getConnections(),
@@ -326,6 +330,7 @@ export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requi
     ["triplewhale", "daily"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
+    ["subscription", "repeat_funnel"],
     ["jortt", "invoices"],
     ["xero", "accounting"],
   ]);

@@ -56,10 +56,12 @@ function MonthlyOverviewPage() {
   const deniedScopes = Array.isArray(jorttObj?.deniedScopes) ? jorttObj.deniedScopes : [];
   const shopifyMonthly = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
   const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
-  const shopifyRepeatFunnel =
-    data?.shopifyRepeatFunnel &&
-    !data.shopifyRepeatFunnel.__empty &&
-    !data.shopifyRepeatFunnel.__error
+  const subFunnel = data?.subscriptionRepeatFunnel;
+  const subFunnelValid =
+    subFunnel && !subFunnel.__empty && !subFunnel.__error && (subFunnel.cohortSize ?? 0) > 0;
+  const shopifyRepeatFunnel = subFunnelValid
+    ? subFunnel
+    : data?.shopifyRepeatFunnel && !data.shopifyRepeatFunnel.__empty && !data.shopifyRepeatFunnel.__error
       ? data.shopifyRepeatFunnel
       : null;
   const shopifyLive = shopifyMonthly.length > 0;

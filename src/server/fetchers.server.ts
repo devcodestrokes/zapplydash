@@ -3465,3 +3465,204 @@ export async function fetchMollieBalances() {
     return { live: false, reason: err?.message ?? "Mollie fetch failed", accounts: [] };
   }
 }
+
+// ─── Subscription Repeat Funnel (Juo + Loop) ──────────────────────────────
+// Builds a cohort retention funnel from subscription platforms instead of
+// Shopify orders. Cohort month = subscription createdAt month. Repeat to Nth
+// order = % of cohort whose subscription has completed ≥ N billing cycles.
+
+const SUB_FUNNEL_CALC_VERSION = 1;
+
+function pickCycleCount(s: any): number {
+  // Try common field names across Juo + Loop. Fall back to 1 (the signup order itself counts).
+  const candidates = [
+    s?.cyclesCompleted,
+    s?.completedCycles,
+    s?.totalCycles,
+    s?.currentCycleNumber,
+    s?.cycleNumber,
+    s?.orderCycles,
+    s?.totalSuccessOrders,
+    s?.totalOrderCount,
+    s?.totalOrders,
+    s?.successfulOrders,
+    s?.orderCount,
+    s?.numberOfBillingAttempts,
+  ];
+  for (const v of candidates) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return 1;
+}
+
+async function fetchAllJuoSubsForFunnel(): Promise<Array<{ createdAt: string; cycles: number }>> {
+  const apiKey = process.env.JUO_NL_API_KEY;
+  if (!apiKey) return [];
+  const headers = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
+  const JUO_BASE = "https://api.juo.io";
+  const out: Array<{ createdAt: string; cycles: number }> = [];
+  // Pull every status so older cohorts are represented.
+  const statuses = ["active", "paused", "canceled", "expired", "failed"];
+  for (const status of statuses) {
+    let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100&status=${status}`;
+    let pages = 0;
+    while (nextUrl && pages < 300) {
+      const res: Response = await fetch(nextUrl, { headers, cache: "no-store" });
+      if (res.status === 429) {
+        const reset = parseInt(res.headers.get("X-RateLimit-Reset") ?? "2", 10);
+        await new Promise((r) => setTimeout(r, (reset || 2) * 1000));
+        continue;
+      }
+      if (!res.ok) break;
+      const json: any = await res.json();
+      const batch: any[] = json.data ?? json.subscriptions ?? (Array.isArray(json) ? json : []);
+      if (batch.length === 0) break;
+      for (const s of batch) {
+        if (!s?.createdAt) continue;
+        out.push({ createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
+      }
+      const link: string = res.headers.get("Link") ?? "";
+      const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
+      if (m) {
+        nextUrl = m[1].startsWith("http") ? m[1] : new URL(m[1], JUO_BASE).toString();
+      } else {
+        nextUrl = null;
+      }
+      pages++;
+    }
+  }
+  return out;
+}
+
+async function fetchAllLoopSubsForFunnel(): Promise<Array<{ createdAt: string; cycles: number }>> {
+  const BASE = "https://api.loopsubscriptions.com";
+  const PAGE_SIZE = 100;
+  const MAX_PAGES = 500;
+  const out: Array<{ createdAt: string; cycles: number }> = [];
+
+  for (const { market, envKey } of LOOP_STORES) {
+    const key = process.env[envKey];
+    if (!key) continue;
+    const headers = { "X-Loop-Token": key, Accept: "application/json" };
+    for (const status of ["ACTIVE", "CANCELLED", "PAUSED", "EXPIRED"] as const) {
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        if (page > 1) await new Promise((r) => setTimeout(r, 1200));
+        const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+        let res: Response = await fetch(url, { headers, cache: "no-store" });
+        if (res.status === 429) {
+          await new Promise((r) => setTimeout(r, 15000));
+          res = await fetch(url, { headers, cache: "no-store" });
+        }
+        if (!res.ok) break;
+        const json: any = await res.json();
+        const batch: any[] = json.data ?? [];
+        if (batch.length === 0) break;
+        for (const s of batch) {
+          if (!s?.createdAt) continue;
+          out.push({ createdAt: String(s.createdAt), cycles: pickCycleCount(s) });
+        }
+        const hasNext =
+          json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
+        if (!hasNext) break;
+      }
+    }
+    void market;
+  }
+  return out;
+}
+
+export async function fetchSubscriptionRepeatFunnel() {
+  const [juo, loop] = await Promise.all([
+    fetchAllJuoSubsForFunnel().catch((e) => {
+      console.error("subscription funnel — Juo fetch failed:", e?.message);
+      return [] as Array<{ createdAt: string; cycles: number }>;
+    }),
+    fetchAllLoopSubsForFunnel().catch((e) => {
+      console.error("subscription funnel — Loop fetch failed:", e?.message);
+      return [] as Array<{ createdAt: string; cycles: number }>;
+    }),
+  ]);
+  const all = [...juo, ...loop];
+  if (all.length === 0) return null;
+
+  // Bucket by cohort month
+  const buckets = new Map<string, number[]>(); // monthKey YYYY-MM → cycles[]
+  for (const s of all) {
+    const d = new Date(s.createdAt);
+    if (isNaN(d.getTime())) continue;
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(s.cycles);
+  }
+  if (buckets.size === 0) return null;
+
+  const sortedMonths = Array.from(buckets.keys()).sort();
+  const now = new Date();
+  const monthsSince = (key: string): number => {
+    const [y, m] = key.split("-").map(Number);
+    return (now.getUTCFullYear() - y) * 12 + (now.getUTCMonth() + 1 - m);
+  };
+
+  // Lifetime aggregate funnel — pool every cohort, weight each cohort fully
+  // until that order's maturity window is reached.
+  const totalCohortSize = all.length;
+  const funnel: Array<{
+    order: number;
+    customers: number | null;
+    rate: number | null;
+    maturing: boolean;
+  }> = [];
+  for (let n = 1; n <= 7; n++) {
+    // Only count cohorts that have had ≥ n months to mature for the Nth order.
+    let eligible = 0;
+    let reached = 0;
+    for (const [key, cycles] of buckets.entries()) {
+      const matureMonths = n - 1; // 1st order = immediate; Nth order needs (n-1) months
+      if (monthsSince(key) < matureMonths) continue;
+      eligible += cycles.length;
+      for (const c of cycles) if (c >= n) reached++;
+    }
+    if (eligible === 0) {
+      funnel.push({ order: n, customers: null, rate: null, maturing: true });
+    } else {
+      const rate = +((reached / eligible) * 100).toFixed(1);
+      funnel.push({ order: n, customers: reached, rate, maturing: false });
+    }
+  }
+
+  // Monthly cohort table — last 12 calendar months
+  const recentMonths = sortedMonths.slice(-12);
+  const monthlyCohorts = recentMonths.map((key) => {
+    const cycles = buckets.get(key)!;
+    const size = cycles.length;
+    const pct = (n: number, matureMonths: number) => {
+      if (monthsSince(key) < matureMonths) return null;
+      if (size === 0) return null;
+      return +(((cycles.filter((c) => c >= n).length / size) * 100).toFixed(1));
+    };
+    const avgOrders = size > 0 ? +((cycles.reduce((s, c) => s + c, 0) / size).toFixed(2)) : null;
+    return {
+      month: key,
+      size,
+      second: pct(2, 1),
+      third: pct(3, 2),
+      fourth: pct(4, 3),
+      avgOrders,
+      maturing: monthsSince(key) < 3,
+    };
+  });
+
+  return {
+    calcVersion: SUB_FUNNEL_CALC_VERSION,
+    source: "subscriptions",
+    sources: ["Juo NL", "Loop UK", "Loop US"],
+    cohortSize: totalCohortSize,
+    sourceStart: sortedMonths[0] ?? null,
+    sourceEnd: sortedMonths[sortedMonths.length - 1] ?? null,
+    funnel,
+    monthlyCohorts,
+    totalCustomersAnalyzed: totalCohortSize,
+    fetchedAt: new Date().toISOString(),
+  };
+}
