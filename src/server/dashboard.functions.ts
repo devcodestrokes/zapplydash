@@ -260,6 +260,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   collectError("tripleWhaleDaily", tripleWhaleDailyCache);
   collectError("juo", juoCache);
   collectError("loop", loopCache);
+  collectError("subscriptionRepeatFunnel", subscriptionRepeatFunnelCache);
   collectError("jortt", jorttCache);
   collectError("xero", xeroCache);
 
