@@ -735,7 +735,7 @@ const TW_SHOPS = [
   { market: "NL", flag: "🇳🇱", envKeys: ["SHOPIFY_NL_STORE"] },
   { market: "UK", flag: "🇬🇧", envKeys: ["SHOPIFY_UK_STORE"] },
   { market: "US", flag: "🇺🇸", envKeys: ["SHOPIFY_US_STORE", "TRIPLE_WHALE_SHOP_US"] },
-  { market: "EU", flag: "🇩🇪", envKeys: ["SHOPIFY_EU_STORE"] },
+  
 ] as const;
 
 function toNumber(v: unknown): number | null {
