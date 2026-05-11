@@ -209,6 +209,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   const tripleWhaleDailyCache = get("triplewhale", "daily");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
+  const subscriptionRepeatFunnelCache = get("subscription", "repeat_funnel");
   const jorttCache = get("jortt", "invoices");
   const xeroCache = get("xero", "accounting");
 
