@@ -1228,7 +1228,7 @@ function GrowthPlan2026({ data }: { data: any }) {
               Combined NL + UK + US · Jan–Dec {year}
             </div>
             <div className="mt-3 h-px bg-neutral-100" />
-            <div className="mt-3 grid grid-cols-4 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {MARKETS.map((mk) => (
                 <div key={mk.code}>
                   <div className="text-[10px] font-semibold uppercase text-neutral-400">
