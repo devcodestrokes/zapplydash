@@ -1582,10 +1582,23 @@ export const fetchLoop = _fetchLoop;
 //
 // CONFIRMED WORKING: requires accounting.reports.read + accounting.transactions scopes
 
+let __xeroLastTokenError: string | null = null;
+export function getXeroLastTokenError() {
+  return __xeroLastTokenError;
+}
+
 async function getXeroToken(): Promise<string | null> {
+  __xeroLastTokenError = null;
   const clientId = process.env.XERO_CLIENT_ID;
   const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
+  if (!clientId) {
+    __xeroLastTokenError = "XERO_CLIENT_ID not set in environment";
+    return null;
+  }
+  if (!clientSecret) {
+    __xeroLastTokenError = "XERO_CLIENT_SECRET not set in environment";
+    return null;
+  }
 
   // Load stored row from Supabase
   let row: any = null;
@@ -1601,6 +1614,7 @@ async function getXeroToken(): Promise<string | null> {
   }
 
   if (!row) {
+    __xeroLastTokenError = "No Xero token row in integrations table — never connected";
     console.warn("Xero: no token stored — visit /api/auth/xero to connect");
     return null;
   }
@@ -1614,12 +1628,16 @@ async function getXeroToken(): Promise<string | null> {
   // Refresh using stored refresh_token
   const refreshToken = row.refresh_token ?? row.metadata?.refresh_token;
   if (!refreshToken) {
+    __xeroLastTokenError = `Access token expired at ${row.expires_at} and no refresh_token stored — must reconnect`;
     console.warn("Xero: access token expired and no refresh_token — reconnect via /api/auth/xero");
     return null;
   }
 
   try {
-    const creds = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const creds =
+      typeof Buffer !== "undefined"
+        ? Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
+        : btoa(`${clientId}:${clientSecret}`);
     const res = await fetch("https://identity.xero.com/connect/token", {
       method: "POST",
       headers: {
@@ -1634,30 +1652,36 @@ async function getXeroToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-      console.error("Xero token refresh failed:", res.status, (await res.text()).slice(0, 200));
+      const body = (await res.text()).slice(0, 300);
+      __xeroLastTokenError = `Token refresh failed (HTTP ${res.status}): ${body}`;
+      console.error("Xero token refresh failed:", res.status, body);
       return null;
     }
 
-    const { access_token, refresh_token: new_refresh, expires_in } = await res.json();
-    if (!access_token) return null;
+    const { access_token, new_refresh, expires_in, refresh_token: rotated } = await res.json();
+    const finalRefresh = rotated ?? new_refresh ?? refreshToken;
+    if (!access_token) {
+      __xeroLastTokenError = "Token refresh returned no access_token";
+      return null;
+    }
 
     const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
-    // Always persist the new refresh_token (Xero rotates them)
     await serviceClient()
       .from("integrations")
       .upsert(
         {
           provider: "xero",
           access_token,
-          refresh_token: new_refresh ?? refreshToken,
+          refresh_token: finalRefresh,
           expires_at: expiresAt,
           updated_at: new Date().toISOString(),
-          metadata: { ...row.metadata, refresh_token: new_refresh ?? refreshToken },
+          metadata: { ...row.metadata, refresh_token: finalRefresh },
         },
         { onConflict: "provider" },
       );
     return access_token;
   } catch (err: any) {
+    __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
     console.error("Xero token refresh error:", err.message);
     return null;
   }
