@@ -58,22 +58,40 @@ function ReconciliationPage() {
       ? -Math.abs(Number(lastMonth.paymentFees))
       : (netSales != null && netSales > 0 ? -Math.round(netSales * 0.029) : null);
 
-    // Jortt expense breakdown
-    const opexDetail = data?.jortt?.opexDetail ?? null;
-    const pickFromDetail = (re: RegExp): number | null => {
-      if (!opexDetail || typeof opexDetail !== "object") return null;
-      let sum = 0; let found = false;
-      for (const [k, v] of Object.entries(opexDetail)) {
-        if (re.test(k)) { sum += Math.abs(Number(v ?? 0)); found = true; }
-      }
-      return found ? -sum : null;
-    };
-    const cogs     = pickFromDetail(/cost of goods|inkoop|cogs|directe kosten/i);
-    const shipping = pickFromDetail(/ship|verzend|transport/i);
-    const opex     = pickFromDetail(/operating|operationeel|kantoor|huur|salaris|loon|software|abonnement|verzekering/i)
-                  ?? (data?.jortt?.plSummary?.costs != null
-                      ? -Math.abs(Number(data.jortt.plSummary.costs)) - (cogs ?? 0) - (shipping ?? 0)
-                      : null);
+    // COGS — estimate via Triple Whale NL gross-profit ratio applied to net revenue
+    // (mirrors the P&L table in FinanceDashboard). Fallback to a 0.54 GP ratio
+    // when Triple Whale hasn't reported a usable revenue/grossProfit pair.
+    const twAll: any[] = Array.isArray(data?.tripleWhale)
+      ? data.tripleWhale
+      : Array.isArray(data?.tripleWhale?.markets)
+        ? data.tripleWhale.markets
+        : [];
+    const twNL = twAll.find((t: any) => t?.market === "NL") ?? twAll[0];
+    const gpRatio =
+      twNL && typeof twNL.revenue === "number" && twNL.revenue > 0 && typeof twNL.grossProfit === "number"
+        ? twNL.grossProfit / twNL.revenue
+        : 0.54;
+    const netRev = netSales != null && netSales > 0
+      ? netSales
+      : (grossRev != null && grossRev > 0 ? grossRev : null);
+    const cogs = netRev != null ? -Math.round(netRev * (1 - gpRatio)) : null;
+
+    // Shipping & opex from Jortt opex buckets (opexDetail is nested {label,items}).
+    const opexByMonth: any[] = Array.isArray(data?.jortt?.opexByMonth) ? data.jortt.opexByMonth : [];
+    const lastOpex = opexByMonth[opexByMonth.length - 1] ?? null;
+    const shipping: number | null = null; // not wired yet
+    const opex = lastOpex
+      ? -Math.abs(
+          (lastOpex.team ?? 0) +
+          (lastOpex.agencies ?? 0) +
+          (lastOpex.content ?? 0) +
+          (lastOpex.software ?? 0) +
+          (lastOpex.rent ?? 0) +
+          (lastOpex.other ?? 0),
+        ) || null
+      : (data?.jortt?.plSummary?.costs != null
+          ? -Math.abs(Number(data.jortt.plSummary.costs)) - (cogs ?? 0)
+          : null);
 
     // Triple Whale ad spend — cache shape is an array of per-market rows
     // each with { live, adSpend, facebookSpend, googleSpend, ... }.
@@ -101,7 +119,7 @@ function ReconciliationPage() {
       { label: "Shopify gross revenue",   source: "Shopify",      value: grossRev,    tone: "pos" },
       { label: "Refunds & returns",       source: "Shopify",      value: refunds,     tone: "neg" },
       { label: "Discounts applied",       source: "Shopify",      value: discounts,   tone: "neg" },
-      { label: "Cost of Goods Sold",      source: "Jortt",        value: cogs,        tone: "neg" },
+      { label: "Cost of Goods Sold",      source: "Triple Whale", value: cogs,        tone: "neg" },
       { label: "Payment processing fees", source: "Shopify",      value: paymentFees, tone: "neg" },
       { label: "Shipping costs",          source: "Jortt",        value: shipping,    tone: "neg" },
       { label: "Ad spend",                source: "Triple Whale", value: adSpend,     tone: "neg" },
