@@ -239,7 +239,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     const p = c?.payload;
     if (!p || typeof p !== "object") return;
     if ((p as any).__error) {
-      errors[label] = String((p as any).message ?? "fetch failed").slice(0, 200);
+      errors[label] = String((p as any).message ?? "fetch failed").slice(0, 700);
     } else if ((p as any).__empty) {
       errors[label] = "Source returned empty payload";
     }
