@@ -323,6 +323,14 @@ function SyncStatusPage() {
                     <button className="inline-flex items-center rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium hover:bg-neutral-50">
                       Logs
                     </button>
+                    {c.id === "xero" && (
+                      <a
+                        href="/api/auth/xero"
+                        className="inline-flex items-center rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-[12px] font-medium text-sky-700 hover:bg-sky-100"
+                      >
+                        Connect Xero
+                      </a>
+                    )}
                     <button
                       onClick={() => syncConnector(c.id)}
                       disabled={refreshing}
