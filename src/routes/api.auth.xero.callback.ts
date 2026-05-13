@@ -146,15 +146,23 @@ export const Route = createFileRoute("/api/auth/xero/callback")({
           ).toISOString();
 
           const sb = serviceClient();
+          const { data: existingTokenRow } = await (sb as any)
+            .from("integrations")
+            .select("refresh_token, metadata")
+            .eq("provider", "xero")
+            .maybeSingle();
+          const finalRefreshToken =
+            refresh_token ?? existingTokenRow?.refresh_token ?? existingTokenRow?.metadata?.refresh_token ?? null;
           const { error: upsertError } = await (sb as any).from("integrations").upsert(
             {
               provider: "xero",
               access_token,
-              refresh_token: refresh_token ?? null,
+              refresh_token: finalRefreshToken,
               expires_at: expiresAt,
               updated_at: new Date().toISOString(),
               metadata: {
-                refresh_token,
+                ...(existingTokenRow?.metadata ?? {}),
+                refresh_token: finalRefreshToken,
                 tenant_id: tenantId,
                 tenant_name: tenantName,
                 source: "oauth2_authorization_code",
