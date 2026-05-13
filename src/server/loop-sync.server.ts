@@ -2,63 +2,44 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const BASE = "https://api.loopsubscriptions.com";
 const PAGE_SIZE = 100;
+const STATUSES = ["ACTIVE", "CANCELLED", "PAUSED"] as const;
+type LoopStatus = (typeof STATUSES)[number];
+type Market = "UK" | "US";
 
-// Loop rate limit: 2 requests per 3 seconds.
-// Per-market token bucket — markets run in parallel because each has its own API key bucket.
-function makeBucket() {
-  let queue: Promise<void> = Promise.resolve();
-  // 1500ms gap between requests = 2 requests / 3s, sustained.
-  const GAP_MS = 1500;
-  let lastAt = 0;
-  return async function take(): Promise<void> {
-    const slot = queue.then(async () => {
-      const now = Date.now();
-      const wait = Math.max(0, lastAt + GAP_MS - now);
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      lastAt = Date.now();
-    });
-    queue = slot.catch(() => undefined);
-    return slot;
-  };
+// Loop rate limit: 2 requests per 3 seconds → 1500ms gap between calls.
+const GAP_MS = 1500;
+
+function tableFor(market: Market) {
+  return market === "UK" ? "UK_loop" : "US_loop";
+}
+function envKeyFor(market: Market) {
+  return market === "UK" ? "LOOP_UK_API_KEY" : "LOOP_US_API_KEY";
 }
 
-async function fetchAllSubsForStatus(
+async function fetchPage(
   apiKey: string,
-  status: "ACTIVE" | "CANCELLED" | "PAUSED",
-  take: () => Promise<void>,
-): Promise<any[]> {
+  status: LoopStatus,
+  page: number,
+): Promise<{ data: any[]; hasNextPage: boolean }> {
   const headers = { "X-Loop-Token": apiKey, Accept: "application/json" };
-  const out: any[] = [];
-  let page = 1;
-  while (true) {
-    await take();
-    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
-    let res = await fetch(url, { headers, cache: "no-store" });
-
-    // Backoff for 429 — exponential, 3 retries
-    let backoff = 3000;
-    for (let attempt = 0; attempt < 3 && res.status === 429; attempt++) {
-      console.warn(`[loop-sync] 429 on ${status} page ${page}, waiting ${backoff}ms`);
-      await new Promise((r) => setTimeout(r, backoff));
-      backoff *= 2;
-      await take();
-      res = await fetch(url, { headers, cache: "no-store" });
-    }
-
-    if (!res.ok) {
-      throw new Error(`Loop ${status} page ${page} failed: ${res.status} ${res.statusText}`);
-    }
-    const json: any = await res.json();
-    const batch: any[] = json?.data ?? [];
-    out.push(...batch);
-    const hasNext =
-      json?.pageInfo?.hasNextPage ??
-      json?.pagination?.hasNextPage ??
-      batch.length === PAGE_SIZE;
-    if (!hasNext || batch.length === 0) break;
-    page++;
+  const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+  let res = await fetch(url, { headers, cache: "no-store" });
+  let backoff = 3000;
+  for (let i = 0; i < 3 && res.status === 429; i++) {
+    await new Promise((r) => setTimeout(r, backoff));
+    backoff *= 2;
+    res = await fetch(url, { headers, cache: "no-store" });
   }
-  return out;
+  if (!res.ok) {
+    throw new Error(`Loop ${status} page ${page}: ${res.status} ${res.statusText}`);
+  }
+  const json: any = await res.json();
+  const batch: any[] = json?.data ?? [];
+  const hasNextPage =
+    json?.pageInfo?.hasNextPage ??
+    json?.pagination?.hasNextPage ??
+    batch.length === PAGE_SIZE;
+  return { data: batch, hasNextPage };
 }
 
 function mapRow(sub: any): Record<string, any> {
@@ -100,57 +81,246 @@ function mapRow(sub: any): Record<string, any> {
 }
 
 async function upsertChunked(table: "UK_loop" | "US_loop", rows: any[]) {
+  if (rows.length === 0) return;
   const CHUNK = 500;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const slice = rows.slice(i, i + CHUNK);
+  // Dedupe within batch by id (Loop sometimes returns the same sub twice on
+  // adjacent pages when records shift between fetches).
+  const byId = new Map<number, any>();
+  for (const r of rows) byId.set(r.id, r);
+  const deduped = Array.from(byId.values());
+  for (let i = 0; i < deduped.length; i += CHUNK) {
+    const slice = deduped.slice(i, i + CHUNK);
     const { error } = await supabaseAdmin
       .from(table as any)
       .upsert(slice, { onConflict: "id" });
-    if (error) throw new Error(`upsert ${table} chunk@${i}: ${error.message}`);
+    if (error) throw new Error(`upsert ${table}@${i}: ${error.message}`);
   }
 }
 
-export async function syncLoopStore(
-  market: "UK" | "US",
-): Promise<{ market: string; total: number; statuses: Record<string, number> }> {
-  const envKey = market === "UK" ? "LOOP_UK_API_KEY" : "LOOP_US_API_KEY";
-  const apiKey = process.env[envKey];
-  if (!apiKey) throw new Error(`Missing ${envKey}`);
+// ── Sync state helpers ────────────────────────────────────────────────────────
+type StateRow = {
+  market: string;
+  status: string;
+  page_no: number;
+  done: boolean;
+  total_fetched: number;
+  last_error: string | null;
+  started_at: string;
+  updated_at: string;
+};
 
-  const take = makeBucket();
-  const statuses: Array<"ACTIVE" | "CANCELLED" | "PAUSED"> = [
-    "ACTIVE",
-    "CANCELLED",
-    "PAUSED",
-  ];
-  const all: any[] = [];
-  const counts: Record<string, number> = {};
-  for (const s of statuses) {
-    const subs = await fetchAllSubsForStatus(apiKey, s, take);
-    counts[s] = subs.length;
-    all.push(...subs);
-  }
-
-  // Dedupe by id (in case Loop returns the same sub under multiple status calls)
-  const byId = new Map<number, any>();
-  for (const s of all) byId.set(s.id, s);
-  const rows = Array.from(byId.values()).map(mapRow);
-
-  const table = (market === "UK" ? "UK_loop" : "US_loop") as "UK_loop" | "US_loop";
-  await upsertChunked(table, rows);
-
-  return { market, total: rows.length, statuses: counts };
+export async function getLoopSyncState(): Promise<StateRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_state" as any)
+    .select("*");
+  if (error) throw new Error(`loop_sync_state read: ${error.message}`);
+  return (data ?? []) as StateRow[];
 }
 
-export async function syncAllLoop(): Promise<
-  Array<{ market: string; total: number; statuses: Record<string, number> } | { market: string; error: string }>
+async function loadStateMap(market: Market): Promise<Map<LoopStatus, StateRow>> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_state" as any)
+    .select("*")
+    .eq("market", market);
+  if (error) throw new Error(`loop_sync_state read: ${error.message}`);
+  const m = new Map<LoopStatus, StateRow>();
+  for (const r of (data ?? []) as StateRow[]) m.set(r.status as LoopStatus, r);
+  return m;
+}
+
+async function upsertState(row: Partial<StateRow> & { market: string; status: string }) {
+  const { error } = await supabaseAdmin
+    .from("loop_sync_state" as any)
+    .upsert(row, { onConflict: "market,status" });
+  if (error) throw new Error(`loop_sync_state upsert: ${error.message}`);
+}
+
+export async function resetLoopState(market: Market) {
+  for (const status of STATUSES) {
+    await upsertState({
+      market,
+      status,
+      page_no: 1,
+      done: false,
+      total_fetched: 0,
+      last_error: null,
+      started_at: new Date().toISOString(),
+    });
+  }
+}
+
+// ── Resumable chunk sync ──────────────────────────────────────────────────────
+export async function syncLoopChunk(
+  market: Market,
+  opts: { maxPages?: number; timeBudgetMs?: number } = {},
+): Promise<{
+  market: Market;
+  pagesFetched: number;
+  rowsUpserted: number;
+  perStatus: Record<string, { page: number; total: number; done: boolean }>;
+  allDone: boolean;
+  lastError?: string;
+}> {
+  const apiKey = process.env[envKeyFor(market)];
+  if (!apiKey) throw new Error(`Missing ${envKeyFor(market)}`);
+  const table = tableFor(market) as "UK_loop" | "US_loop";
+
+  const maxPages = opts.maxPages ?? 25;
+  const timeBudgetMs = opts.timeBudgetMs ?? 45_000;
+  const startedAt = Date.now();
+
+  const stateMap = await loadStateMap(market);
+  // Ensure rows exist for each status
+  for (const s of STATUSES) {
+    if (!stateMap.has(s)) {
+      const row: StateRow = {
+        market,
+        status: s,
+        page_no: 1,
+        done: false,
+        total_fetched: 0,
+        last_error: null,
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      stateMap.set(s, row);
+      await upsertState(row);
+    }
+  }
+
+  let pagesFetched = 0;
+  let rowsUpserted = 0;
+  let lastError: string | undefined;
+
+  outer: for (const status of STATUSES) {
+    const st = stateMap.get(status)!;
+    if (st.done) continue;
+    let page = st.page_no || 1;
+    let total = st.total_fetched || 0;
+    while (pagesFetched < maxPages && Date.now() - startedAt < timeBudgetMs) {
+      // rate limit gap (skip on very first call of the chunk)
+      if (pagesFetched > 0) await new Promise((r) => setTimeout(r, GAP_MS));
+      let result;
+      try {
+        result = await fetchPage(apiKey, status, page);
+      } catch (err: any) {
+        lastError = err?.message ?? String(err);
+        await upsertState({
+          market,
+          status,
+          page_no: page,
+          done: false,
+          total_fetched: total,
+          last_error: lastError,
+        });
+        break outer;
+      }
+      pagesFetched++;
+      const rows = result.data.map(mapRow);
+      try {
+        await upsertChunked(table, rows);
+      } catch (err: any) {
+        lastError = err?.message ?? String(err);
+        await upsertState({
+          market,
+          status,
+          page_no: page,
+          done: false,
+          total_fetched: total,
+          last_error: lastError,
+        });
+        break outer;
+      }
+      rowsUpserted += rows.length;
+      total += rows.length;
+
+      if (!result.hasNextPage || rows.length === 0) {
+        await upsertState({
+          market,
+          status,
+          page_no: page,
+          done: true,
+          total_fetched: total,
+          last_error: null,
+        });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: true, last_error: null });
+        break; // move to next status in this chunk
+      }
+      page++;
+      // persist progress every page so the UI sees movement
+      await upsertState({
+        market,
+        status,
+        page_no: page,
+        done: false,
+        total_fetched: total,
+        last_error: null,
+      });
+      stateMap.set(status, { ...st, page_no: page, total_fetched: total });
+    }
+    if (pagesFetched >= maxPages || Date.now() - startedAt >= timeBudgetMs) break;
+  }
+
+  const perStatus: Record<string, { page: number; total: number; done: boolean }> = {};
+  for (const s of STATUSES) {
+    const r = stateMap.get(s)!;
+    perStatus[s] = { page: r.page_no, total: r.total_fetched, done: r.done };
+  }
+  const allDone = STATUSES.every((s) => stateMap.get(s)!.done);
+  return { market, pagesFetched, rowsUpserted, perStatus, allDone, lastError };
+}
+
+// Convenience: drive both markets to completion, respecting a wall-time budget.
+// Used by cron / background sync. Returns once allDone for both, or the budget
+// is exhausted.
+export async function syncAllLoop(opts: { wallBudgetMs?: number } = {}): Promise<
+  Array<{ market: Market; allDone: boolean; lastError?: string; perStatus: any }>
 > {
-  // Each market has its own rate-limit bucket → run in parallel.
-  const settled = await Promise.allSettled([syncLoopStore("UK"), syncLoopStore("US")]);
-  return settled.map((r, i) => {
-    const market = i === 0 ? "UK" : "US";
-    return r.status === "fulfilled"
-      ? r.value
-      : { market, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
-  });
+  const wall = opts.wallBudgetMs ?? 50_000;
+  const start = Date.now();
+  const results: Record<Market, { market: Market; allDone: boolean; lastError?: string; perStatus: any }> = {
+    UK: { market: "UK", allDone: false, perStatus: {} },
+    US: { market: "US", allDone: false, perStatus: {} },
+  };
+  while (Date.now() - start < wall) {
+    const remaining = wall - (Date.now() - start);
+    const slice = Math.max(8_000, Math.floor(remaining / 2));
+    const [uk, us] = await Promise.allSettled([
+      results.UK.allDone ? Promise.resolve(null) : syncLoopChunk("UK", { timeBudgetMs: slice, maxPages: 30 }),
+      results.US.allDone ? Promise.resolve(null) : syncLoopChunk("US", { timeBudgetMs: slice, maxPages: 30 }),
+    ]);
+    if (uk.status === "fulfilled" && uk.value) {
+      results.UK = { market: "UK", allDone: uk.value.allDone, lastError: uk.value.lastError, perStatus: uk.value.perStatus };
+    } else if (uk.status === "rejected") {
+      results.UK.lastError = String(uk.reason?.message ?? uk.reason);
+    }
+    if (us.status === "fulfilled" && us.value) {
+      results.US = { market: "US", allDone: us.value.allDone, lastError: us.value.lastError, perStatus: us.value.perStatus };
+    } else if (us.status === "rejected") {
+      results.US.lastError = String(us.reason?.message ?? us.reason);
+    }
+    if (results.UK.allDone && results.US.allDone) break;
+  }
+  return [results.UK, results.US];
+}
+
+// Back-compat: a single market full sync (used by the /api/sync-loop?market=X
+// route). Drives that market to completion within a budget.
+export async function syncLoopStore(market: Market): Promise<{
+  market: Market;
+  allDone: boolean;
+  perStatus: Record<string, { page: number; total: number; done: boolean }>;
+  lastError?: string;
+}> {
+  const wall = 50_000;
+  const start = Date.now();
+  let last: Awaited<ReturnType<typeof syncLoopChunk>> | null = null;
+  while (Date.now() - start < wall) {
+    const remaining = wall - (Date.now() - start);
+    last = await syncLoopChunk(market, { timeBudgetMs: Math.max(8_000, remaining), maxPages: 30 });
+    if (last.allDone || last.lastError) break;
+  }
+  return last
+    ? { market, allDone: last.allDone, perStatus: last.perStatus, lastError: last.lastError }
+    : { market, allDone: false, perStatus: {} };
 }
