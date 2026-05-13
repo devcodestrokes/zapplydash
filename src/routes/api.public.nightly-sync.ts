@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { syncAllShopifyOrders, snapshotSubscriptions } from "@/server/order-sync.server";
 import { runAll } from "@/server/sync.server";
+import { syncAllLoop } from "@/server/loop-sync.server";
 
 // POST /api/public/nightly-sync
 //   Public endpoint called by pg_cron every night. Does three things:
