@@ -170,12 +170,90 @@ export type Database = {
         }
         Relationships: []
       }
+      loop_sync_errors: {
+        Row: {
+          first_seen_at: string
+          last_error: string | null
+          last_seen_at: string
+          market: string
+          resolved_at: string | null
+          retry_count: number
+          status: string
+        }
+        Insert: {
+          first_seen_at?: string
+          last_error?: string | null
+          last_seen_at?: string
+          market: string
+          resolved_at?: string | null
+          retry_count?: number
+          status: string
+        }
+        Update: {
+          first_seen_at?: string
+          last_error?: string | null
+          last_seen_at?: string
+          market?: string
+          resolved_at?: string | null
+          retry_count?: number
+          status?: string
+        }
+        Relationships: []
+      }
+      loop_sync_runs: {
+        Row: {
+          duration_ms: number | null
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          market: string
+          outcome: string
+          pages_fetched: number
+          per_status: Json
+          rows_upserted: number
+          run_group_id: string
+          started_at: string
+          total_fetched: number
+        }
+        Insert: {
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          market: string
+          outcome?: string
+          pages_fetched?: number
+          per_status?: Json
+          rows_upserted?: number
+          run_group_id?: string
+          started_at?: string
+          total_fetched?: number
+        }
+        Update: {
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          market?: string
+          outcome?: string
+          pages_fetched?: number
+          per_status?: Json
+          rows_upserted?: number
+          run_group_id?: string
+          started_at?: string
+          total_fetched?: number
+        }
+        Relationships: []
+      }
       loop_sync_state: {
         Row: {
           done: boolean
           last_error: string | null
+          last_error_at: string | null
+          last_success_at: string | null
           market: string
           page_no: number
+          retry_count: number
           started_at: string
           status: string
           total_fetched: number
@@ -184,8 +262,11 @@ export type Database = {
         Insert: {
           done?: boolean
           last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
           market: string
           page_no?: number
+          retry_count?: number
           started_at?: string
           status: string
           total_fetched?: number
@@ -194,8 +275,11 @@ export type Database = {
         Update: {
           done?: boolean
           last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
           market?: string
           page_no?: number
+          retry_count?: number
           started_at?: string
           status?: string
           total_fetched?: number
@@ -527,15 +611,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -662,6 +773,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
