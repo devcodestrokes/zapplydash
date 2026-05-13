@@ -455,6 +455,30 @@ function DailyPnlPage() {
               deltaPct={periodKpis.adPct}
               positiveIsGood={false}
             />
+            {(() => {
+              const opexTotal = -(
+                pnlBreakdown.salaries +
+                pnlBreakdown.software +
+                pnlBreakdown.rent +
+                pnlBreakdown.otherOpex
+              );
+              const days = daysInRange(dateRange.from, dateRange.to);
+              const dailyOpex = opexTotal / Math.max(1, days);
+              return (
+                <KpiTile
+                  icon={Wallet}
+                  label="OpEx / day"
+                  value={fmtMoney(dailyOpex, "EUR")}
+                  subtitle={
+                    pnlBreakdown.jorttLive
+                      ? `${fmtMoney(opexTotal, "EUR")} over ${days} day${days === 1 ? "" : "s"} · Jortt`
+                      : "awaiting Jortt sync"
+                  }
+                  deltaPct={null}
+                  positiveIsGood={false}
+                />
+              );
+            })()}
             <KpiTile
               icon={Target}
               label="Contribution margin"
