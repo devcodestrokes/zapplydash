@@ -1,59 +1,84 @@
-# Source Repeat Purchase Funnel from Juo + Loop
+## Goal
 
-## Problem
+Persist every Loop subscription (UK + US) into Supabase so the dashboard reads from the database instead of hitting Loop on every render. Juo stays as-is (live API, no DB).
 
-The Repeat purchase funnel on the overview dashboard is currently computed from raw Shopify order history (`fetchShopifyRepeatFunnel`). Because this business is ~100% subscription, those numbers don't match reality:
+## Database — 2 new tables
 
-- Cohort size (62,121) counts every Shopify first-time buyer, including single non-subscription purchases.
-- Repeat % values (30.5 / 13.1 / 6.9) reflect Shopify reorders, not subscription renewals.
-- Date range (2021-05-10 – 2026-05-11) is fixed to Shopify order history, not subscription signup history.
+Create `public."UK_loop"` and `public."US_loop"` (quoted identifiers to preserve casing as requested).
 
-You want the funnel built from the actual subscription platforms: **Juo (NL)** and **Loop (UK + US)**.
+Each table has one row per Loop subscription, with **all top-level scalar fields as real columns** and **all nested objects/arrays kept losslessly in a `raw jsonb` column** (so nothing is lost — `lines[]`, `attributes[]`, `discounts[]`, `shippingAddress`, `billingPolicy`, `deliveryPolicy`, `deliveryMethod`, etc. are queryable via JSONB).
 
-## Approach
+Columns (same for both tables):
 
-Add a new server fetcher `fetchSubscriptionRepeatFunnel` that builds the funnel from Juo + Loop subscription data, and switch the dashboard card to prefer it over the Shopify one.
-
-### Cohort definition
-- Cohort month = month a subscription was **created** (`createdAt`).
-- Cohort size = number of subscribers whose first subscription was created in that month, summed across Juo NL + Loop UK + Loop US.
-- Repeat to Nth order = % of cohort whose subscription has completed ≥ N billing cycles (i.e. ≥ N successful orders).
-
-### Data sources
-- **Juo**: pull ALL subscriptions (`status=active`, `paused`, `canceled`) — current fetcher only pulls active, which would under-count past cohorts. Read cycle count from the first available field: `cyclesCompleted` / `completedCycles` / `totalCycles` / `currentCycleNumber` / `orderCycles`. Default to 1 if none present.
-- **Loop**: already fetches ACTIVE + CANCELLED. Read cycles from: `totalSuccessOrders` / `completedCycles` / `cycleNumber` / `currentCycleNumber` / `totalOrders`. Default to 1.
-
-### Output shape
-Match the existing `shopifyRepeatFunnel` payload so the card needs minimal changes:
-
-```text
-{
-  calcVersion: 6,
-  cohortSize: <lifetime sum of all cohort sizes>,
-  sourceStart: <earliest cohort month>,
-  sourceEnd: <latest mature month>,
-  funnel: [{ order, customers, rate, maturing }, … up to 7],
-  monthlyCohorts: [{ month, size, second, third, fourth, avgOrders, maturing }, …]
-}
+```
+id                              bigint  PRIMARY KEY      -- Loop "id"
+shopify_id                      bigint
+origin_order_shopify_id         bigint
+created_at                      timestamptz
+updated_at                      timestamptz
+order_note                      text
+total_line_item_price           numeric
+total_line_item_discounted_price numeric
+delivery_price                  numeric
+currency_code                   text
+status                          text
+cancellation_reason             text
+cancellation_comment            text
+completed_orders_count          integer
+paused_at                       timestamptz
+cancelled_at                    timestamptz
+is_prepaid                      boolean
+is_marked_for_cancellation      boolean
+next_billing_date_epoch         bigint
+last_payment_status             text
+last_inventory_action           text
+delivery_method                 jsonb         -- {code,title}
+billing_policy                  jsonb         -- {interval,intervalCount,...}
+delivery_policy                 jsonb         -- {interval,intervalCount}
+shipping_address                jsonb         -- full address
+lines                           jsonb         -- array of line items + discounts
+attributes                      jsonb         -- array of {key,value}
+raw                             jsonb  NOT NULL -- the entire original API object
+synced_at                       timestamptz NOT NULL DEFAULT now()
 ```
 
-A subscription cohort is considered "mature" for Nth-order checks if its month is ≥ N months ago (one billing cycle per month, with a safety buffer).
+Indexes: `(status)`, `(created_at)`, `(cancelled_at)`.
 
-### Wiring
-1. New fetcher exported from `src/server/fetchers.server.ts`.
-2. Cache it under `subscription:repeat_funnel` in `dashboard.functions.ts` (same shape as the existing entry).
-3. Expose as `subscriptionRepeatFunnel` on the dashboard payload.
-4. In `FinanceDashboard.tsx`, the Repeat purchase funnel card reads `subscriptionRepeatFunnel ?? shopifyRepeatFunnel` and updates the subtitle/source label to "Juo NL + Loop UK + Loop US subscription cohorts" when the new one is used.
-5. The "Cohort size" line uses the actual subscription-cohort total (no more 62,121 Shopify number).
+RLS: enable, with `authenticated` SELECT + `anon/authenticated` INSERT/UPDATE (same shape as `shopify_orders` in this project, which is the existing pattern for sync-written tables).
 
-## Technical Notes
+## Sync logic — Loop fetcher with full pagination + rate limiting
 
-- The Juo fetcher needs an extra pass to pull non-active subscriptions for cohort coverage; today it skips them deliberately for MRR accuracy. The new pass writes into a separate array used only by the funnel — MRR math is untouched.
-- Cycle-count field names are not documented; the fetcher tries the candidates above and logs which one it found on first run so we can lock it in.
-- "Avg orders" per cohort uses the mean cycles-completed of that cohort.
-- The 2nd-order figure for a cohort created < 1 full month ago is shown as "still maturing".
+New file `src/server/loop-sync.server.ts`:
 
-## Out of Scope
+- One function `syncLoopStore(market: "UK" | "US", apiKey)` that:
+  1. Iterates `status=ACTIVE` then `status=CANCELLED`, paging `pageNo=1..N` with `pageSize=100`.
+  2. Stops when `pageInfo.hasNextPage === false` (no arbitrary `MAX_PAGES` cap).
+  3. Enforces **2 requests per 3 seconds**: a small token-bucket / `await sleep(1500)` between each request (per market — each market has its own key/bucket so the two markets still run in parallel).
+  4. On HTTP 429, exponential backoff (3s → 6s → 12s, max 3 retries) before giving up.
+  5. Upserts each subscription into the correct table (`UK_loop` or `US_loop`) keyed on `id`, mapping scalars to columns and storing the full object in `raw`.
+  6. Returns `{ inserted, updated, totalFetched }`.
 
-- Shopify-only funnel stays in the code for non-subscription tenants; we just stop showing it on this dashboard.
-- Loop EU / future Juo markets get included automatically when their keys exist.
+Trigger surfaces (no new external endpoint required):
+- Add a call in `src/routes/api.sync.ts` so the existing manual sync runs the Loop DB sync.
+- Add it to the nightly job in `src/routes/api.public.nightly-sync.ts`.
+
+## Dashboard reads from DB instead of API
+
+- Add `fetchLoopFromDb()` in `src/server/fetchers.server.ts` that reads both tables and computes the same shape currently returned by `fetchLoopStore` (`mrr`, `activeSubs`, `newThisMonth`, `churnedThisMonth`, `arpu`, `churnRate`, `currency`, per market) — using SQL aggregates so it's instant.
+- Replace `fetchLoopRaw` / `fetchLoopForRange` consumers to use the DB-backed version. Range filter becomes a simple `WHERE created_at`/`cancelled_at BETWEEN from AND to`.
+- Juo path is **untouched** — keeps fetching live from the Juo API.
+
+## Implementation order
+
+1. `supabase--migration` to create both tables + RLS + indexes.
+2. Wait for user to apply migration → types.ts regenerates.
+3. Add `src/server/loop-sync.server.ts` (paginated + rate-limited writer).
+4. Wire it into `api.sync.ts` and `api.public.nightly-sync.ts`.
+5. Add `fetchLoopFromDb` and switch `FinanceDashboard` / range fetchers to read from DB.
+6. Trigger one full sync, verify row counts in both tables match Loop totals.
+
+## Notes / assumptions
+
+- Table names use the exact casing you requested (`UK_loop`, `US_loop`); they will need to be quoted in every SQL query (`from('UK_loop')` works fine in the JS client). If you'd prefer the Postgres-friendly `loop_uk` / `loop_us`, say so and I'll switch.
+- Loop's pagination cap per page is 100; with 2 req / 3s that's ~67 subs/sec per market — fine for the volumes this account has.
+- Storing `raw jsonb` guarantees zero data loss even if Loop adds new fields later.
