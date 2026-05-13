@@ -1538,6 +1538,205 @@ export const fetchLoopRaw = _fetchLoop;
 export const fetchJuo = _fetchJuo;
 export const fetchLoop = _fetchLoop;
 
+// ─── Range-aware subscription fetchers ────────────────────────────────────────
+// Compute MRR/active as of `toIso` (end of selected window), and new/churned
+// inside [fromIso, toIso]. Used by /api/sync when a custom range is requested.
+
+async function _juoPaginate(apiKey: string, status: "active" | "canceled"): Promise<any[]> {
+  const JUO_BASE = "https://api.juo.io";
+  const headers = { "X-Juo-Admin-Api-Key": apiKey, Accept: "application/json" };
+  const out: any[] = [];
+  let nextUrl: string | null = `${JUO_BASE}/admin/v1/subscriptions?limit=100&status=${status}`;
+  let page = 0;
+  const MAX_PAGES = 300;
+  while (nextUrl && page < MAX_PAGES) {
+    const res: Response = await fetch(nextUrl, { headers, cache: "no-store" });
+    if (res.status === 429) {
+      const reset = parseInt(res.headers.get("X-RateLimit-Reset") ?? "2", 10);
+      await new Promise((r) => setTimeout(r, (reset || 2) * 1000));
+      continue;
+    }
+    if (!res.ok) break;
+    const json = await res.json();
+    const batch: any[] = json.data ?? json.subscriptions ?? (Array.isArray(json) ? json : []);
+    if (!batch.length) break;
+    out.push(...batch);
+    const link: string = res.headers.get("Link") ?? "";
+    const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
+    nextUrl = m ? (m[1].startsWith("http") ? m[1] : new URL(m[1], JUO_BASE).toString()) : null;
+    page++;
+  }
+  return out;
+}
+
+export async function fetchJuoForRange(fromIso: string, toIso: string) {
+  const apiKey = process.env.JUO_NL_API_KEY;
+  if (!apiKey) return null;
+  const from = new Date(fromIso + "T00:00:00");
+  const to = new Date(toIso + "T23:59:59");
+  try {
+    const [active, canceled] = await Promise.all([
+      _juoPaginate(apiKey, "active"),
+      _juoPaginate(apiKey, "canceled"),
+    ]);
+    const all = [...active, ...canceled];
+    if (!all.length) return null;
+
+    // "Active as of `to`": created on/before `to` AND not canceled before/at `to`
+    const activeAsOf = all.filter((s) => {
+      const created = s.createdAt ? new Date(s.createdAt) : null;
+      if (!created || created > to) return false;
+      const canceledAt = s.canceledAt ? new Date(s.canceledAt) : null;
+      if (canceledAt && canceledAt <= to) return false;
+      return true;
+    });
+
+    let mrr = 0;
+    for (const sub of activeAsOf) {
+      const interval = sub.billingPolicy?.interval ?? "month";
+      const intervalCount = sub.billingPolicy?.intervalCount ?? 1;
+      for (const item of sub.items ?? []) {
+        const price = parseFloat(item.price ?? item.unitPrice ?? "0");
+        mrr += normalizeToMonthly(price, interval, intervalCount);
+      }
+      if (sub.deliveryPrice > 0) {
+        mrr += normalizeToMonthly(parseFloat(sub.deliveryPrice), interval, intervalCount);
+      }
+    }
+
+    const newInRange = all.filter((s) => {
+      const c = s.createdAt ? new Date(s.createdAt) : null;
+      return c && c >= from && c <= to;
+    }).length;
+    const churnedInRange = all.filter((s) => {
+      const c = s.canceledAt ? new Date(s.canceledAt) : null;
+      return c && c >= from && c <= to;
+    }).length;
+
+    const arpu = activeAsOf.length > 0 ? mrr / activeAsOf.length : null;
+    const churnRate =
+      activeAsOf.length + churnedInRange > 0
+        ? +((churnedInRange / (activeAsOf.length + churnedInRange)) * 100).toFixed(1)
+        : null;
+    const currency = activeAsOf[0]?.currencyCode ?? all[0]?.currencyCode ?? "EUR";
+
+    return [
+      {
+        market: "NL",
+        flag: "🇳🇱",
+        platform: "juo",
+        live: true,
+        calcVersion: 2,
+        rangeMode: true,
+        mrr: +mrr.toFixed(2),
+        activeSubs: activeAsOf.length,
+        totalFetched: all.length,
+        newThisMonth: newInRange,
+        churnedThisMonth: churnedInRange,
+        arpu: arpu != null ? +arpu.toFixed(2) : null,
+        churnRate,
+        currency,
+      },
+    ];
+  } catch (err: any) {
+    console.error("Juo range fetch error:", err?.message);
+    return null;
+  }
+}
+
+async function _loopPaginate(BASE: string, headers: Record<string, string>, status: "ACTIVE" | "CANCELLED"): Promise<{ subs: any[]; ok: boolean }> {
+  const subs: any[] = [];
+  const MAX_PAGES = 500;
+  const PAGE_SIZE = 100;
+  let ok = false;
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    if (page > 1) await new Promise((r) => setTimeout(r, 1300));
+    const url = `${BASE}/admin/2023-10/subscription?pageNo=${page}&pageSize=${PAGE_SIZE}&status=${status}`;
+    let res: Response = await fetch(url, { headers, cache: "no-store" });
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 15000));
+      res = await fetch(url, { headers, cache: "no-store" });
+    }
+    if (!res.ok) break;
+    ok = true;
+    const json = await res.json();
+    const batch: any[] = json.data ?? [];
+    subs.push(...batch);
+    const hasNext =
+      json.pageInfo?.hasNextPage ?? json.pagination?.hasNextPage ?? batch.length === PAGE_SIZE;
+    if (!hasNext || !batch.length) break;
+  }
+  return { subs, ok };
+}
+
+async function fetchLoopStoreForRange(market: string, flag: string, key: string, fromIso: string, toIso: string) {
+  const BASE = "https://api.loopsubscriptions.com";
+  const headers = { "X-Loop-Token": key, Accept: "application/json" };
+  const from = new Date(fromIso + "T00:00:00");
+  const to = new Date(toIso + "T23:59:59");
+
+  const [activeRes, cancelledRes] = await Promise.all([
+    _loopPaginate(BASE, headers, "ACTIVE"),
+    _loopPaginate(BASE, headers, "CANCELLED").catch(() => ({ subs: [], ok: false })),
+  ]);
+  if (!activeRes.ok) return null;
+  const all = [...activeRes.subs, ...cancelledRes.subs];
+
+  const activeAsOf = all.filter((s) => {
+    const created = s.createdAt ? new Date(s.createdAt) : null;
+    if (!created || created > to) return false;
+    const cancelled = s.cancelledAt ? new Date(s.cancelledAt) : null;
+    if (cancelled && cancelled <= to) return false;
+    return true;
+  });
+  const mrr = activeAsOf.reduce((sum, s) => sum + parseFloat(s.totalLineItemPrice ?? "0"), 0);
+
+  const newInRange = all.filter((s) => {
+    const c = s.createdAt ? new Date(s.createdAt) : null;
+    return c && c >= from && c <= to;
+  }).length;
+  const churnedInRange = all.filter((s) => {
+    const c = s.cancelledAt ? new Date(s.cancelledAt) : null;
+    return c && c >= from && c <= to;
+  }).length;
+
+  const currency = market === "US" ? "USD" : market === "UK" ? "GBP" : "EUR";
+  const arpu = activeAsOf.length > 0 ? mrr / activeAsOf.length : null;
+  const churnRate =
+    activeAsOf.length + churnedInRange > 0
+      ? +((churnedInRange / (activeAsOf.length + churnedInRange)) * 100).toFixed(1)
+      : null;
+
+  return {
+    market,
+    flag,
+    platform: "loop",
+    live: true,
+    calcVersion: 4,
+    rangeMode: true,
+    mrr: Math.round(mrr),
+    activeSubs: activeAsOf.length,
+    totalFetched: all.length,
+    newThisMonth: newInRange,
+    churnedThisMonth: churnedInRange,
+    arpu: arpu != null ? +arpu.toFixed(2) : null,
+    churnRate,
+    currency,
+  };
+}
+
+export async function fetchLoopForRange(fromIso: string, toIso: string) {
+  const settled = await Promise.allSettled(
+    LOOP_STORES.map(({ market, flag, envKey }) => {
+      const key = process.env[envKey];
+      if (!key) return Promise.resolve(null);
+      return fetchLoopStoreForRange(market, flag, key, fromIso, toIso);
+    }),
+  );
+  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean);
+  return results.length > 0 ? results : null;
+}
+
 // ─── Xero ────────────────────────────────────────────────────────────────────
 //
 // OAuth 2.0 Authorization Code flow — one-time browser auth, then refresh tokens
