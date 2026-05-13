@@ -82,7 +82,7 @@ function mapRow(sub: any): Record<string, any> {
 
 async function upsertChunked(table: "UK_loop" | "US_loop", rows: any[]) {
   if (rows.length === 0) return;
-  const CHUNK = 500;
+  const CHUNK = 50;
   // Dedupe within batch by id (Loop sometimes returns the same sub twice on
   // adjacent pages when records shift between fetches).
   const byId = new Map<number, any>();
@@ -161,6 +161,66 @@ async function upsertState(row: Partial<StateRow> & { market: string; status: st
     .from("loop_sync_state" as any)
     .upsert(row, { onConflict: "market,status" });
   if (error) throw new Error(`loop_sync_state upsert: ${error.message}`);
+}
+
+async function createRun(market: Market, runGroupId?: string) {
+  const startedAt = new Date().toISOString();
+  const row = { market, run_group_id: runGroupId, started_at: startedAt, outcome: "running" };
+  const { data, error } = await supabaseAdmin.from("loop_sync_runs" as any).insert(row).select("*").single();
+  if (error || !data) return null;
+  return data as unknown as LoopRunRow;
+}
+
+async function finishRun(run: LoopRunRow | null, patch: Partial<LoopRunRow>) {
+  if (!run) return;
+  const finishedAt = new Date().toISOString();
+  await supabaseAdmin
+    .from("loop_sync_runs" as any)
+    .update({ ...patch, finished_at: finishedAt, duration_ms: Date.now() - new Date(run.started_at).getTime() })
+    .eq("id", run.id);
+}
+
+async function recordLoopError(market: Market, status: LoopStatus, message: string) {
+  const now = new Date().toISOString();
+  const { data } = await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .select("retry_count")
+    .eq("market", market)
+    .eq("status", status)
+    .maybeSingle();
+  const retryCount = Number((data as any)?.retry_count ?? 0) + 1;
+  await supabaseAdmin.from("loop_sync_errors" as any).upsert(
+    { market, status, last_error: message, retry_count: retryCount, last_seen_at: now, resolved_at: null },
+    { onConflict: "market,status" },
+  );
+}
+
+async function resolveLoopError(market: Market, status: LoopStatus) {
+  await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("market", market)
+    .eq("status", status)
+    .is("resolved_at", null);
+}
+
+export async function getLoopSyncRuns(limit = 20): Promise<LoopRunRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_runs" as any)
+    .select("*")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as unknown as LoopRunRow[];
+}
+
+export async function getLoopSyncErrors(): Promise<LoopErrorRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .select("*")
+    .order("last_seen_at", { ascending: false });
+  if (error) return [];
+  return (data ?? []) as unknown as LoopErrorRow[];
 }
 
 export async function resetLoopState(market: Market) {
