@@ -49,7 +49,7 @@ export async function verifyAllowedUser(
     email && ALLOWED_DOMAINS.some((d) => email.endsWith(`@${d}`));
   if (!ok) return new Response("Forbidden", { status: 403 });
   if (opts.requireAdmin) {
-    const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
+    const { data: isAdmin, error: roleError } = await (supabase as any).rpc("has_role", {
       _user_id: userId,
       _role: "admin",
     });
