@@ -2396,6 +2396,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                 <th className="px-3 py-2.5 font-medium text-right">Ad spend</th>
                 <th className="px-3 py-2.5 font-medium text-right">CAC</th>
                 <th className="px-3 py-2.5 font-medium text-right">Gross M%</th>
+                <th className="px-3 py-2.5 font-medium text-right">Shipping</th>
+                <th className="px-3 py-2.5 font-medium text-right">Fees</th>
                 <th className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-neutral-900" onClick={() => setSortBy("contributionMargin")}>Contrib M%</th>
                 <th className="px-3 py-2.5 font-medium text-right">Contrib (€)</th>
                 <th className="px-3 py-2.5 font-medium text-right">Refund %</th>
