@@ -58,7 +58,7 @@ async function validateRequestUser(requireAdmin: boolean) {
     if (!ok) throw new Response("Forbidden", { status: 403 });
 
     if (requireAdmin) {
-      const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
+      const { data: isAdmin, error: roleError } = await (supabase as any).rpc("has_role", {
         _user_id: userId,
         _role: "admin",
       });
