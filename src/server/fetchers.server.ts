@@ -1721,15 +1721,7 @@ async function fetchLoopStoreForRange(market: string, flag: string, key: string,
 }
 
 export async function fetchLoopForRange(fromIso: string, toIso: string) {
-  const settled = await Promise.allSettled(
-    LOOP_STORES.map(({ market, flag, envKey }) => {
-      const key = process.env[envKey];
-      if (!key) return Promise.resolve(null);
-      return fetchLoopStoreForRange(market, flag, key, fromIso, toIso);
-    }),
-  );
-  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean);
-  return results.length > 0 ? results : null;
+  return await fetchLoopFromDbForRange(fromIso, toIso);
 }
 
 // ─── Xero ────────────────────────────────────────────────────────────────────
