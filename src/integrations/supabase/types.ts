@@ -170,6 +170,39 @@ export type Database = {
         }
         Relationships: []
       }
+      loop_sync_state: {
+        Row: {
+          done: boolean
+          last_error: string | null
+          market: string
+          page_no: number
+          started_at: string
+          status: string
+          total_fetched: number
+          updated_at: string
+        }
+        Insert: {
+          done?: boolean
+          last_error?: string | null
+          market: string
+          page_no?: number
+          started_at?: string
+          status: string
+          total_fetched?: number
+          updated_at?: string
+        }
+        Update: {
+          done?: boolean
+          last_error?: string | null
+          market?: string
+          page_no?: number
+          started_at?: string
+          status?: string
+          total_fetched?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shopify_orders: {
         Row: {
           currency: string | null
