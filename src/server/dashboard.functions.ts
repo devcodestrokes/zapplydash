@@ -358,6 +358,37 @@ export const triggerXeroSyncNow = createServerFn({ method: "POST" }).middleware(
   }
 });
 
+// ── Loop DB status / full sync ────────────────────────────────────────────────
+import { getLoopDbStatus, getLoopApiPending, fetchLoopFromDb } from "./loop-db.server";
+import { syncAllLoop } from "./loop-sync.server";
+
+export const getLoopStoreStatus = createServerFn({ method: "GET" })
+  .middleware([requireAllowedUser])
+  .handler(async () => {
+    return { stores: await getLoopDbStatus(), checkedAt: Date.now() };
+  });
+
+export const getLoopApiPendingCount = createServerFn({ method: "POST" })
+  .middleware([requireAllowedUser])
+  .handler(async () => {
+    return { results: await getLoopApiPending(), checkedAt: Date.now() };
+  });
+
+export const triggerLoopFullSync = createServerFn({ method: "POST" })
+  .middleware([requireAllowedUser])
+  .handler(async () => {
+    const startedAt = new Date().toISOString();
+    const sync = await syncAllLoop();
+    // Refresh dashboard cache from the freshly populated DB.
+    try {
+      const payload = await fetchLoopFromDb();
+      if (payload) await writeCache("loop", "subscriptions", payload);
+    } catch (err: any) {
+      console.error("[loop] cache refresh failed:", err?.message);
+    }
+    return { ok: true, startedAt, finishedAt: new Date().toISOString(), sync };
+  });
+
 // In-memory cache for Growth Plan year data — 10 minutes per year.
 // Bump GROWTH_YEAR_CACHE_VERSION to invalidate previously cached partial fetches.
 const GROWTH_YEAR_TTL_MS = 10 * 60 * 1000;
