@@ -337,7 +337,7 @@ export const getSyncStatus = createServerFn({ method: "GET" }).middleware([requi
   return buildSourceStatus(cache);
 });
 
-export const triggerSyncNow = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
+export const triggerSyncNow = createServerFn({ method: "POST" }).middleware([requireAdminUser]).handler(async () => {
   const results = await runAll();
   return { ok: true, finishedAt: new Date().toISOString(), results };
 });
