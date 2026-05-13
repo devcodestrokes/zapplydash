@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Plug, AlertCircle, ChevronRight, LayoutGrid } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getSyncStatus, getDashboardData, triggerSyncNow, triggerXeroSyncNow } from "@/server/dashboard.functions";
+import { getSyncStatus, getDashboardData, triggerSyncNow, triggerXeroSyncNow, getLoopStoreStatus, getLoopApiPendingCount, triggerLoopFullSync } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/operations/sync-status")({
   head: () => ({ meta: [{ title: "Sync status — Zapply" }] }),
@@ -210,13 +210,18 @@ function SyncStatusPage() {
   const [status, setStatus] = useState<{ sources: SourceRow[]; checkedAt: number } | null>(null);
   const [data, setData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loopDb, setLoopDb] = useState<{ stores: any[]; checkedAt: number } | null>(null);
+  const [loopPending, setLoopPending] = useState<{ results: any[]; checkedAt: number } | null>(null);
+  const [loopChecking, setLoopChecking] = useState(false);
+  const [loopSyncing, setLoopSyncing] = useState(false);
 
   const load = async () => {
     setRefreshing(true);
     try {
-      const [s, d] = await Promise.all([getSyncStatus(), getDashboardData()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
       setStatus(s as any);
       setData(d);
+      setLoopDb(ld as any);
     } finally {
       setRefreshing(false);
     }
@@ -226,11 +231,34 @@ function SyncStatusPage() {
     setRefreshing(true);
     try {
       await triggerSyncNow();
-      const [s, d] = await Promise.all([getSyncStatus(), getDashboardData()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
       setStatus(s as any);
       setData(d);
+      setLoopDb(ld as any);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const checkLoopApi = async () => {
+    setLoopChecking(true);
+    try {
+      const r = await getLoopApiPendingCount();
+      setLoopPending(r as any);
+    } finally {
+      setLoopChecking(false);
+    }
+  };
+
+  const fullSyncLoop = async () => {
+    setLoopSyncing(true);
+    try {
+      await triggerLoopFullSync();
+      const ld = await getLoopStoreStatus();
+      setLoopDb(ld as any);
+      setLoopPending(null);
+    } finally {
+      setLoopSyncing(false);
     }
   };
 
@@ -343,6 +371,92 @@ function SyncStatusPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Loop DB sync panel */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[14px] font-semibold">Loop subscriptions · Database</div>
+              <div className="text-[12px] text-neutral-500 mt-0.5">
+                Dashboard reads from Supabase tables <code>UK_loop</code> / <code>US_loop</code>. Click{" "}
+                <span className="font-medium">Full sync</span> to refresh from the Loop API.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={checkLoopApi}
+                disabled={loopChecking || loopSyncing}
+                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[12px] font-medium hover:bg-neutral-50 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loopChecking ? "animate-spin" : ""}`} />
+                {loopChecking ? "Checking API…" : "Check API for new"}
+              </button>
+              <button
+                onClick={fullSyncLoop}
+                disabled={loopSyncing}
+                className="inline-flex items-center gap-2 rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-[12px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loopSyncing ? "animate-spin" : ""}`} />
+                {loopSyncing ? "Syncing…" : "Full sync"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(loopDb?.stores ?? [{ market: "UK" }, { market: "US" }]).map((s: any) => {
+              const pending = loopPending?.results?.find((r: any) => r.market === s.market);
+              return (
+                <div key={s.market} className="rounded-lg ring-1 ring-neutral-100 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[13px] font-semibold text-neutral-900">{s.market} store</div>
+                    <span className="text-[11px] text-neutral-500 font-mono">{s.table ?? `${s.market}_loop`}</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+                    <div>
+                      <div className="text-neutral-500">In database</div>
+                      <div className="text-[18px] font-semibold text-neutral-900">
+                        {(s.dbCount ?? 0).toLocaleString("en-GB")}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-neutral-500">New on API</div>
+                      <div className="text-[18px] font-semibold text-neutral-900">
+                        {pending?.error ? (
+                          <span className="text-rose-600 text-[13px]">{pending.error}</span>
+                        ) : pending ? (
+                          pending.pending > 0 ? (
+                            <span className="text-amber-600">+{pending.pending.toLocaleString("en-GB")}</span>
+                          ) : (
+                            <span className="text-emerald-600">Up to date</span>
+                          )
+                        ) : (
+                          <span className="text-neutral-400 text-[13px]">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {s.byStatus && (
+                    <div className="mt-2 flex gap-2 flex-wrap text-[11px] text-neutral-500">
+                      {Object.entries(s.byStatus).map(([k, v]) => (
+                        <span key={k} className="rounded bg-neutral-100 px-1.5 py-0.5">
+                          {k}: {(v as number).toLocaleString("en-GB")}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-2 text-[11px] text-neutral-500">
+                    Last synced: {s.lastSyncedAt ? new Date(s.lastSyncedAt).toLocaleString() : "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {loopPending && (
+            <div className="mt-3 text-[11px] text-neutral-400">
+              API checked at {new Date(loopPending.checkedAt).toLocaleTimeString()} · click Full sync to merge new rows into the database.
+            </div>
+          )}
         </div>
 
         {/* Data flow */}

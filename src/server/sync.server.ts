@@ -17,6 +17,18 @@ import {
   fetchSubscriptionRepeatFunnel,
   fetchXero,
 } from "./fetchers.server";
+import { syncAllLoop } from "./loop-sync.server";
+
+// Loop job wrapper: refresh Supabase UK_loop/US_loop from the Loop API,
+// then recompute dashboard payload from the DB tables.
+async function fetchLoopFull() {
+  try {
+    await syncAllLoop();
+  } catch (err) {
+    console.error("[sync] loop DB sync failed (continuing with existing DB rows):", err);
+  }
+  return fetchLoopRaw();
+}
 
 // Module-level guards — prevent duplicate concurrent syncs hammering APIs.
 // One in-flight promise per provider/key.
@@ -111,7 +123,7 @@ const ALL_JOBS: Job[] = [
   },
   { name: "jortt", provider: "jortt", key: "invoices", fn: fetchJortt, maxAgeMin: 60 },
   { name: "juo", provider: "juo", key: "subscriptions", fn: fetchJuoRaw, maxAgeMin: 60 },
-  { name: "loop", provider: "loop", key: "subscriptions", fn: fetchLoopRaw, maxAgeMin: 60 },
+  { name: "loop", provider: "loop", key: "subscriptions", fn: fetchLoopFull, maxAgeMin: 60 },
   {
     name: "subscription_repeat_funnel",
     provider: "subscription",
