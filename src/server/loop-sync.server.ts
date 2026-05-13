@@ -299,19 +299,21 @@ export async function syncLoopChunk(
       try {
         result = await fetchPage(apiKey, status, page);
       } catch (err: any) {
-        lastError = err?.message ?? String(err);
-        await recordLoopError(market, status, lastError);
+        const message = err?.message ?? String(err);
+        lastError = message;
+        const errorAt = new Date().toISOString();
+        await recordLoopError(market, status, message);
         await upsertState({
           market,
           status,
           page_no: page,
           done: false,
           total_fetched: total,
-          last_error: lastError,
+          last_error: message,
           retry_count: (st.retry_count ?? 0) + 1,
-          last_error_at: new Date().toISOString(),
+          last_error_at: errorAt,
         });
-        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: lastError, retry_count: (st.retry_count ?? 0) + 1, last_error_at: new Date().toISOString() });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: message, retry_count: (st.retry_count ?? 0) + 1, last_error_at: errorAt });
         break outer;
       }
       pagesFetched++;
@@ -319,19 +321,21 @@ export async function syncLoopChunk(
       try {
         await upsertChunked(table, rows);
       } catch (err: any) {
-        lastError = err?.message ?? String(err);
-        await recordLoopError(market, status, lastError);
+        const message = err?.message ?? String(err);
+        lastError = message;
+        const errorAt = new Date().toISOString();
+        await recordLoopError(market, status, message);
         await upsertState({
           market,
           status,
           page_no: page,
           done: false,
           total_fetched: total,
-          last_error: lastError,
+          last_error: message,
           retry_count: (st.retry_count ?? 0) + 1,
-          last_error_at: new Date().toISOString(),
+          last_error_at: errorAt,
         });
-        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: lastError, retry_count: (st.retry_count ?? 0) + 1, last_error_at: new Date().toISOString() });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: message, retry_count: (st.retry_count ?? 0) + 1, last_error_at: errorAt });
         break outer;
       }
       rowsUpserted += rows.length;
