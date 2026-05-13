@@ -124,7 +124,7 @@ async function loadStateMap(market: Market): Promise<Map<LoopStatus, StateRow>> 
     .eq("market", market);
   if (error) throw new Error(`loop_sync_state read: ${error.message}`);
   const m = new Map<LoopStatus, StateRow>();
-  for (const r of (data ?? []) as StateRow[]) m.set(r.status as LoopStatus, r);
+  for (const r of ((data ?? []) as unknown as StateRow[])) m.set(r.status as LoopStatus, r);
   return m;
 }
 
