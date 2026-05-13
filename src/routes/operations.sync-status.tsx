@@ -210,19 +210,30 @@ function SyncStatusPage() {
   const [status, setStatus] = useState<{ sources: SourceRow[]; checkedAt: number } | null>(null);
   const [data, setData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [loopDb, setLoopDb] = useState<{ stores: any[]; checkedAt: number } | null>(null);
+  const [loopDb, setLoopDb] = useState<any>(null);
   const [loopPending, setLoopPending] = useState<{ results: any[]; checkedAt: number } | null>(null);
   const [loopChecking, setLoopChecking] = useState(false);
   const [loopSyncing, setLoopSyncing] = useState(false);
+  const [loopAdminError, setLoopAdminError] = useState<string | null>(null);
   const [loopProgress, setLoopProgress] = useState<Record<string, { page: number; total: number; done: boolean; status: string; error?: string } | null>>({ UK: null, US: null });
 
   const load = async () => {
     setRefreshing(true);
     try {
-      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
+      const [s, d, ld] = await Promise.all([
+        getSyncStatus(),
+        getDashboardData(),
+        getLoopStoreStatus().catch((err: any) => {
+          setLoopAdminError(err?.message ?? "Admin access required");
+          return null;
+        }),
+      ]);
       setStatus(s as any);
       setData(d);
-      setLoopDb(ld as any);
+      if (ld) {
+        setLoopAdminError(null);
+        setLoopDb(ld as any);
+      }
     } finally {
       setRefreshing(false);
     }
@@ -232,10 +243,12 @@ function SyncStatusPage() {
     setRefreshing(true);
     try {
       await triggerSyncNow();
-      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus().catch(() => null)]);
       setStatus(s as any);
       setData(d);
-      setLoopDb(ld as any);
+      if (ld) setLoopDb(ld as any);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setRefreshing(false);
     }
@@ -246,6 +259,9 @@ function SyncStatusPage() {
     try {
       const r = await getLoopApiPendingCount();
       setLoopPending(r as any);
+      setLoopAdminError(null);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setLoopChecking(false);
     }
@@ -290,6 +306,11 @@ function SyncStatusPage() {
         firstPass = false;
       }
       setLoopPending(null);
+      const ld = await getLoopStoreStatus().catch(() => null);
+      if (ld) setLoopDb(ld as any);
+      setLoopAdminError(null);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setLoopSyncing(false);
     }
@@ -416,6 +437,11 @@ function SyncStatusPage() {
                 Dashboard reads from Supabase tables <code>UK_loop</code> / <code>US_loop</code>. Click{" "}
                 <span className="font-medium">Full sync</span> to refresh from the Loop API.
               </div>
+              {loopAdminError && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 ring-1 ring-amber-200 px-2 py-1 text-[11px] text-amber-700">
+                  <AlertCircle className="h-3 w-3" /> Admin access required for Loop sync status and controls.
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -503,6 +529,40 @@ function SyncStatusPage() {
           {loopPending && (
             <div className="mt-3 text-[11px] text-neutral-400">
               API checked at {new Date(loopPending.checkedAt).toLocaleTimeString()} · click Full sync to merge new rows into the database.
+            </div>
+          )}
+          {(loopDb?.runs?.length > 0 || loopDb?.errors?.length > 0) && (
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-lg ring-1 ring-neutral-100 p-4">
+                <div className="text-[13px] font-semibold text-neutral-900">Sync history</div>
+                <div className="mt-3 space-y-2">
+                  {(loopDb?.runs ?? []).slice(0, 8).map((run: any) => (
+                    <div key={run.id} className="flex items-start justify-between gap-3 text-[11px] border-b border-neutral-100 pb-2 last:border-0">
+                      <div>
+                        <div className="font-medium text-neutral-800">{run.market} · {run.outcome}</div>
+                        <div className="text-neutral-500">{new Date(run.started_at).toLocaleString()}</div>
+                      </div>
+                      <div className="text-right text-neutral-500">
+                        <div>{Number(run.total_fetched ?? 0).toLocaleString("en-GB")} fetched</div>
+                        <div>{run.duration_ms ? `${Math.round(run.duration_ms / 1000)}s` : "—"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg ring-1 ring-neutral-100 p-4">
+                <div className="text-[13px] font-semibold text-neutral-900">Sync error log</div>
+                <div className="mt-3 space-y-2">
+                  {(loopDb?.errors ?? []).map((err: any) => (
+                    <div key={`${err.market}-${err.status}`} className="text-[11px] rounded-md bg-rose-50 ring-1 ring-rose-100 px-2 py-2 text-rose-700">
+                      <div className="font-medium">{err.market} · {err.status} · {err.retry_count ?? 0} retries</div>
+                      <div className="mt-0.5 break-words">{err.last_error ?? "—"}</div>
+                      <div className="mt-1 text-rose-500">{err.last_seen_at ? new Date(err.last_seen_at).toLocaleString() : "—"}</div>
+                    </div>
+                  ))}
+                  {(loopDb?.errors ?? []).length === 0 && <div className="text-[11px] text-neutral-400">No recorded Loop sync errors.</div>}
+                </div>
+              </div>
             </div>
           )}
         </div>

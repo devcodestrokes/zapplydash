@@ -82,7 +82,7 @@ function mapRow(sub: any): Record<string, any> {
 
 async function upsertChunked(table: "UK_loop" | "US_loop", rows: any[]) {
   if (rows.length === 0) return;
-  const CHUNK = 500;
+  const CHUNK = 50;
   // Dedupe within batch by id (Loop sometimes returns the same sub twice on
   // adjacent pages when records shift between fetches).
   const byId = new Map<number, any>();
@@ -105,8 +105,36 @@ type StateRow = {
   done: boolean;
   total_fetched: number;
   last_error: string | null;
+  retry_count: number;
+  last_error_at: string | null;
+  last_success_at: string | null;
   started_at: string;
   updated_at: string;
+};
+
+type LoopRunRow = {
+  id: string;
+  run_group_id: string;
+  market: string;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  total_fetched: number;
+  rows_upserted: number;
+  pages_fetched: number;
+  outcome: string;
+  last_error: string | null;
+  per_status: any;
+};
+
+type LoopErrorRow = {
+  market: string;
+  status: string;
+  last_error: string | null;
+  retry_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
 };
 
 export async function getLoopSyncState(): Promise<StateRow[]> {
@@ -135,6 +163,66 @@ async function upsertState(row: Partial<StateRow> & { market: string; status: st
   if (error) throw new Error(`loop_sync_state upsert: ${error.message}`);
 }
 
+async function createRun(market: Market, runGroupId?: string) {
+  const startedAt = new Date().toISOString();
+  const row = { market, run_group_id: runGroupId, started_at: startedAt, outcome: "running" };
+  const { data, error } = await supabaseAdmin.from("loop_sync_runs" as any).insert(row).select("*").single();
+  if (error || !data) return null;
+  return data as unknown as LoopRunRow;
+}
+
+async function finishRun(run: LoopRunRow | null, patch: Partial<LoopRunRow>) {
+  if (!run) return;
+  const finishedAt = new Date().toISOString();
+  await supabaseAdmin
+    .from("loop_sync_runs" as any)
+    .update({ ...patch, finished_at: finishedAt, duration_ms: Date.now() - new Date(run.started_at).getTime() })
+    .eq("id", run.id);
+}
+
+async function recordLoopError(market: Market, status: LoopStatus, message: string) {
+  const now = new Date().toISOString();
+  const { data } = await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .select("retry_count")
+    .eq("market", market)
+    .eq("status", status)
+    .maybeSingle();
+  const retryCount = Number((data as any)?.retry_count ?? 0) + 1;
+  await supabaseAdmin.from("loop_sync_errors" as any).upsert(
+    { market, status, last_error: message, retry_count: retryCount, last_seen_at: now, resolved_at: null },
+    { onConflict: "market,status" },
+  );
+}
+
+async function resolveLoopError(market: Market, status: LoopStatus) {
+  await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("market", market)
+    .eq("status", status)
+    .is("resolved_at", null);
+}
+
+export async function getLoopSyncRuns(limit = 20): Promise<LoopRunRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_runs" as any)
+    .select("*")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data ?? []) as unknown as LoopRunRow[];
+}
+
+export async function getLoopSyncErrors(): Promise<LoopErrorRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("loop_sync_errors" as any)
+    .select("*")
+    .order("last_seen_at", { ascending: false });
+  if (error) return [];
+  return (data ?? []) as unknown as LoopErrorRow[];
+}
+
 export async function resetLoopState(market: Market) {
   for (const status of STATUSES) {
     await upsertState({
@@ -144,6 +232,9 @@ export async function resetLoopState(market: Market) {
       done: false,
       total_fetched: 0,
       last_error: null,
+      retry_count: 0,
+      last_error_at: null,
+      last_success_at: null,
       started_at: new Date().toISOString(),
     });
   }
@@ -152,7 +243,7 @@ export async function resetLoopState(market: Market) {
 // ── Resumable chunk sync ──────────────────────────────────────────────────────
 export async function syncLoopChunk(
   market: Market,
-  opts: { maxPages?: number; timeBudgetMs?: number } = {},
+  opts: { maxPages?: number; timeBudgetMs?: number; runGroupId?: string } = {},
 ): Promise<{
   market: Market;
   pagesFetched: number;
@@ -168,6 +259,7 @@ export async function syncLoopChunk(
   const maxPages = opts.maxPages ?? 25;
   const timeBudgetMs = opts.timeBudgetMs ?? 45_000;
   const startedAt = Date.now();
+  const run = await createRun(market, opts.runGroupId);
 
   const stateMap = await loadStateMap(market);
   // Ensure rows exist for each status
@@ -180,6 +272,9 @@ export async function syncLoopChunk(
         done: false,
         total_fetched: 0,
         last_error: null,
+        retry_count: 0,
+        last_error_at: null,
+        last_success_at: null,
         started_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -204,15 +299,21 @@ export async function syncLoopChunk(
       try {
         result = await fetchPage(apiKey, status, page);
       } catch (err: any) {
-        lastError = err?.message ?? String(err);
+        const message = err?.message ?? String(err);
+        lastError = message;
+        const errorAt = new Date().toISOString();
+        await recordLoopError(market, status, message);
         await upsertState({
           market,
           status,
           page_no: page,
           done: false,
           total_fetched: total,
-          last_error: lastError,
+          last_error: message,
+          retry_count: (st.retry_count ?? 0) + 1,
+          last_error_at: errorAt,
         });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: message, retry_count: (st.retry_count ?? 0) + 1, last_error_at: errorAt });
         break outer;
       }
       pagesFetched++;
@@ -220,21 +321,29 @@ export async function syncLoopChunk(
       try {
         await upsertChunked(table, rows);
       } catch (err: any) {
-        lastError = err?.message ?? String(err);
+        const message = err?.message ?? String(err);
+        lastError = message;
+        const errorAt = new Date().toISOString();
+        await recordLoopError(market, status, message);
         await upsertState({
           market,
           status,
           page_no: page,
           done: false,
           total_fetched: total,
-          last_error: lastError,
+          last_error: message,
+          retry_count: (st.retry_count ?? 0) + 1,
+          last_error_at: errorAt,
         });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: message, retry_count: (st.retry_count ?? 0) + 1, last_error_at: errorAt });
         break outer;
       }
       rowsUpserted += rows.length;
       total += rows.length;
 
       if (!result.hasNextPage || rows.length === 0) {
+        const successAt = new Date().toISOString();
+        await resolveLoopError(market, status);
         await upsertState({
           market,
           status,
@@ -242,8 +351,11 @@ export async function syncLoopChunk(
           done: true,
           total_fetched: total,
           last_error: null,
+          retry_count: 0,
+          last_error_at: null,
+          last_success_at: successAt,
         });
-        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: true, last_error: null });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: true, last_error: null, retry_count: 0, last_error_at: null, last_success_at: successAt });
         break; // move to next status in this chunk
       }
       page++;
@@ -255,8 +367,9 @@ export async function syncLoopChunk(
         done: false,
         total_fetched: total,
         last_error: null,
+        last_error_at: null,
       });
-      stateMap.set(status, { ...st, page_no: page, total_fetched: total });
+      stateMap.set(status, { ...st, page_no: page, total_fetched: total, last_error: null, last_error_at: null });
     }
     if (pagesFetched >= maxPages || Date.now() - startedAt >= timeBudgetMs) break;
   }
@@ -267,6 +380,14 @@ export async function syncLoopChunk(
     perStatus[s] = { page: r.page_no, total: r.total_fetched, done: r.done };
   }
   const allDone = STATUSES.every((s) => stateMap.get(s)!.done);
+  await finishRun(run, {
+    total_fetched: Object.values(perStatus).reduce((sum, s) => sum + s.total, 0),
+    rows_upserted: rowsUpserted,
+    pages_fetched: pagesFetched,
+    outcome: lastError ? "error" : allDone ? "success" : "partial",
+    last_error: lastError ?? null,
+    per_status: perStatus,
+  });
   return { market, pagesFetched, rowsUpserted, perStatus, allDone, lastError };
 }
 

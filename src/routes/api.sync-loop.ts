@@ -8,7 +8,7 @@ export const Route = createFileRoute("/api/sync-loop")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await verifyAllowedUser(request);
+        const denied = await verifyAllowedUser(request, { requireAdmin: true });
         if (denied) return denied;
         const { searchParams } = new URL(request.url);
         const market = searchParams.get("market");

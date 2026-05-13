@@ -4,6 +4,7 @@
 //
 // Preview/dev hosts bypass auth so the in-editor preview keeps working.
 import { createClient } from "@supabase/supabase-js";
+import { resolveSupabasePublishableKey, resolveSupabaseUrl } from "./supabase-env.server";
 
 const ALLOWED_DOMAINS = ["zapply.nl", "codestrokes.com"];
 
@@ -19,13 +20,14 @@ function isPreviewHost(host: string): boolean {
 
 export async function verifyAllowedUser(
   request: Request,
+  opts: { requireAdmin?: boolean } = {},
 ): Promise<Response | null> {
   const host = request.headers.get("host") ?? "";
   const origin = request.headers.get("origin") ?? "";
   if (isPreviewHost(host) || isPreviewHost(origin)) return null;
 
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  const url = resolveSupabaseUrl();
+  const key = resolveSupabasePublishableKey();
   if (!url || !key) {
     return new Response("Server misconfigured", { status: 500 });
   }
@@ -42,8 +44,16 @@ export async function verifyAllowedUser(
     return new Response("Unauthorized", { status: 401 });
   }
   const email = String((data.claims as any).email ?? "").toLowerCase();
+  const userId = String((data.claims as any).sub ?? "");
   const ok =
     email && ALLOWED_DOMAINS.some((d) => email.endsWith(`@${d}`));
   if (!ok) return new Response("Forbidden", { status: 403 });
+  if (opts.requireAdmin) {
+    const { data: isAdmin, error: roleError } = await (supabase as any).rpc("has_role", {
+      _user_id: userId,
+      _role: "admin",
+    });
+    if (roleError || !isAdmin) return new Response("Admin access required", { status: 403 });
+  }
   return null;
 }
