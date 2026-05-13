@@ -243,10 +243,12 @@ function SyncStatusPage() {
     setRefreshing(true);
     try {
       await triggerSyncNow();
-      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus().catch(() => null)]);
       setStatus(s as any);
       setData(d);
-      setLoopDb(ld as any);
+      if (ld) setLoopDb(ld as any);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setRefreshing(false);
     }
@@ -257,6 +259,9 @@ function SyncStatusPage() {
     try {
       const r = await getLoopApiPendingCount();
       setLoopPending(r as any);
+      setLoopAdminError(null);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setLoopChecking(false);
     }
@@ -301,6 +306,11 @@ function SyncStatusPage() {
         firstPass = false;
       }
       setLoopPending(null);
+      const ld = await getLoopStoreStatus().catch(() => null);
+      if (ld) setLoopDb(ld as any);
+      setLoopAdminError(null);
+    } catch (err: any) {
+      setLoopAdminError(err?.message ?? "Admin access required");
     } finally {
       setLoopSyncing(false);
     }
