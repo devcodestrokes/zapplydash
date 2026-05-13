@@ -17,6 +17,18 @@ import {
   fetchSubscriptionRepeatFunnel,
   fetchXero,
 } from "./fetchers.server";
+import { syncAllLoop } from "./loop-sync.server";
+
+// Loop job wrapper: refresh Supabase UK_loop/US_loop from the Loop API,
+// then recompute dashboard payload from the DB tables.
+async function fetchLoopFull() {
+  try {
+    await syncAllLoop();
+  } catch (err) {
+    console.error("[sync] loop DB sync failed (continuing with existing DB rows):", err);
+  }
+  return fetchLoopRaw();
+}
 
 // Module-level guards — prevent duplicate concurrent syncs hammering APIs.
 // One in-flight promise per provider/key.
