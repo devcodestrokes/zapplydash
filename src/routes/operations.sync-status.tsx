@@ -482,6 +482,20 @@ function SyncStatusPage() {
                   <div className="mt-2 text-[11px] text-neutral-500">
                     Last synced: {s.lastSyncedAt ? new Date(s.lastSyncedAt).toLocaleString() : "—"}
                   </div>
+                  {loopProgress[s.market] && (
+                    <div className="mt-2 text-[11px] flex items-center gap-2">
+                      {loopProgress[s.market]!.error ? (
+                        <span className="text-rose-600">Error: {loopProgress[s.market]!.error}</span>
+                      ) : loopProgress[s.market]!.done ? (
+                        <span className="text-emerald-600">✓ Sync complete</span>
+                      ) : (
+                        <span className="text-violet-600 inline-flex items-center gap-1.5">
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                          Syncing {loopProgress[s.market]!.status} · page {loopProgress[s.market]!.page} · {loopProgress[s.market]!.total.toLocaleString("en-GB")} fetched
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
