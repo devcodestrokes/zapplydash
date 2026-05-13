@@ -114,7 +114,7 @@ export async function getLoopSyncState(): Promise<StateRow[]> {
     .from("loop_sync_state" as any)
     .select("*");
   if (error) throw new Error(`loop_sync_state read: ${error.message}`);
-  return (data ?? []) as StateRow[];
+  return (data ?? []) as unknown as StateRow[];
 }
 
 async function loadStateMap(market: Market): Promise<Map<LoopStatus, StateRow>> {
