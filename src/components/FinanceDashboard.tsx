@@ -1222,7 +1222,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
       return (
         <section className="mt-3 grid gap-3 lg:grid-cols-2">
           {/* Cash positions */}
-          {cash.length > 0 && (
+          {cash.length > 0 ? (
             <Card className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
