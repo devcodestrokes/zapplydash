@@ -1665,11 +1665,14 @@ async function getXeroToken(): Promise<string | null> {
       return null;
     }
 
-    const { access_token, new_refresh, expires_in, refresh_token: rotated } = await res.json();
+    const { access_token, new_refresh, expires_in, refresh_token: rotated, scope } = await res.json();
     const finalRefresh = rotated ?? new_refresh ?? refreshToken;
     if (!access_token) {
       __xeroLastTokenError = "Token refresh returned no access_token";
       return null;
+    }
+    if (!rotated && !new_refresh) {
+      console.warn("Xero token refresh response did not include a rotated refresh token; keeping the previous stored token.");
     }
 
     const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
@@ -1682,7 +1685,7 @@ async function getXeroToken(): Promise<string | null> {
           refresh_token: finalRefresh,
           expires_at: expiresAt,
           updated_at: new Date().toISOString(),
-          metadata: { ...row.metadata, refresh_token: finalRefresh },
+          metadata: { ...row.metadata, refresh_token: finalRefresh, refreshed_at: new Date().toISOString(), scope },
         },
         { onConflict: "provider" },
       );
