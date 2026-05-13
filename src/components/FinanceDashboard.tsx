@@ -2993,21 +2993,35 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
           <div className="text-[13px] font-semibold">Revenue, profit & ad spend — YTD by month</div>
           <div className="text-[12px] text-neutral-400">Current month is MTD and updates as it progresses</div>
         </div>
-        <div className="h-[220px]">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-            <ComposedChart data={activeMonths} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} barGap={2} barCategoryGap="22%">
+        <div className="h-[240px]">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+            <AreaChart data={activeMonths} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="areaRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#171717" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#171717" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="areaProfit" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.22} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="areaAd" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#a1a1aa" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#a1a1aa" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid stroke="#f4f4f5" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v / 1000}k`} />
               <Tooltip
                 contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
-                formatter={(v) => `€${v.toLocaleString()}`}
+                formatter={(v: any) => `€${Number(v).toLocaleString()}`}
               />
               <Legend wrapperStyle={{ fontSize: 12, paddingTop: 6 }} iconType="circle" />
-              <Bar dataKey="revenue" name="Revenue" fill="#171717" radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Bar dataKey="adSpend" name="Ad spend" fill="#d4d4d8" radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-            </ComposedChart>
+              <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#171717" strokeWidth={2} fill="url(#areaRevenue)" dot={{ r: 3, fill: "#171717" }} activeDot={{ r: 4 }} />
+              <Area type="monotone" dataKey="adSpend" name="Ad spend" stroke="#a1a1aa" strokeWidth={2} fill="url(#areaAd)" dot={{ r: 3, fill: "#a1a1aa" }} activeDot={{ r: 4 }} />
+              <Area type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2} fill="url(#areaProfit)" dot={{ r: 3, fill: "#10b981" }} activeDot={{ r: 4 }} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </Card>
