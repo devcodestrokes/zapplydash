@@ -360,12 +360,13 @@ export const triggerXeroSyncNow = createServerFn({ method: "POST" }).middleware(
 
 // ── Loop DB status / full sync ────────────────────────────────────────────────
 import { getLoopDbStatus, getLoopApiPending, fetchLoopFromDb } from "./loop-db.server";
-import { syncAllLoop } from "./loop-sync.server";
+import { syncAllLoop, syncLoopChunk, resetLoopState, getLoopSyncState } from "./loop-sync.server";
 
 export const getLoopStoreStatus = createServerFn({ method: "GET" })
   .middleware([requireAllowedUser])
   .handler(async () => {
-    return { stores: await getLoopDbStatus(), checkedAt: Date.now() };
+    const [stores, syncState] = await Promise.all([getLoopDbStatus(), getLoopSyncState()]);
+    return { stores, syncState, checkedAt: Date.now() };
   });
 
 export const getLoopApiPendingCount = createServerFn({ method: "POST" })
@@ -374,12 +375,33 @@ export const getLoopApiPendingCount = createServerFn({ method: "POST" })
     return { results: await getLoopApiPending(), checkedAt: Date.now() };
   });
 
+// One resumable chunk for a single market. The UI calls this in a loop,
+// passing reset=true on the very first call to start fresh from page 1.
+export const runLoopSyncChunk = createServerFn({ method: "POST" })
+  .middleware([requireAllowedUser])
+  .inputValidator((input: { market: "UK" | "US"; reset?: boolean }) => ({
+    market: input.market === "UK" ? ("UK" as const) : ("US" as const),
+    reset: !!input.reset,
+  }))
+  .handler(async ({ data }) => {
+    if (data.reset) await resetLoopState(data.market);
+    const result = await syncLoopChunk(data.market, { maxPages: 25, timeBudgetMs: 45_000 });
+    if (result.allDone) {
+      try {
+        const payload = await fetchLoopFromDb();
+        if (payload) await writeCache("loop", "subscriptions", payload);
+      } catch (err: any) {
+        console.error("[loop] cache refresh failed:", err?.message);
+      }
+    }
+    return result;
+  });
+
 export const triggerLoopFullSync = createServerFn({ method: "POST" })
   .middleware([requireAllowedUser])
   .handler(async () => {
     const startedAt = new Date().toISOString();
     const sync = await syncAllLoop();
-    // Refresh dashboard cache from the freshly populated DB.
     try {
       const payload = await fetchLoopFromDb();
       if (payload) await writeCache("loop", "subscriptions", payload);
@@ -388,6 +410,7 @@ export const triggerLoopFullSync = createServerFn({ method: "POST" })
     }
     return { ok: true, startedAt, finishedAt: new Date().toISOString(), sync };
   });
+
 
 // In-memory cache for Growth Plan year data — 10 minutes per year.
 // Bump GROWTH_YEAR_CACHE_VERSION to invalidate previously cached partial fetches.
