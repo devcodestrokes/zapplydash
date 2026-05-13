@@ -44,11 +44,19 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
+type MarketCost = { shippingPerOrder: number; paymentFeePct: number };
+const MARKET_CODES = ["NL", "UK", "US", "EU", "DE"] as const;
+const MARKET_FLAGS: Record<string, string> = { NL: "🇳🇱", UK: "🇬🇧", US: "🇺🇸", EU: "🇪🇺", DE: "🇩🇪" };
+const DEFAULT_MARKET_COSTS: Record<string, MarketCost> = Object.fromEntries(
+  MARKET_CODES.map((c) => [c, { shippingPerOrder: 0, paymentFeePct: 0 }]),
+);
+
 function ManualDataPage() {
   const { user } = useDashboardSession();
   const [cash, setCash] = useState<Cash[]>([]);
   const [inv, setInv] = useState<Inv[]>([]);
   const [minBuffer, setMinBuffer] = useState<number>(50000);
+  const [marketCosts, setMarketCosts] = useState<Record<string, MarketCost>>(DEFAULT_MARKET_COSTS);
   const [savingMsg, setSavingMsg] = useState<string>("");
 
   async function reload() {
@@ -61,6 +69,19 @@ function ManualDataPage() {
     setInv(i as any);
     if ((s as any)?.min_cash_buffer_eur?.amount != null) {
       setMinBuffer(Number((s as any).min_cash_buffer_eur.amount));
+    }
+    const mc = (s as any)?.market_costs;
+    if (mc && typeof mc === "object") {
+      const merged = { ...DEFAULT_MARKET_COSTS };
+      for (const code of MARKET_CODES) {
+        if (mc[code]) {
+          merged[code] = {
+            shippingPerOrder: Number(mc[code].shippingPerOrder ?? 0) || 0,
+            paymentFeePct: Number(mc[code].paymentFeePct ?? 0) || 0,
+          };
+        }
+      }
+      setMarketCosts(merged);
     }
   }
   useEffect(() => {
@@ -106,6 +127,17 @@ function ManualDataPage() {
     });
     flash("Buffer saved");
   }
+  async function saveMarketCosts() {
+    const clean: Record<string, MarketCost> = {};
+    for (const code of MARKET_CODES) {
+      clean[code] = {
+        shippingPerOrder: Number(marketCosts[code]?.shippingPerOrder) || 0,
+        paymentFeePct: Number(marketCosts[code]?.paymentFeePct) || 0,
+      };
+    }
+    await setAppSetting({ data: { key: "market_costs", value: clean } });
+    flash("Market costs saved");
+  }
 
   return (
     <DashboardShell user={user} title="Manual data">
@@ -143,6 +175,66 @@ function ManualDataPage() {
             >
               <Save size={12} /> Save
             </button>
+          </div>
+        </Card>
+
+        {/* Per-market costs */}
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[14px] font-semibold">Shipping & payment fees per market</div>
+              <div className="mt-1 text-[12px] text-neutral-500">
+                Used by Margin per Market to compute contribution margin. Shipping is per order; payment fee is a % of revenue.
+              </div>
+            </div>
+            <button
+              onClick={saveMarketCosts}
+              className="inline-flex items-center gap-1 rounded-md bg-neutral-900 px-3 py-1.5 text-[12px] font-medium text-white"
+            >
+              <Save size={12} /> Save all
+            </button>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-lg border border-neutral-100">
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 bg-neutral-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+              <div>Market</div>
+              <div className="text-right">Shipping (€/order)</div>
+              <div className="text-right">Payment fee (% of revenue)</div>
+            </div>
+            {MARKET_CODES.map((code) => (
+              <div
+                key={code}
+                className="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 border-t border-neutral-100 px-3 py-2 text-[12px]"
+              >
+                <div className="font-medium">
+                  <span className="mr-2">{MARKET_FLAGS[code]}</span>
+                  {code === "UK" ? "GB" : code}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={marketCosts[code]?.shippingPerOrder ?? 0}
+                  onChange={(e) =>
+                    setMarketCosts((m) => ({
+                      ...m,
+                      [code]: { ...m[code], shippingPerOrder: Number(e.target.value) },
+                    }))
+                  }
+                  className="rounded-md border border-neutral-200 px-2 py-1 text-right tabular-nums"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={marketCosts[code]?.paymentFeePct ?? 0}
+                  onChange={(e) =>
+                    setMarketCosts((m) => ({
+                      ...m,
+                      [code]: { ...m[code], paymentFeePct: Number(e.target.value) },
+                    }))
+                  }
+                  className="rounded-md border border-neutral-200 px-2 py-1 text-right tabular-nums"
+                />
+              </div>
+            ))}
           </div>
         </Card>
 

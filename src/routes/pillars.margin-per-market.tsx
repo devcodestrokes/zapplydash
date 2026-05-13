@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
+import { getManualDataSnapshot } from "@/server/manual-data.functions";
 import { MarketsView } from "@/components/FinanceDashboard.tsx";
 
 export const Route = createFileRoute("/pillars/margin-per-market")({
@@ -44,6 +45,7 @@ function MarginPerMarketPage() {
   const { user } = useDashboardSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [manualData, setManualData] = useState<any>(null);
 
   const [dateRange, setDateRange] = useState({ from: daysAgoStr(30), to: todayStr() });
   const [rangeData, setRangeData] = useState<any>(null);
@@ -54,6 +56,9 @@ function MarginPerMarketPage() {
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
+    getManualDataSnapshot()
+      .then((m) => alive && setManualData(m))
+      .catch(() => { if (alive) setManualData(null); });
     return () => { alive = false; };
   }, []);
 
@@ -119,6 +124,7 @@ function MarginPerMarketPage() {
             onDateChange={handleDateChange}
             rangeSyncing={rangeSyncing}
             shopifyMonthly={Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : null}
+            marketCosts={manualData?.settings?.market_costs ?? null}
           />
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800">

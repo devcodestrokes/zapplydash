@@ -2236,7 +2236,7 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null, marketCosts = null }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
@@ -2257,10 +2257,21 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
     .map(m => {
       const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
+      const orders = m.orders ?? 0;
       const adSpend = tw?.adSpend ?? null;
       const grossProfit = tw?.grossProfit ?? null;
       const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
-      const contributionMarginAbs = grossProfit != null && adSpend != null ? +(grossProfit - adSpend).toFixed(0) : null;
+
+      // Per-market shipping & payment fees (configured in /admin/manual-data).
+      const mc = (marketCosts && marketCosts[m.code]) || null;
+      const shippingPerOrder = mc ? Number(mc.shippingPerOrder) || 0 : 0;
+      const paymentFeePct = mc ? Number(mc.paymentFeePct) || 0 : 0;
+      const shippingCost = +(orders * shippingPerOrder).toFixed(0);
+      const paymentFee = +(revenue * paymentFeePct / 100).toFixed(0);
+
+      const contributionMarginAbs = grossProfit != null && adSpend != null
+        ? +(grossProfit - adSpend - shippingCost - paymentFee).toFixed(0)
+        : null;
       const contributionMarginPct = contributionMarginAbs != null && revenue > 0
         ? +(contributionMarginAbs / revenue * 100).toFixed(1) : null;
       // Refund rate per market
@@ -2276,6 +2287,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
         grossMargin: grossMarginPct,
         contributionMargin: contributionMarginPct,
         contributionMarginAbs,
+        shippingCost,
+        paymentFee,
         refundRate,
         revDeltaPct,
         roas: tw?.roas ?? null,
@@ -2383,6 +2396,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                 <th className="px-3 py-2.5 font-medium text-right">Ad spend</th>
                 <th className="px-3 py-2.5 font-medium text-right">CAC</th>
                 <th className="px-3 py-2.5 font-medium text-right">Gross M%</th>
+                <th className="px-3 py-2.5 font-medium text-right">Shipping</th>
+                <th className="px-3 py-2.5 font-medium text-right">Fees</th>
                 <th className="px-3 py-2.5 font-medium text-right cursor-pointer hover:text-neutral-900" onClick={() => setSortBy("contributionMargin")}>Contrib M%</th>
                 <th className="px-3 py-2.5 font-medium text-right">Contrib (€)</th>
                 <th className="px-3 py-2.5 font-medium text-right">Refund %</th>
@@ -2415,6 +2430,12 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">
+                      {m.shippingCost > 0 ? `€${m.shippingCost.toLocaleString()}` : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">
+                      {m.paymentFee > 0 ? `€${m.paymentFee.toLocaleString()}` : <span className="text-neutral-400">—</span>}
+                    </td>
                     <td className="px-3 py-3 text-right tabular-nums">
                       {m.contributionMargin != null ? (
                         <span className={m.contributionMargin >= 30 ? "text-emerald-600 font-medium" : m.contributionMargin >= 20 ? "text-neutral-900" : "text-amber-600 font-medium"}>
@@ -2455,7 +2476,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
           </table>
         </div>
         <div className="border-t border-neutral-100 px-5 py-3 text-[11px] text-neutral-400">
-          Shipping cost &amp; payment-fee per market not yet wired — these vary per region and need to be added per store. Refund rate uses Shopify gross-vs-net revenue.
+          Shipping (€/order) and payment-fee % per market are configured in <a href="/admin/manual-data" className="underline hover:text-neutral-700">Manual data</a>. Refund rate uses Shopify gross-vs-net revenue.
         </div>
       </Card>
 
@@ -2798,13 +2819,12 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
     const curMonth = now.getMonth(); // 0-based
     const yy = String(curYear).slice(-2);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    // Build a lookup from incoming shopifyMonthly entries.
     const byKey = new Map<string, { revenue: number; refunds: number }>();
     for (const m of shopifyMonthly ?? []) {
       if (!m?.month) continue;
       byKey.set(String(m.month), { revenue: m.revenue ?? 0, refunds: m.refunds ?? 0 });
     }
-    const out = [];
+    const out: any[] = [];
     for (let i = 0; i <= curMonth; i++) {
       const label = `${monthNames[i]} '${yy}`;
       const entry = byKey.get(label) ?? { revenue: 0, refunds: 0 };
@@ -2818,7 +2838,9 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
         netProfit: Math.round(net * 0.12),
       });
     }
-    return out;
+    // Drop leading empty months so the chart isn't dominated by blank space.
+    const firstNonZero = out.findIndex((m) => m.revenue > 0);
+    return firstNonZero > 0 ? out.slice(firstNonZero) : out;
   }, [shopifyMonthly]);
   if (activeMonths.length === 0) {
     return (
@@ -2965,15 +2987,15 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
         );
       })()}
 
-      {/* Trend chart */}
+      {/* Trend chart — compact */}
       <Card className="mt-3 p-5">
-        <div className="mb-4">
-          <div className="text-[13px] font-semibold">Revenue, profit & ad spend — trailing 6 months</div>
-          <div className="text-[12px] text-neutral-400">April is MTD and will update as month progresses</div>
+        <div className="mb-3">
+          <div className="text-[13px] font-semibold">Revenue, profit & ad spend — YTD by month</div>
+          <div className="text-[12px] text-neutral-400">Current month is MTD and updates as it progresses</div>
         </div>
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
-            <ComposedChart data={activeMonths} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+        <div className="h-[220px]">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+            <ComposedChart data={activeMonths} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} barGap={2} barCategoryGap="22%">
               <CartesianGrid stroke="#f4f4f5" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v / 1000}k`} />
@@ -2981,10 +3003,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
                 contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
                 formatter={(v) => `€${v.toLocaleString()}`}
               />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
-              <Bar dataKey="revenue" name="Revenue" fill="#171717" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              <Bar dataKey="adSpend" name="Ad spend" fill="#d4d4d8" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 6 }} iconType="circle" />
+              <Bar dataKey="revenue" name="Revenue" fill="#171717" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="adSpend" name="Ad spend" fill="#d4d4d8" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
