@@ -2236,7 +2236,7 @@ const DailyPnLView = ({ dailyData = null, twData = [] }) => {
    VIEW: PILLAR 2 — MARGIN PER MARKET
    ========================================================================= */
 
-export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null }: any = {}) => {
+export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null, onDateChange = null, rangeSyncing = false, shopifyMonthly = null, marketCosts = null }: any = {}) => {
   const [sortBy, setSortBy] = useState("revenue");
   const [allocation, setAllocation] = useState("revenue-weighted");
 
@@ -2257,10 +2257,21 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
     .map(m => {
       const tw = twData.find(t => t.market === m.code && t.live);
       const revenue = m.revenue ?? 0;
+      const orders = m.orders ?? 0;
       const adSpend = tw?.adSpend ?? null;
       const grossProfit = tw?.grossProfit ?? null;
       const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
-      const contributionMarginAbs = grossProfit != null && adSpend != null ? +(grossProfit - adSpend).toFixed(0) : null;
+
+      // Per-market shipping & payment fees (configured in /admin/manual-data).
+      const mc = (marketCosts && marketCosts[m.code]) || null;
+      const shippingPerOrder = mc ? Number(mc.shippingPerOrder) || 0 : 0;
+      const paymentFeePct = mc ? Number(mc.paymentFeePct) || 0 : 0;
+      const shippingCost = +(orders * shippingPerOrder).toFixed(0);
+      const paymentFee = +(revenue * paymentFeePct / 100).toFixed(0);
+
+      const contributionMarginAbs = grossProfit != null && adSpend != null
+        ? +(grossProfit - adSpend - shippingCost - paymentFee).toFixed(0)
+        : null;
       const contributionMarginPct = contributionMarginAbs != null && revenue > 0
         ? +(contributionMarginAbs / revenue * 100).toFixed(1) : null;
       // Refund rate per market
@@ -2276,6 +2287,8 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
         grossMargin: grossMarginPct,
         contributionMargin: contributionMarginPct,
         contributionMarginAbs,
+        shippingCost,
+        paymentFee,
         refundRate,
         revDeltaPct,
         roas: tw?.roas ?? null,
