@@ -647,7 +647,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null, manualData = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   const [showRevProfitChart, setShowRevProfitChart] = useState(false);
