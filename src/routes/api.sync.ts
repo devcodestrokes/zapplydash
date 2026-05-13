@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   fetchShopifyMarkets,
   fetchTripleWhale,
+  fetchJuoForRange,
+  fetchLoopForRange,
 } from "@/server/fetchers.server";
 import { runAllInBackground } from "@/server/sync.server";
 import { verifyAllowedUser } from "@/server/user-auth.server";
@@ -27,9 +29,11 @@ export const Route = createFileRoute("/api/sync")({
         const isCustomRange = !!(fromDate && toDate);
 
         if (isCustomRange) {
-          const [shopifyMarkets, tripleWhale] = await Promise.allSettled([
+          const [shopifyMarkets, tripleWhale, juo, loop] = await Promise.allSettled([
             fetchShopifyMarkets(fromDate, toDate),
             fetchTripleWhale(fromDate, toDate),
+            fetchJuoForRange(fromDate!, toDate!),
+            fetchLoopForRange(fromDate!, toDate!),
           ]);
           return Response.json({
             ok: true,
@@ -40,6 +44,8 @@ export const Route = createFileRoute("/api/sync")({
                 shopifyMarkets.status === "fulfilled" ? shopifyMarkets.value : null,
               tripleWhale:
                 tripleWhale.status === "fulfilled" ? tripleWhale.value : null,
+              juo: juo.status === "fulfilled" ? juo.value : null,
+              loop: loop.status === "fulfilled" ? loop.value : null,
             },
           });
         }
