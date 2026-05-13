@@ -912,7 +912,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                             return (
                               <div key={m.code} className="flex items-center justify-between text-[12px]">
                                 <span className="flex items-center gap-1.5">
-                                  <span>{m.flag}</span>
+                                  <Flag code={m.code} size={14} />
                                   <span className="font-medium text-neutral-700">{m.code}</span>
                                 </span>
                                 <span className="text-right tabular-nums">
