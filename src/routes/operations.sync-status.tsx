@@ -214,6 +214,7 @@ function SyncStatusPage() {
   const [loopPending, setLoopPending] = useState<{ results: any[]; checkedAt: number } | null>(null);
   const [loopChecking, setLoopChecking] = useState(false);
   const [loopSyncing, setLoopSyncing] = useState(false);
+  const [loopProgress, setLoopProgress] = useState<Record<string, { page: number; total: number; done: boolean; status: string; error?: string } | null>>({ UK: null, US: null });
 
   const load = async () => {
     setRefreshing(true);
@@ -250,17 +251,50 @@ function SyncStatusPage() {
     }
   };
 
+  // Resumable full sync: drives both markets to completion via repeated chunk
+  // calls. Each chunk fetches up to 25 pages with the 1.5 s gap (2 req / 3 s)
+  // and persists progress in loop_sync_state, so the loop survives a refresh.
   const fullSyncLoop = async () => {
     setLoopSyncing(true);
+    setLoopProgress({ UK: null, US: null });
     try {
-      await triggerLoopFullSync();
-      const ld = await getLoopStoreStatus();
-      setLoopDb(ld as any);
+      const markets: Array<"UK" | "US"> = ["UK", "US"];
+      const doneMap: Record<string, boolean> = { UK: false, US: false };
+      // First call: reset both
+      let firstPass = true;
+      // Drive both markets in parallel with bounded iterations.
+      for (let i = 0; i < 200; i++) {
+        if (doneMap.UK && doneMap.US) break;
+        const calls = markets.map(async (m) => {
+          if (doneMap[m]) return null;
+          const res: any = await runLoopSyncChunk({ data: { market: m, reset: firstPass } });
+          doneMap[m] = !!res.allDone;
+          // pick the currently-active status to show
+          const entries = Object.entries(res.perStatus ?? {}) as Array<[string, any]>;
+          const active = entries.find(([, v]) => !v.done) ?? entries[entries.length - 1];
+          setLoopProgress((p) => ({
+            ...p,
+            [m]: active
+              ? { status: active[0], page: active[1].page, total: active[1].total, done: !!res.allDone, error: res.lastError }
+              : { status: "—", page: 0, total: 0, done: !!res.allDone, error: res.lastError },
+          }));
+          // Refresh DB counts after each chunk
+          try {
+            const ld = await getLoopStoreStatus();
+            setLoopDb(ld as any);
+          } catch {}
+          if (res.lastError) doneMap[m] = true; // stop looping on error
+          return res;
+        });
+        await Promise.all(calls);
+        firstPass = false;
+      }
       setLoopPending(null);
     } finally {
       setLoopSyncing(false);
     }
   };
+
 
   const syncConnector = async (id: string) => {
     setRefreshing(true);
