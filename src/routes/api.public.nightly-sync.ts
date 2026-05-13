@@ -35,6 +35,7 @@ export const Route = createFileRoute("/api/public/nightly-sync")({
           finishedAt: new Date().toISOString(),
           orders,
           subscriptions: subs,
+          loop,
           message: hasMore
             ? "Stored this chunk. Run the endpoint again until hasMore is false for every store."
             : "Order sync is caught up; subscription snapshots and dashboard cache refresh started.",
