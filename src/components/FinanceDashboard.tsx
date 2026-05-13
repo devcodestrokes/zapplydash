@@ -1035,14 +1035,31 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
           delta: prevDeltas.cm,
           deltaInverse: false,
         },
-        {
-          icon: Wallet,
-          label: "OpEx",
-          value: opex != null ? `€${Math.round(opex).toLocaleString()}` : "—",
-          sub: opex != null ? "Team + Software + Agencies + Content" : "Connect Jortt",
-          delta: prevDeltas.opex,
-          deltaInverse: true, // higher OpEx = bad
-        },
+        (() => {
+          const days = Math.max(
+            1,
+            Math.round(
+              (new Date(dateRange.to + "T00:00:00").getTime() -
+                new Date(dateRange.from + "T00:00:00").getTime()) /
+                86400000,
+            ) + 1,
+          );
+          const dailyOpex = opex != null ? opex / days : null;
+          const prevDailyDelta = (() => {
+            if (prevDeltas.opex == null) return null;
+            return prevDeltas.opex; // % change is the same per-day vs total
+          })();
+          return {
+            icon: Wallet,
+            label: "OpEx / day",
+            value: dailyOpex != null ? `€${Math.round(dailyOpex).toLocaleString()}` : "—",
+            sub: opex != null
+              ? `€${Math.round(opex).toLocaleString()} over ${days}d · Team + Software + Agencies + Content`
+              : "Connect Jortt",
+            delta: prevDailyDelta,
+            deltaInverse: true, // higher OpEx = bad
+          };
+        })(),
         {
           icon: TrendingUp,
           label: "EBITDA",
