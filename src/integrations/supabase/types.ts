@@ -302,6 +302,198 @@ export type Database = {
         }
         Relationships: []
       }
+      UK_loop: {
+        Row: {
+          attributes: Json | null
+          billing_policy: Json | null
+          cancellation_comment: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          completed_orders_count: number | null
+          created_at: string | null
+          currency_code: string | null
+          delivery_method: Json | null
+          delivery_policy: Json | null
+          delivery_price: number | null
+          id: number
+          is_marked_for_cancellation: boolean | null
+          is_prepaid: boolean | null
+          last_inventory_action: string | null
+          last_payment_status: string | null
+          lines: Json | null
+          next_billing_date_epoch: number | null
+          order_note: string | null
+          origin_order_shopify_id: number | null
+          paused_at: string | null
+          raw: Json
+          shipping_address: Json | null
+          shopify_id: number | null
+          status: string | null
+          synced_at: string
+          total_line_item_discounted_price: number | null
+          total_line_item_price: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          attributes?: Json | null
+          billing_policy?: Json | null
+          cancellation_comment?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_orders_count?: number | null
+          created_at?: string | null
+          currency_code?: string | null
+          delivery_method?: Json | null
+          delivery_policy?: Json | null
+          delivery_price?: number | null
+          id: number
+          is_marked_for_cancellation?: boolean | null
+          is_prepaid?: boolean | null
+          last_inventory_action?: string | null
+          last_payment_status?: string | null
+          lines?: Json | null
+          next_billing_date_epoch?: number | null
+          order_note?: string | null
+          origin_order_shopify_id?: number | null
+          paused_at?: string | null
+          raw: Json
+          shipping_address?: Json | null
+          shopify_id?: number | null
+          status?: string | null
+          synced_at?: string
+          total_line_item_discounted_price?: number | null
+          total_line_item_price?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          attributes?: Json | null
+          billing_policy?: Json | null
+          cancellation_comment?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_orders_count?: number | null
+          created_at?: string | null
+          currency_code?: string | null
+          delivery_method?: Json | null
+          delivery_policy?: Json | null
+          delivery_price?: number | null
+          id?: number
+          is_marked_for_cancellation?: boolean | null
+          is_prepaid?: boolean | null
+          last_inventory_action?: string | null
+          last_payment_status?: string | null
+          lines?: Json | null
+          next_billing_date_epoch?: number | null
+          order_note?: string | null
+          origin_order_shopify_id?: number | null
+          paused_at?: string | null
+          raw?: Json
+          shipping_address?: Json | null
+          shopify_id?: number | null
+          status?: string | null
+          synced_at?: string
+          total_line_item_discounted_price?: number | null
+          total_line_item_price?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      US_loop: {
+        Row: {
+          attributes: Json | null
+          billing_policy: Json | null
+          cancellation_comment: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          completed_orders_count: number | null
+          created_at: string | null
+          currency_code: string | null
+          delivery_method: Json | null
+          delivery_policy: Json | null
+          delivery_price: number | null
+          id: number
+          is_marked_for_cancellation: boolean | null
+          is_prepaid: boolean | null
+          last_inventory_action: string | null
+          last_payment_status: string | null
+          lines: Json | null
+          next_billing_date_epoch: number | null
+          order_note: string | null
+          origin_order_shopify_id: number | null
+          paused_at: string | null
+          raw: Json
+          shipping_address: Json | null
+          shopify_id: number | null
+          status: string | null
+          synced_at: string
+          total_line_item_discounted_price: number | null
+          total_line_item_price: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          attributes?: Json | null
+          billing_policy?: Json | null
+          cancellation_comment?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_orders_count?: number | null
+          created_at?: string | null
+          currency_code?: string | null
+          delivery_method?: Json | null
+          delivery_policy?: Json | null
+          delivery_price?: number | null
+          id: number
+          is_marked_for_cancellation?: boolean | null
+          is_prepaid?: boolean | null
+          last_inventory_action?: string | null
+          last_payment_status?: string | null
+          lines?: Json | null
+          next_billing_date_epoch?: number | null
+          order_note?: string | null
+          origin_order_shopify_id?: number | null
+          paused_at?: string | null
+          raw: Json
+          shipping_address?: Json | null
+          shopify_id?: number | null
+          status?: string | null
+          synced_at?: string
+          total_line_item_discounted_price?: number | null
+          total_line_item_price?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          attributes?: Json | null
+          billing_policy?: Json | null
+          cancellation_comment?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          completed_orders_count?: number | null
+          created_at?: string | null
+          currency_code?: string | null
+          delivery_method?: Json | null
+          delivery_policy?: Json | null
+          delivery_price?: number | null
+          id?: number
+          is_marked_for_cancellation?: boolean | null
+          is_prepaid?: boolean | null
+          last_inventory_action?: string | null
+          last_payment_status?: string | null
+          lines?: Json | null
+          next_billing_date_epoch?: number | null
+          order_note?: string | null
+          origin_order_shopify_id?: number | null
+          paused_at?: string | null
+          raw?: Json
+          shipping_address?: Json | null
+          shopify_id?: number | null
+          status?: string | null
+          synced_at?: string
+          total_line_item_discounted_price?: number | null
+          total_line_item_price?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
