@@ -1551,6 +1551,42 @@ export function getXeroLastTokenError() {
   return __xeroLastTokenError;
 }
 
+let __xeroTokenRefreshInFlight: Promise<string | null> | null = null;
+
+function xeroTokenValidUntil(row: any, bufferMs = 2 * 60 * 1000) {
+  const exp = row?.expires_at ? new Date(row.expires_at).getTime() : 0;
+  return Number.isFinite(exp) && exp > Date.now() + bufferMs;
+}
+
+async function readXeroTokenRow() {
+  const { data, error } = await serviceClient()
+    .from("integrations")
+    .select("access_token, refresh_token, expires_at, metadata, updated_at")
+    .eq("provider", "xero")
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+function getStoredXeroRefreshToken(row: any) {
+  return row?.refresh_token ?? row?.metadata?.refresh_token ?? null;
+}
+
+async function useNewerXeroTokenIfAvailable(attemptedRefreshToken: string) {
+  const latest = await readXeroTokenRow();
+  const latestRefreshToken = getStoredXeroRefreshToken(latest);
+  if (
+    latest?.access_token &&
+    latestRefreshToken &&
+    latestRefreshToken !== attemptedRefreshToken &&
+    xeroTokenValidUntil(latest)
+  ) {
+    console.warn("Xero refresh token was already rotated by another request; using the latest stored access token.");
+    return latest.access_token as string;
+  }
+  return null;
+}
+
 async function getXeroToken(): Promise<string | null> {
   __xeroLastTokenError = null;
   const clientId = process.env.XERO_CLIENT_ID;
@@ -1567,17 +1603,7 @@ async function getXeroToken(): Promise<string | null> {
   // Load stored row from Supabase
   let row: any = null;
   try {
-    const { data, error } = await serviceClient()
-      .from("integrations")
-      .select("access_token, refresh_token, expires_at, metadata")
-      .eq("provider", "xero")
-      .single();
-    if (error) {
-      __xeroLastTokenError = `Could not read Xero token from integrations: ${error.message}`;
-      console.error("Xero token lookup failed:", error.message);
-      return null;
-    }
-    row = data;
+    row = await readXeroTokenRow();
   } catch (err: any) {
     __xeroLastTokenError = `Could not read Xero token from integrations: ${err?.message ?? String(err)}`;
     return null;
@@ -1590,13 +1616,12 @@ async function getXeroToken(): Promise<string | null> {
   }
 
   // Return cached access_token if still valid (2-min buffer)
-  const exp = row.expires_at ? new Date(row.expires_at).getTime() : 0;
-  if (row.access_token && exp > Date.now() + 2 * 60 * 1000) {
+  if (row.access_token && xeroTokenValidUntil(row)) {
     return row.access_token;
   }
 
   // Refresh using stored refresh_token
-  const refreshToken = row.refresh_token ?? row.metadata?.refresh_token;
+  const refreshToken = getStoredXeroRefreshToken(row);
   if (!refreshToken) {
     __xeroLastTokenError = `Access token expired at ${row.expires_at} and no refresh_token stored — must reconnect`;
     console.warn("Xero: access token expired and no refresh_token — reconnect via /api/auth/xero");
