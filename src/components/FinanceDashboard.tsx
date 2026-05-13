@@ -955,9 +955,8 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                   const eur = m.revenue ?? 0;
                   const pct = rangeRevenue > 0 ? (eur / rangeRevenue) * 100 : 0;
                   return (
-                    <div key={m.code} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px]">
-                      <span>{m.flag}</span>
-                      <span className="font-medium text-neutral-600">{m.code}</span>
+                    <div key={m.code} title={m.name ?? m.code} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px]">
+                      <span className="text-[14px] leading-none">{m.flag}</span>
                       <span className="font-semibold tabular-nums text-neutral-900">€{Math.round(eur).toLocaleString()}</span>
                       <span className="text-neutral-400 tabular-nums">{pct.toFixed(0)}%</span>
                     </div>
