@@ -888,13 +888,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             <div className="mt-3 flex items-baseline gap-4">
               {rangeRevenue !== null ? (
                 <>
-                  <div
-                    className="relative inline-block"
-                    onMouseEnter={() => setShowRevenueBreakdown(true)}
-                    onMouseLeave={() => setShowRevenueBreakdown(false)}
-                    onFocus={() => setShowRevenueBreakdown(true)}
-                    onBlur={() => setShowRevenueBreakdown(false)}
-                  >
+                  <div className="relative inline-block">
                     <span tabIndex={0} className="text-[44px] font-semibold tracking-tight tabular-nums leading-none cursor-help border-b border-dashed border-neutral-300 outline-none">
                       €{Math.round(rangeRevenue).toLocaleString()}
                     </span>
