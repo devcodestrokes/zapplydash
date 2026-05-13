@@ -232,6 +232,9 @@ export async function resetLoopState(market: Market) {
       done: false,
       total_fetched: 0,
       last_error: null,
+      retry_count: 0,
+      last_error_at: null,
+      last_success_at: null,
       started_at: new Date().toISOString(),
     });
   }
@@ -268,6 +271,9 @@ export async function syncLoopChunk(
         done: false,
         total_fetched: 0,
         last_error: null,
+        retry_count: 0,
+        last_error_at: null,
+        last_success_at: null,
         started_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
