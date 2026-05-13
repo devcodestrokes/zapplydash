@@ -127,6 +127,17 @@ function ManualDataPage() {
     });
     flash("Buffer saved");
   }
+  async function saveMarketCosts() {
+    const clean: Record<string, MarketCost> = {};
+    for (const code of MARKET_CODES) {
+      clean[code] = {
+        shippingPerOrder: Number(marketCosts[code]?.shippingPerOrder) || 0,
+        paymentFeePct: Number(marketCosts[code]?.paymentFeePct) || 0,
+      };
+    }
+    await setAppSetting({ data: { key: "market_costs", value: clean } });
+    flash("Market costs saved");
+  }
 
   return (
     <DashboardShell user={user} title="Manual data">
