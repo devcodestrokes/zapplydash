@@ -342,6 +342,8 @@ export async function syncLoopChunk(
       total += rows.length;
 
       if (!result.hasNextPage || rows.length === 0) {
+        const successAt = new Date().toISOString();
+        await resolveLoopError(market, status);
         await upsertState({
           market,
           status,
@@ -349,8 +351,11 @@ export async function syncLoopChunk(
           done: true,
           total_fetched: total,
           last_error: null,
+          retry_count: 0,
+          last_error_at: null,
+          last_success_at: successAt,
         });
-        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: true, last_error: null });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: true, last_error: null, retry_count: 0, last_error_at: null, last_success_at: successAt });
         break; // move to next status in this chunk
       }
       page++;
@@ -362,8 +367,9 @@ export async function syncLoopChunk(
         done: false,
         total_fetched: total,
         last_error: null,
+        last_error_at: null,
       });
-      stateMap.set(status, { ...st, page_no: page, total_fetched: total });
+      stateMap.set(status, { ...st, page_no: page, total_fetched: total, last_error: null, last_error_at: null });
     }
     if (pagesFetched >= maxPages || Date.now() - startedAt >= timeBudgetMs) break;
   }
@@ -374,6 +380,14 @@ export async function syncLoopChunk(
     perStatus[s] = { page: r.page_no, total: r.total_fetched, done: r.done };
   }
   const allDone = STATUSES.every((s) => stateMap.get(s)!.done);
+  await finishRun(run, {
+    total_fetched: Object.values(perStatus).reduce((sum, s) => sum + s.total, 0),
+    rows_upserted: rowsUpserted,
+    pages_fetched: pagesFetched,
+    outcome: lastError ? "error" : allDone ? "success" : "partial",
+    last_error: lastError ?? null,
+    per_status: perStatus,
+  });
   return { market, pagesFetched, rowsUpserted, perStatus, allDone, lastError };
 }
 
