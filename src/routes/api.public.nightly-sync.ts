@@ -23,6 +23,10 @@ export const Route = createFileRoute("/api/public/nightly-sync")({
         const orders = await syncAllShopifyOrders(pages);
         const hasMore = orders.some((store) => store.hasMore);
         const subs = hasMore ? [] : await snapshotSubscriptions();
+        const loop = hasMore ? [] : await syncAllLoop().catch((e) => {
+          console.error("[nightly-sync] syncAllLoop:", e);
+          return [{ error: e instanceof Error ? e.message : String(e) }];
+        });
         // Refresh expensive dashboard caches only after the order backfill is caught up.
         if (!hasMore) runAll().catch((e) => console.error("[nightly-sync] runAll:", e));
         return Response.json({
