@@ -124,6 +124,7 @@ function MarginPerMarketPage() {
             onDateChange={handleDateChange}
             rangeSyncing={rangeSyncing}
             shopifyMonthly={Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : null}
+            marketCosts={manualData?.settings?.market_costs ?? null}
           />
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800">
