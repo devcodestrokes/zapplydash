@@ -214,15 +214,26 @@ function SyncStatusPage() {
   const [loopPending, setLoopPending] = useState<{ results: any[]; checkedAt: number } | null>(null);
   const [loopChecking, setLoopChecking] = useState(false);
   const [loopSyncing, setLoopSyncing] = useState(false);
+  const [loopAdminError, setLoopAdminError] = useState<string | null>(null);
   const [loopProgress, setLoopProgress] = useState<Record<string, { page: number; total: number; done: boolean; status: string; error?: string } | null>>({ UK: null, US: null });
 
   const load = async () => {
     setRefreshing(true);
     try {
-      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
+      const [s, d, ld] = await Promise.all([
+        getSyncStatus(),
+        getDashboardData(),
+        getLoopStoreStatus().catch((err: any) => {
+          setLoopAdminError(err?.message ?? "Admin access required");
+          return null;
+        }),
+      ]);
       setStatus(s as any);
       setData(d);
-      setLoopDb(ld as any);
+      if (ld) {
+        setLoopAdminError(null);
+        setLoopDb(ld as any);
+      }
     } finally {
       setRefreshing(false);
     }
