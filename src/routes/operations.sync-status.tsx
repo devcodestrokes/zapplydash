@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Plug, AlertCircle, ChevronRight, LayoutGrid } from "lucide-react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getSyncStatus, getDashboardData, triggerSyncNow, triggerXeroSyncNow } from "@/server/dashboard.functions";
+import { getSyncStatus, getDashboardData, triggerSyncNow, triggerXeroSyncNow, getLoopStoreStatus, getLoopApiPendingCount, triggerLoopFullSync } from "@/server/dashboard.functions";
 
 export const Route = createFileRoute("/operations/sync-status")({
   head: () => ({ meta: [{ title: "Sync status — Zapply" }] }),
