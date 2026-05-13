@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
 import { getDashboardData } from "@/server/dashboard.functions";
+import { getManualDataSnapshot } from "@/server/manual-data.functions";
 import { MarketsView } from "@/components/FinanceDashboard.tsx";
 
 export const Route = createFileRoute("/pillars/margin-per-market")({
