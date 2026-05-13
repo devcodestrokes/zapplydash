@@ -1573,16 +1573,19 @@ function getStoredXeroRefreshToken(row: any) {
 }
 
 async function useNewerXeroTokenIfAvailable(attemptedRefreshToken: string) {
-  const latest = await readXeroTokenRow();
-  const latestRefreshToken = getStoredXeroRefreshToken(latest);
-  if (
-    latest?.access_token &&
-    latestRefreshToken &&
-    latestRefreshToken !== attemptedRefreshToken &&
-    xeroTokenValidUntil(latest)
-  ) {
-    console.warn("Xero refresh token was already rotated by another request; using the latest stored access token.");
-    return latest.access_token as string;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const latest = await readXeroTokenRow();
+    const latestRefreshToken = getStoredXeroRefreshToken(latest);
+    if (
+      latest?.access_token &&
+      latestRefreshToken &&
+      latestRefreshToken !== attemptedRefreshToken &&
+      xeroTokenValidUntil(latest)
+    ) {
+      console.warn("Xero refresh token was already rotated by another request; using the latest stored access token.");
+      return latest.access_token as string;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
   }
   return null;
 }
