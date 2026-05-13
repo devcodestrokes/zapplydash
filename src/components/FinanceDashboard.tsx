@@ -648,7 +648,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null, manualData = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData: subDataProp = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null, manualData = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   const [showRevProfitChart, setShowRevProfitChart] = useState(false);
@@ -659,6 +659,16 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const effectiveTWData  = Array.isArray(rangeData?.tripleWhale)
     ? rangeData.tripleWhale.filter(m => m?.live)
     : twData;
+
+  // Subscriptions: when a custom range is synced, use range-aware subs (MRR/active
+  // as of `to`, new/churned in [from, to]); otherwise fall back to live snapshot.
+  const rangeSubs = (() => {
+    const juo = Array.isArray(rangeData?.juo) ? rangeData.juo.filter((m: any) => m?.live) : [];
+    const loop = Array.isArray(rangeData?.loop) ? rangeData.loop.filter((m: any) => m?.live) : [];
+    const merged = [...juo, ...loop];
+    return merged.length ? merged : null;
+  })();
+  const subData = rangeSubs ?? subDataProp;
 
   // Is the selected range the current month?
   const isCurrentMonth = useMemo(() => {
