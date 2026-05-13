@@ -648,7 +648,7 @@ const TodaysProfitCard = ({ metrics, chartsReady }: any) => {
    VIEW: OVERVIEW
    ========================================================================= */
 
-export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null, manualData = null }: any) => {
+export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twData = [], subData: subDataProp = [], shopifyMonthly = null, jorttData = null, rangeData = null, rangeSyncing = false, shopifyDaily = null, tripleWhaleDaily = null, tripleWhaleCustomerEconomics = null, shopifyRepeatFunnel = null, sourceStatus = null, manualData = null }: any) => {
   const [chartsReady, setChartsReady] = useState(false);
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState(false);
   const [showRevProfitChart, setShowRevProfitChart] = useState(false);
@@ -659,6 +659,16 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
   const effectiveTWData  = Array.isArray(rangeData?.tripleWhale)
     ? rangeData.tripleWhale.filter(m => m?.live)
     : twData;
+
+  // Subscriptions: when a custom range is synced, use range-aware subs (MRR/active
+  // as of `to`, new/churned in [from, to]); otherwise fall back to live snapshot.
+  const rangeSubs = (() => {
+    const juo = Array.isArray(rangeData?.juo) ? rangeData.juo.filter((m: any) => m?.live) : [];
+    const loop = Array.isArray(rangeData?.loop) ? rangeData.loop.filter((m: any) => m?.live) : [];
+    const merged = [...juo, ...loop];
+    return merged.length ? merged : null;
+  })();
+  const subData = rangeSubs ?? subDataProp;
 
   // Is the selected range the current month?
   const isCurrentMonth = useMemo(() => {
@@ -1568,7 +1578,7 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
             <div className="border-t border-neutral-100 pt-5 md:border-t-0 md:pt-0">
               <div className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">Churn rate</div>
               <div className="mt-1 text-[26px] font-semibold tabular-nums leading-none">{blendedChurn !== null ? `${blendedChurn.toFixed(1)}%` : "—"}</div>
-              <div className="mt-1 text-[11px] text-neutral-400">{totalChurned > 0 ? `${totalChurned} lost this month` : "No churn this month"}</div>
+              <div className="mt-1 text-[11px] text-neutral-400">{totalChurned > 0 ? `${totalChurned} lost ${rangeSubs ? "in range" : "this month"}` : `No churn ${rangeSubs ? "in range" : "this month"}`}</div>
             </div>
             {(() => {
               const f: any = shopifyRepeatFunnel;
