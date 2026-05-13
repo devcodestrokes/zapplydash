@@ -1518,17 +1518,12 @@ async function fetchLoopStore(market: string, flag: string, key: string) {
   };
 }
 
+import { fetchLoopFromDb, fetchLoopFromDbForRange } from "./loop-db.server";
+
 async function _fetchLoop() {
-  // Each market has its own API key → its own rate-limit bucket → safe to run in parallel
-  const settled = await Promise.allSettled(
-    LOOP_STORES.map(({ market, flag, envKey }) => {
-      const key = process.env[envKey];
-      if (!key) return Promise.resolve(null);
-      return fetchLoopStore(market, flag, key);
-    }),
-  );
-  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null)).filter(Boolean);
-  return results.length > 0 ? results : null;
+  // Read from Supabase tables (UK_loop / US_loop) instead of hitting the Loop API.
+  const rows = await fetchLoopFromDb();
+  return rows;
 }
 
 // Raw exports — called by /api/sync which writes results to Supabase data_cache
