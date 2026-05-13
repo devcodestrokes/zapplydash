@@ -1631,24 +1631,28 @@ async function getXeroToken(): Promise<string | null> {
     return null;
   }
 
+  if (__xeroTokenRefreshInFlight) {
+    return await __xeroTokenRefreshInFlight;
+  }
+
   const refreshPromise = (async () => {
-  try {
-    const creds =
-      typeof Buffer !== "undefined"
-        ? Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
-        : btoa(`${clientId}:${clientSecret}`);
-    const res = await fetch("https://identity.xero.com/connect/token", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${creds}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-      }).toString(),
-      cache: "no-store",
-    });
+    try {
+      const creds =
+        typeof Buffer !== "undefined"
+          ? Buffer.from(`${clientId}:${clientSecret}`).toString("base64")
+          : btoa(`${clientId}:${clientSecret}`);
+      const res = await fetch("https://identity.xero.com/connect/token", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${creds}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+        }).toString(),
+        cache: "no-store",
+      });
 
     if (!res.ok) {
       const body = (await res.text()).slice(0, 300);
