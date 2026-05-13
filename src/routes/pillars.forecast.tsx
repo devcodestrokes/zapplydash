@@ -1502,3 +1502,116 @@ function GrowthPlan2026({ data }: { data: any }) {
     </>
   );
 }
+
+/* ============================= Per-store mini charts ============================= */
+const FLAGS: Record<string, string> = { NL: "🇳🇱", UK: "🇬🇧", GB: "🇬🇧", US: "🇺🇸", EU: "🇪🇺", DE: "🇩🇪" };
+
+function PerStoreMiniCharts({
+  shopifyMonthly,
+  momTrend,
+}: {
+  shopifyMonthly: any[];
+  momTrend: number;
+}) {
+  const series = useMemo(() => {
+    if (!Array.isArray(shopifyMonthly) || shopifyMonthly.length === 0) return [] as any[];
+    // Last 6 months chronologically
+    const sorted = [...shopifyMonthly]
+      .filter((m) => m?.month)
+      .sort((a, b) => String(a.month).localeCompare(String(b.month)))
+      .slice(-6);
+
+    const codes = new Set<string>();
+    for (const m of sorted) {
+      const bm = m?.byMarket ?? {};
+      for (const code of Object.keys(bm)) codes.add(code);
+    }
+
+    const growth = Math.max(-0.2, Math.min(0.2, momTrend || 0));
+
+    return Array.from(codes)
+      .filter((c) => c !== "DE")
+      .map((code) => {
+        const history = sorted.map((m) => ({
+          month: String(m.month),
+          revenue: Math.round(Number(m?.byMarket?.[code]?.revenue ?? 0)),
+          kind: "actual" as const,
+        }));
+        const last = history[history.length - 1]?.revenue ?? 0;
+        const projected = Array.from({ length: 3 }, (_, i) => ({
+          month: `+${i + 1}m`,
+          revenue: Math.round(last * Math.pow(1 + growth, i + 1)),
+          kind: "proj" as const,
+        }));
+        const total = history.reduce((s, h) => s + h.revenue, 0);
+        return { code, total, data: [...history, ...projected] };
+      })
+      .filter((s) => s.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [shopifyMonthly, momTrend]);
+
+  if (series.length === 0) return null;
+
+  return (
+    <div className="mt-5">
+      <div className="text-[12px] font-semibold text-neutral-700">Trend per store</div>
+      <div className="text-[11px] text-neutral-400">
+        Last 6 months actual + 3-month projection at {(momTrend * 100).toFixed(1)}% MoM
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {series.map((s) => {
+          const displayCode = s.code === "UK" ? "GB" : s.code;
+          return (
+            <div key={s.code} className="rounded-lg border border-neutral-100 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-neutral-700">
+                  <span>{FLAGS[s.code] ?? "🏳️"}</span>
+                  <span>{displayCode}</span>
+                </div>
+                <div className="text-[11px] tabular-nums text-neutral-500">
+                  €{Math.round(s.total / 1000)}k · 6mo
+                </div>
+              </div>
+              <div className="mt-2 h-[80px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={s.data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+                    <Tooltip
+                      contentStyle={{
+                        background: "white",
+                        border: "1px solid #e5e5e5",
+                        borderRadius: 6,
+                        fontSize: 11,
+                        padding: "4px 8px",
+                      }}
+                      formatter={(v: any) => `€${Number(v).toLocaleString()}`}
+                      labelFormatter={(l) => String(l)}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#171717"
+                      strokeWidth={1.75}
+                      dot={(props: any) => {
+                        const isProj = props.payload?.kind === "proj";
+                        return (
+                          <circle
+                            key={props.index}
+                            cx={props.cx}
+                            cy={props.cy}
+                            r={2}
+                            fill={isProj ? "#a78bfa" : "#171717"}
+                          />
+                        );
+                      }}
+                      strokeDasharray={undefined}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
