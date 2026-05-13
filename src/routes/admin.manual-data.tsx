@@ -44,11 +44,19 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   );
 }
 
+type MarketCost = { shippingPerOrder: number; paymentFeePct: number };
+const MARKET_CODES = ["NL", "UK", "US", "EU", "DE"] as const;
+const MARKET_FLAGS: Record<string, string> = { NL: "🇳🇱", UK: "🇬🇧", US: "🇺🇸", EU: "🇪🇺", DE: "🇩🇪" };
+const DEFAULT_MARKET_COSTS: Record<string, MarketCost> = Object.fromEntries(
+  MARKET_CODES.map((c) => [c, { shippingPerOrder: 0, paymentFeePct: 0 }]),
+);
+
 function ManualDataPage() {
   const { user } = useDashboardSession();
   const [cash, setCash] = useState<Cash[]>([]);
   const [inv, setInv] = useState<Inv[]>([]);
   const [minBuffer, setMinBuffer] = useState<number>(50000);
+  const [marketCosts, setMarketCosts] = useState<Record<string, MarketCost>>(DEFAULT_MARKET_COSTS);
   const [savingMsg, setSavingMsg] = useState<string>("");
 
   async function reload() {
@@ -61,6 +69,19 @@ function ManualDataPage() {
     setInv(i as any);
     if ((s as any)?.min_cash_buffer_eur?.amount != null) {
       setMinBuffer(Number((s as any).min_cash_buffer_eur.amount));
+    }
+    const mc = (s as any)?.market_costs;
+    if (mc && typeof mc === "object") {
+      const merged = { ...DEFAULT_MARKET_COSTS };
+      for (const code of MARKET_CODES) {
+        if (mc[code]) {
+          merged[code] = {
+            shippingPerOrder: Number(mc[code].shippingPerOrder ?? 0) || 0,
+            paymentFeePct: Number(mc[code].paymentFeePct ?? 0) || 0,
+          };
+        }
+      }
+      setMarketCosts(merged);
     }
   }
   useEffect(() => {
