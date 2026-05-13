@@ -2430,6 +2430,12 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
                       ) : <span className="text-neutral-400">—</span>}
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums text-neutral-600">{m.grossMargin != null ? `${m.grossMargin}%` : "—"}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">
+                      {m.shippingCost > 0 ? `€${m.shippingCost.toLocaleString()}` : <span className="text-neutral-400">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums text-neutral-600">
+                      {m.paymentFee > 0 ? `€${m.paymentFee.toLocaleString()}` : <span className="text-neutral-400">—</span>}
+                    </td>
                     <td className="px-3 py-3 text-right tabular-nums">
                       {m.contributionMargin != null ? (
                         <span className={m.contributionMargin >= 30 ? "text-emerald-600 font-medium" : m.contributionMargin >= 20 ? "text-neutral-900" : "text-amber-600 font-medium"}>
