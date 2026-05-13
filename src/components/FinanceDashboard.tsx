@@ -2476,7 +2476,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
           </table>
         </div>
         <div className="border-t border-neutral-100 px-5 py-3 text-[11px] text-neutral-400">
-          Shipping cost &amp; payment-fee per market not yet wired — these vary per region and need to be added per store. Refund rate uses Shopify gross-vs-net revenue.
+          Shipping (€/order) and payment-fee % per market are configured in <a href="/admin/manual-data" className="underline hover:text-neutral-700">Manual data</a>. Refund rate uses Shopify gross-vs-net revenue.
         </div>
       </Card>
 
