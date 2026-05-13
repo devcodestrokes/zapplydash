@@ -2966,15 +2966,15 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
         );
       })()}
 
-      {/* Trend chart */}
+      {/* Trend chart — compact */}
       <Card className="mt-3 p-5">
-        <div className="mb-4">
-          <div className="text-[13px] font-semibold">Revenue, profit & ad spend — trailing 6 months</div>
-          <div className="text-[12px] text-neutral-400">April is MTD and will update as month progresses</div>
+        <div className="mb-3">
+          <div className="text-[13px] font-semibold">Revenue, profit & ad spend — YTD by month</div>
+          <div className="text-[12px] text-neutral-400">Current month is MTD and updates as it progresses</div>
         </div>
-        <div className="h-[280px]">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
-            <ComposedChart data={activeMonths} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+        <div className="h-[220px]">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+            <ComposedChart data={activeMonths} margin={{ top: 8, right: 8, left: -10, bottom: 0 }} barGap={2} barCategoryGap="22%">
               <CartesianGrid stroke="#f4f4f5" vertical={false} />
               <XAxis dataKey="month" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `€${v / 1000}k`} />
@@ -2982,10 +2982,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
                 contentStyle={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, fontSize: 12 }}
                 formatter={(v) => `€${v.toLocaleString()}`}
               />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
-              <Bar dataKey="revenue" name="Revenue" fill="#171717" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              <Bar dataKey="adSpend" name="Ad spend" fill="#d4d4d8" radius={[4, 4, 0, 0]} maxBarSize={40} />
-              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 6 }} iconType="circle" />
+              <Bar dataKey="revenue" name="Revenue" fill="#171717" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="adSpend" name="Ad spend" fill="#d4d4d8" radius={[3, 3, 0, 0]} maxBarSize={28} />
+              <Line type="monotone" dataKey="netProfit" name="Net profit" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
