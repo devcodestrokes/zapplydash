@@ -1278,10 +1278,19 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
                 </table>
               </div>
             </Card>
+          ) : (
+            <Card className="p-5 border-dashed">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[13px] font-semibold">Cash positions</div>
+                <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">Manual</span>
+              </div>
+              <div className="text-[12px] text-neutral-500">No cash, receivables or payables added yet.</div>
+              <a href="/admin/manual-data" className="mt-2 inline-block text-[12px] font-medium text-blue-600 hover:underline">Add accounts →</a>
+            </Card>
           )}
 
           {/* Inventory positions */}
-          {inv.length > 0 && (
+          {inv.length > 0 ? (
             <Card className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div>
