@@ -210,13 +210,18 @@ function SyncStatusPage() {
   const [status, setStatus] = useState<{ sources: SourceRow[]; checkedAt: number } | null>(null);
   const [data, setData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loopDb, setLoopDb] = useState<{ stores: any[]; checkedAt: number } | null>(null);
+  const [loopPending, setLoopPending] = useState<{ results: any[]; checkedAt: number } | null>(null);
+  const [loopChecking, setLoopChecking] = useState(false);
+  const [loopSyncing, setLoopSyncing] = useState(false);
 
   const load = async () => {
     setRefreshing(true);
     try {
-      const [s, d] = await Promise.all([getSyncStatus(), getDashboardData()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
       setStatus(s as any);
       setData(d);
+      setLoopDb(ld as any);
     } finally {
       setRefreshing(false);
     }
@@ -226,11 +231,34 @@ function SyncStatusPage() {
     setRefreshing(true);
     try {
       await triggerSyncNow();
-      const [s, d] = await Promise.all([getSyncStatus(), getDashboardData()]);
+      const [s, d, ld] = await Promise.all([getSyncStatus(), getDashboardData(), getLoopStoreStatus()]);
       setStatus(s as any);
       setData(d);
+      setLoopDb(ld as any);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const checkLoopApi = async () => {
+    setLoopChecking(true);
+    try {
+      const r = await getLoopApiPendingCount();
+      setLoopPending(r as any);
+    } finally {
+      setLoopChecking(false);
+    }
+  };
+
+  const fullSyncLoop = async () => {
+    setLoopSyncing(true);
+    try {
+      await triggerLoopFullSync();
+      const ld = await getLoopStoreStatus();
+      setLoopDb(ld as any);
+      setLoopPending(null);
+    } finally {
+      setLoopSyncing(false);
     }
   };
 
