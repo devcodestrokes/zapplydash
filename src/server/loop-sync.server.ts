@@ -243,7 +243,7 @@ export async function resetLoopState(market: Market) {
 // ── Resumable chunk sync ──────────────────────────────────────────────────────
 export async function syncLoopChunk(
   market: Market,
-  opts: { maxPages?: number; timeBudgetMs?: number } = {},
+  opts: { maxPages?: number; timeBudgetMs?: number; runGroupId?: string } = {},
 ): Promise<{
   market: Market;
   pagesFetched: number;
@@ -259,6 +259,7 @@ export async function syncLoopChunk(
   const maxPages = opts.maxPages ?? 25;
   const timeBudgetMs = opts.timeBudgetMs ?? 45_000;
   const startedAt = Date.now();
+  const run = await createRun(market, opts.runGroupId);
 
   const stateMap = await loadStateMap(market);
   // Ensure rows exist for each status
@@ -299,6 +300,7 @@ export async function syncLoopChunk(
         result = await fetchPage(apiKey, status, page);
       } catch (err: any) {
         lastError = err?.message ?? String(err);
+        await recordLoopError(market, status, lastError);
         await upsertState({
           market,
           status,
@@ -306,7 +308,10 @@ export async function syncLoopChunk(
           done: false,
           total_fetched: total,
           last_error: lastError,
+          retry_count: (st.retry_count ?? 0) + 1,
+          last_error_at: new Date().toISOString(),
         });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: lastError, retry_count: (st.retry_count ?? 0) + 1, last_error_at: new Date().toISOString() });
         break outer;
       }
       pagesFetched++;
@@ -315,6 +320,7 @@ export async function syncLoopChunk(
         await upsertChunked(table, rows);
       } catch (err: any) {
         lastError = err?.message ?? String(err);
+        await recordLoopError(market, status, lastError);
         await upsertState({
           market,
           status,
@@ -322,7 +328,10 @@ export async function syncLoopChunk(
           done: false,
           total_fetched: total,
           last_error: lastError,
+          retry_count: (st.retry_count ?? 0) + 1,
+          last_error_at: new Date().toISOString(),
         });
+        stateMap.set(status, { ...st, page_no: page, total_fetched: total, done: false, last_error: lastError, retry_count: (st.retry_count ?? 0) + 1, last_error_at: new Date().toISOString() });
         break outer;
       }
       rowsUpserted += rows.length;
