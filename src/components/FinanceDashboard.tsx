@@ -2798,13 +2798,12 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
     const curMonth = now.getMonth(); // 0-based
     const yy = String(curYear).slice(-2);
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    // Build a lookup from incoming shopifyMonthly entries.
     const byKey = new Map<string, { revenue: number; refunds: number }>();
     for (const m of shopifyMonthly ?? []) {
       if (!m?.month) continue;
       byKey.set(String(m.month), { revenue: m.revenue ?? 0, refunds: m.refunds ?? 0 });
     }
-    const out = [];
+    const out: any[] = [];
     for (let i = 0; i <= curMonth; i++) {
       const label = `${monthNames[i]} '${yy}`;
       const entry = byKey.get(label) ?? { revenue: 0, refunds: 0 };
@@ -2818,7 +2817,9 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
         netProfit: Math.round(net * 0.12),
       });
     }
-    return out;
+    // Drop leading empty months so the chart isn't dominated by blank space.
+    const firstNonZero = out.findIndex((m) => m.revenue > 0);
+    return firstNonZero > 0 ? out.slice(firstNonZero) : out;
   }, [shopifyMonthly]);
   if (activeMonths.length === 0) {
     return (
