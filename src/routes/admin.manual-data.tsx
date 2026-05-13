@@ -215,6 +215,8 @@ function ManualDataPage() {
                     <option value="paypal">paypal</option>
                     <option value="shopify">shopify</option>
                     <option value="stripe">stripe</option>
+                    <option value="receivable">receivable</option>
+                    <option value="payable">payable</option>
                     <option value="other">other</option>
                   </select>
                   <select
