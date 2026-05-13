@@ -45,6 +45,7 @@ function MarginPerMarketPage() {
   const { user } = useDashboardSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [manualData, setManualData] = useState<any>(null);
 
   const [dateRange, setDateRange] = useState({ from: daysAgoStr(30), to: todayStr() });
   const [rangeData, setRangeData] = useState<any>(null);
@@ -55,6 +56,9 @@ function MarginPerMarketPage() {
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
+    getManualDataSnapshot()
+      .then((m) => alive && setManualData(m))
+      .catch(() => { if (alive) setManualData(null); });
     return () => { alive = false; };
   }, []);
 
