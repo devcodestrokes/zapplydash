@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireAllowedUser } from "./auth.middleware";
+import { requireAdminUser, requireAllowedUser } from "./auth.middleware";
 import { readCacheKeys, writeCache, ageMinutes, type CacheMap } from "./cache.server";
 import { refreshStaleInBackground, runAll } from "./sync.server";
 import {
@@ -360,17 +360,22 @@ export const triggerXeroSyncNow = createServerFn({ method: "POST" }).middleware(
 
 // ── Loop DB status / full sync ────────────────────────────────────────────────
 import { getLoopDbStatus, getLoopApiPending, fetchLoopFromDb } from "./loop-db.server";
-import { syncAllLoop, syncLoopChunk, resetLoopState, getLoopSyncState } from "./loop-sync.server";
+import { syncAllLoop, syncLoopChunk, resetLoopState, getLoopSyncState, getLoopSyncRuns, getLoopSyncErrors } from "./loop-sync.server";
 
 export const getLoopStoreStatus = createServerFn({ method: "GET" })
-  .middleware([requireAllowedUser])
+  .middleware([requireAdminUser])
   .handler(async () => {
-    const [stores, syncState] = await Promise.all([getLoopDbStatus(), getLoopSyncState()]);
-    return { stores, syncState, checkedAt: Date.now() };
+    const [stores, syncState, runs, errors] = await Promise.all([
+      getLoopDbStatus(),
+      getLoopSyncState(),
+      getLoopSyncRuns(24),
+      getLoopSyncErrors(),
+    ]);
+    return { stores, syncState, runs, errors, checkedAt: Date.now() };
   });
 
 export const getLoopApiPendingCount = createServerFn({ method: "POST" })
-  .middleware([requireAllowedUser])
+  .middleware([requireAdminUser])
   .handler(async () => {
     return { results: await getLoopApiPending(), checkedAt: Date.now() };
   });
@@ -378,7 +383,7 @@ export const getLoopApiPendingCount = createServerFn({ method: "POST" })
 // One resumable chunk for a single market. The UI calls this in a loop,
 // passing reset=true on the very first call to start fresh from page 1.
 export const runLoopSyncChunk = createServerFn({ method: "POST" })
-  .middleware([requireAllowedUser])
+  .middleware([requireAdminUser])
   .inputValidator((input: { market: "UK" | "US"; reset?: boolean }) => ({
     market: input.market === "UK" ? ("UK" as const) : ("US" as const),
     reset: !!input.reset,
@@ -398,7 +403,7 @@ export const runLoopSyncChunk = createServerFn({ method: "POST" })
   });
 
 export const triggerLoopFullSync = createServerFn({ method: "POST" })
-  .middleware([requireAllowedUser])
+  .middleware([requireAdminUser])
   .handler(async () => {
     const startedAt = new Date().toISOString();
     const sync = await syncAllLoop();
