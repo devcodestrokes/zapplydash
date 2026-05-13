@@ -7,6 +7,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
+import { resolveSupabasePublishableKey, resolveSupabaseUrl } from "./supabase-env.server";
 
 const ALLOWED_DOMAINS = ["zapply.nl", "codestrokes.com"];
 
@@ -20,8 +21,7 @@ function isPreviewHost(host: string): boolean {
   );
 }
 
-export const requireAllowedUser = createMiddleware({ type: "function" }).server(
-  async ({ next }) => {
+async function validateRequestUser(requireAdmin: boolean) {
     const request = getRequest();
     const host = request?.headers.get("host") ?? "";
     const origin = request?.headers.get("origin") ?? "";
@@ -29,11 +29,11 @@ export const requireAllowedUser = createMiddleware({ type: "function" }).server(
     // Preview/dev: skip auth entirely — used inside the Lovable editor iframe
     // where there's no real Supabase session.
     if (isPreviewHost(host) || isPreviewHost(origin)) {
-      return next();
+      return { preview: true, userId: null };
     }
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
+    const SUPABASE_URL = resolveSupabaseUrl();
+    const SUPABASE_PUBLISHABLE_KEY = resolveSupabasePublishableKey();
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
       throw new Response("Server misconfigured", { status: 500 });
     }
@@ -52,10 +52,32 @@ export const requireAllowedUser = createMiddleware({ type: "function" }).server(
       throw new Response("Unauthorized", { status: 401 });
     }
     const email = String((data.claims as any).email ?? "").toLowerCase();
+    const userId = String((data.claims as any).sub ?? "");
     const ok =
       email && ALLOWED_DOMAINS.some((d) => email.endsWith(`@${d}`));
     if (!ok) throw new Response("Forbidden", { status: 403 });
 
+    if (requireAdmin) {
+      const { data: isAdmin, error: roleError } = await supabase.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      });
+      if (roleError || !isAdmin) throw new Response("Admin access required", { status: 403 });
+    }
+
+    return { preview: false, userId };
+}
+
+export const requireAllowedUser = createMiddleware({ type: "function" }).server(
+  async ({ next }) => {
+    await validateRequestUser(false);
+    return next();
+  },
+);
+
+export const requireAdminUser = createMiddleware({ type: "function" }).server(
+  async ({ next }) => {
+    await validateRequestUser(true);
     return next();
   },
 );
