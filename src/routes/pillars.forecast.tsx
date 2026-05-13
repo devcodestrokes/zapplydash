@@ -520,6 +520,12 @@ function ForecastPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Per-store mini trend charts */}
+                <PerStoreMiniCharts
+                  shopifyMonthly={Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : []}
+                  momTrend={momTrend}
+                />
               </Card>
             )}
 
