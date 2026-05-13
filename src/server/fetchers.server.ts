@@ -1631,6 +1631,7 @@ async function getXeroToken(): Promise<string | null> {
     return null;
   }
 
+  const refreshPromise = (async () => {
   try {
     const creds =
       typeof Buffer !== "undefined"
@@ -1651,6 +1652,10 @@ async function getXeroToken(): Promise<string | null> {
 
     if (!res.ok) {
       const body = (await res.text()).slice(0, 300);
+      if (res.status === 400 && body.includes("invalid_grant")) {
+        const latestAccessToken = await useNewerXeroTokenIfAvailable(refreshToken);
+        if (latestAccessToken) return latestAccessToken;
+      }
       __xeroLastTokenError = `Token refresh failed (HTTP ${res.status}): ${body}`;
       console.error("Xero token refresh failed:", res.status, body);
       return null;
@@ -1687,6 +1692,14 @@ async function getXeroToken(): Promise<string | null> {
     __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
     console.error("Xero token refresh error:", err.message);
     return null;
+  }
+  })();
+
+  __xeroTokenRefreshInFlight = refreshPromise;
+  try {
+    return await refreshPromise;
+  } finally {
+    if (__xeroTokenRefreshInFlight === refreshPromise) __xeroTokenRefreshInFlight = null;
   }
 }
 
