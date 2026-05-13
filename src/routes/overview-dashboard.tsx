@@ -58,12 +58,16 @@ function OverviewPage() {
   const [dateRange, setDateRange] = useState({ from: daysAgoStr(7), to: todayStr() });
   const [rangeData, setRangeData] = useState<any>(null);
   const [rangeSyncing, setRangeSyncing] = useState(false);
+  const [manualData, setManualData] = useState<any>(null);
 
   useEffect(() => {
     let alive = true;
     getDashboardData()
       .then((d) => alive && setData(d))
       .finally(() => alive && setLoading(false));
+    getManualDataSnapshot()
+      .then((m) => alive && setManualData(m))
+      .catch(() => { if (alive) setManualData(null); });
     return () => { alive = false; };
   }, []);
 
