@@ -1654,52 +1654,52 @@ async function getXeroToken(): Promise<string | null> {
         cache: "no-store",
       });
 
-    if (!res.ok) {
-      const body = (await res.text()).slice(0, 300);
-      if (res.status === 400 && body.includes("invalid_grant")) {
-        const latestAccessToken = await useNewerXeroTokenIfAvailable(refreshToken);
-        if (latestAccessToken) return latestAccessToken;
+      if (!res.ok) {
+        const body = (await res.text()).slice(0, 300);
+        if (res.status === 400 && body.includes("invalid_grant")) {
+          const latestAccessToken = await useNewerXeroTokenIfAvailable(refreshToken);
+          if (latestAccessToken) return latestAccessToken;
+        }
+        __xeroLastTokenError = `Token refresh failed (HTTP ${res.status}): ${body}`;
+        console.error("Xero token refresh failed:", res.status, body);
+        return null;
       }
-      __xeroLastTokenError = `Token refresh failed (HTTP ${res.status}): ${body}`;
-      console.error("Xero token refresh failed:", res.status, body);
-      return null;
-    }
 
-    const { access_token, new_refresh, expires_in, refresh_token: rotated, scope } = await res.json();
-    const finalRefresh = rotated ?? new_refresh ?? refreshToken;
-    if (!access_token) {
-      __xeroLastTokenError = "Token refresh returned no access_token";
-      return null;
-    }
-    if (!rotated && !new_refresh) {
-      console.warn("Xero token refresh response did not include a rotated refresh token; keeping the previous stored token.");
-    }
+      const { access_token, new_refresh, expires_in, refresh_token: rotated, scope } = await res.json();
+      const finalRefresh = rotated ?? new_refresh ?? refreshToken;
+      if (!access_token) {
+        __xeroLastTokenError = "Token refresh returned no access_token";
+        return null;
+      }
+      if (!rotated && !new_refresh) {
+        console.warn("Xero token refresh response did not include a rotated refresh token; keeping the previous stored token.");
+      }
 
-    const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
-    const { error: updateError } = await serviceClient()
-      .from("integrations")
-      .upsert(
-        {
-          provider: "xero",
-          access_token,
-          refresh_token: finalRefresh,
-          expires_at: expiresAt,
-          updated_at: new Date().toISOString(),
-          metadata: { ...row.metadata, refresh_token: finalRefresh, refreshed_at: new Date().toISOString(), scope },
-        },
-        { onConflict: "provider" },
-      );
-    if (updateError) {
-      __xeroLastTokenError = `Token refreshed, but saving the rotated token failed: ${updateError.message}`;
-      console.error("Xero token save failed:", updateError.message);
+      const expiresAt = new Date(Date.now() + ((expires_in ?? 1800) - 60) * 1000).toISOString();
+      const { error: updateError } = await serviceClient()
+        .from("integrations")
+        .upsert(
+          {
+            provider: "xero",
+            access_token,
+            refresh_token: finalRefresh,
+            expires_at: expiresAt,
+            updated_at: new Date().toISOString(),
+            metadata: { ...row.metadata, refresh_token: finalRefresh, refreshed_at: new Date().toISOString(), scope },
+          },
+          { onConflict: "provider" },
+        );
+      if (updateError) {
+        __xeroLastTokenError = `Token refreshed, but saving the rotated token failed: ${updateError.message}`;
+        console.error("Xero token save failed:", updateError.message);
+        return null;
+      }
+      return access_token;
+    } catch (err: any) {
+      __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
+      console.error("Xero token refresh error:", err.message);
       return null;
     }
-    return access_token;
-  } catch (err: any) {
-    __xeroLastTokenError = `Token refresh exception: ${err?.message ?? String(err)}`;
-    console.error("Xero token refresh error:", err.message);
-    return null;
-  }
   })();
 
   __xeroTokenRefreshInFlight = refreshPromise;
