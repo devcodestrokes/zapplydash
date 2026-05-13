@@ -157,6 +157,7 @@ function OverviewPage() {
               return data?.shopifyRepeatFunnel?.calcVersion >= 6 ? data.shopifyRepeatFunnel : null;
             })()}
             sourceStatus={data?.sourceStatus ?? null}
+            manualData={manualData}
           />
           <div className="mt-10 text-center text-[11px] text-neutral-400">
             {data?.syncedAt ? `Synced · ${new Date(data.syncedAt).toLocaleString()}` : "No live sources connected"}
