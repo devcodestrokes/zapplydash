@@ -1191,7 +1191,6 @@ export const OverviewView = ({ dateRange, onDateChange, liveMarkets = null, twDa
     {(() => {
       const cash = Array.isArray(manualData?.cashPositions) ? manualData.cashPositions : [];
       const inv = Array.isArray(manualData?.inventoryPositions) ? manualData.inventoryPositions : [];
-      if (cash.length === 0 && inv.length === 0) return null;
 
       const isReceivable = (t: string) => /receivable/i.test(t);
       const isPayable = (t: string) => /payable/i.test(t);
