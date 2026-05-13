@@ -26,6 +26,7 @@ import { Route as OperationsSyncStatusRouteImport } from './routes/operations.sy
 import { Route as OperationsReconciliationRouteImport } from './routes/operations.reconciliation'
 import { Route as AuthLogoutRouteImport } from './routes/auth.logout'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as ApiSyncLoopRouteImport } from './routes/api.sync-loop'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
 import { Route as ApiJorttRouteImport } from './routes/api.jortt'
 import { Route as AdminManualDataRouteImport } from './routes/admin.manual-data'
@@ -125,6 +126,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSyncLoopRoute = ApiSyncLoopRouteImport.update({
+  id: '/api/sync-loop',
+  path: '/api/sync-loop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
   id: '/api/sync',
   path: '/api/sync',
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
+  '/api/sync-loop': typeof ApiSyncLoopRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/operations/reconciliation': typeof OperationsReconciliationRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByTo {
   '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
+  '/api/sync-loop': typeof ApiSyncLoopRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/operations/reconciliation': typeof OperationsReconciliationRoute
@@ -261,6 +269,7 @@ export interface FileRoutesById {
   '/admin/manual-data': typeof AdminManualDataRoute
   '/api/jortt': typeof ApiJorttRouteWithChildren
   '/api/sync': typeof ApiSyncRoute
+  '/api/sync-loop': typeof ApiSyncLoopRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/logout': typeof AuthLogoutRoute
   '/operations/reconciliation': typeof OperationsReconciliationRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
+    | '/api/sync-loop'
     | '/auth/callback'
     | '/auth/logout'
     | '/operations/reconciliation'
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
+    | '/api/sync-loop'
     | '/auth/callback'
     | '/auth/logout'
     | '/operations/reconciliation'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/admin/manual-data'
     | '/api/jortt'
     | '/api/sync'
+    | '/api/sync-loop'
     | '/auth/callback'
     | '/auth/logout'
     | '/operations/reconciliation'
@@ -388,6 +400,7 @@ export interface RootRouteChildren {
   AdminManualDataRoute: typeof AdminManualDataRoute
   ApiJorttRoute: typeof ApiJorttRouteWithChildren
   ApiSyncRoute: typeof ApiSyncRoute
+  ApiSyncLoopRoute: typeof ApiSyncLoopRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthLogoutRoute: typeof AuthLogoutRoute
   OperationsReconciliationRoute: typeof OperationsReconciliationRoute
@@ -526,6 +539,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sync-loop': {
+      id: '/api/sync-loop'
+      path: '/api/sync-loop'
+      fullPath: '/api/sync-loop'
+      preLoaderRoute: typeof ApiSyncLoopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sync': {
       id: '/api/sync'
       path: '/api/sync'
@@ -651,6 +671,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminManualDataRoute: AdminManualDataRoute,
   ApiJorttRoute: ApiJorttRouteWithChildren,
   ApiSyncRoute: ApiSyncRoute,
+  ApiSyncLoopRoute: ApiSyncLoopRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthLogoutRoute: AuthLogoutRoute,
   OperationsReconciliationRoute: OperationsReconciliationRoute,
@@ -670,13 +691,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
