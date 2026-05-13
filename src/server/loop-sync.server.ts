@@ -105,8 +105,36 @@ type StateRow = {
   done: boolean;
   total_fetched: number;
   last_error: string | null;
+  retry_count: number;
+  last_error_at: string | null;
+  last_success_at: string | null;
   started_at: string;
   updated_at: string;
+};
+
+type LoopRunRow = {
+  id: string;
+  run_group_id: string;
+  market: string;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  total_fetched: number;
+  rows_upserted: number;
+  pages_fetched: number;
+  outcome: string;
+  last_error: string | null;
+  per_status: any;
+};
+
+type LoopErrorRow = {
+  market: string;
+  status: string;
+  last_error: string | null;
+  retry_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  resolved_at: string | null;
 };
 
 export async function getLoopSyncState(): Promise<StateRow[]> {
