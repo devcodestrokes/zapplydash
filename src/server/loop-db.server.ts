@@ -151,8 +151,8 @@ export async function getLoopDbStatus() {
       market: s.market,
       table: s.table,
       dbCount: count ?? 0,
-      lastSyncedAt: last?.[0]?.synced_at ?? null,
-      maxUpdatedAt: maxUpd?.[0]?.updated_at ?? null,
+      lastSyncedAt: (last?.[0] as any)?.synced_at ?? null,
+      maxUpdatedAt: (maxUpd?.[0] as any)?.updated_at ?? null,
       byStatus,
     });
   }
