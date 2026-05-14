@@ -4068,7 +4068,7 @@ async function fetchShopifyPaymentFeesPerStore(
 
   while (next && pages < 80) {
     pages++;
-    const res = await fetch(next, { headers });
+    const res: Response = await fetch(next, { headers });
     if (res.status === 404) return null; // not on Shopify Payments
     if (!res.ok) return null;
     const json: any = await res.json();
@@ -4079,8 +4079,8 @@ async function fetchShopifyPaymentFeesPerStore(
       if (t?.currency) currency = String(t.currency);
     }
     // Pagination via Link header
-    const link = res.headers.get("link") ?? res.headers.get("Link") ?? "";
-    const m = link.match(/<([^>]+)>;\s*rel="next"/);
+    const link: string = res.headers.get("link") ?? res.headers.get("Link") ?? "";
+    const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
     next = m ? m[1] : null;
   }
 
