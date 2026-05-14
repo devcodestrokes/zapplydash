@@ -2550,6 +2550,48 @@ export async function fetchXero() {
       };
       walk(rows);
 
+      // ── OpEx breakdown: scan expense Section detail rows per month ──────
+      const scanExpenseSections = (sections: any[]) => {
+        for (const section of sections ?? []) {
+          if (section.RowType !== "Section") continue;
+          const title = String(section.Title ?? "").toLowerCase();
+          const isExpenseSection =
+            title.includes("operating expense") ||
+            title.includes("less operating") ||
+            title.includes("overhead") ||
+            title.includes("administrative") ||
+            title.includes("cost of sales") ||
+            title.includes("cost of goods") ||
+            (title.includes("expense") && !title.includes("non-operating"));
+          if (isExpenseSection) {
+            for (const row of section.Rows ?? []) {
+              if (row.RowType !== "Row" || !Array.isArray(row.Cells) || row.Cells.length < 2) continue;
+              const accountName = String(row.Cells[0]?.Value ?? "").trim();
+              if (!accountName) continue;
+              const cat = bucketFromKeywords(accountName);
+              for (let i = 1; i < row.Cells.length; i++) {
+                if (i === ytdCol) continue;
+                const label = colLabels[i];
+                if (!label) continue;
+                const parsed = colLabelToMonth(label);
+                if (!parsed) continue;
+                const v = xNum(row.Cells[i]);
+                if (!Number.isFinite(v) || v === 0) continue;
+                const amt = Math.abs(v);
+                if (!opexBucketsX[parsed.mk]) {
+                  opexBucketsX[parsed.mk] = { ym: parsed.ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+                }
+                (opexBucketsX[parsed.mk] as any)[cat] += amt;
+                const itemKey = accountName.slice(0, 80);
+                opexDetailMapX[cat][itemKey] = (opexDetailMapX[cat][itemKey] ?? 0) + amt;
+              }
+            }
+          }
+          if (Array.isArray(section.Rows)) scanExpenseSections(section.Rows);
+        }
+      };
+      scanExpenseSections(rows);
+
       // Fallback for Xero P&L variants where the Section title is blank or
       // generic, but the row label carries the useful name (e.g. "Total Income",
       // "Sales", "Turnover"). Prefer total/summary rows to avoid double-counting.
