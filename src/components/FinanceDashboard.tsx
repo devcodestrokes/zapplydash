@@ -2789,7 +2789,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null, shippingByMonth = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   // Aggregate KPIs across ALL live markets (not just NL).
   const liveTWAll = (twData ?? []).filter((t: any) => t?.live);
