@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useDashboardSession } from "@/components/dashboard/useDashboardSession";
-import { getDashboardData } from "@/server/dashboard.functions";
+import { getDashboardData, triggerXeroSyncNow } from "@/server/dashboard.functions";
 import { MonthlyView } from "@/components/FinanceDashboard.tsx";
 
 export const Route = createFileRoute("/pillars/monthly-overview")({
