@@ -1121,7 +1121,10 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string, progr
         if (progressKey) markStore(progressKey, market, hasMetrics ? "done" : "error");
         if (!hasMetrics) return { market, flag, live: false };
 
-        return { ...row, live: true };
+        // Enrich with true shipping cost from Orcabase SQL endpoint.
+        const shippingCost = await fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey);
+
+        return { ...row, shippingCost, live: true };
       } catch (err: any) {
         console.error(`Triple Whale ${market}:`, err.message);
         if (progressKey) markStore(progressKey, market, "error");
