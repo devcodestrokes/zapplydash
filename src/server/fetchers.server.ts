@@ -2958,6 +2958,9 @@ export async function fetchXero() {
       expensesByMonth,
       grossProfitByMonth,
       netProfitByMonth,
+      // OpEx breakdown sourced from Xero P&L expense rows
+      opexByMonth,
+      opexDetail,
       ytdRevenue: ytdRevenue !== null ? Math.round(ytdRevenue) : null,
       ytdExpenses: ytdExpenses !== null ? Math.round(ytdExpenses) : null,
       ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,
