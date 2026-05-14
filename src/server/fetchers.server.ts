@@ -3380,6 +3380,8 @@ export async function fetchJortt() {
     revenueByMonth,
     expensesByMonth,
     opexByMonth,
+    interestByMonth,
+    taxByMonth,
     opexDetail,
     cashBalance,
     accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
