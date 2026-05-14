@@ -2311,6 +2311,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const revDeltaPct = prev && prev.revenue > 0 ? +((revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : null;
       return {
         ...m,
+        refunds,
         adSpend,
         grossMargin: grossMarginPct,
         contributionMargin: contributionMarginPct,
