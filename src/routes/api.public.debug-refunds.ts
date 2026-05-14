@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { fetchShopifyRefundsBreakdown } from "@/server/fetchers.server";
 
-// GET /api/debug/refunds?from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/public/debug-refunds?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Runs the ShopifyQL Analytics query
 //   FROM payments SHOW refunded_payments SINCE {from} UNTIL {to}
 // against every Shopify store and returns the raw native amount, EUR-converted
 // amount, currency, and any parse / HTTP errors per market.
-export const Route = createFileRoute("/api/debug/refunds")({
+export const Route = createFileRoute("/api/public/debug-refunds")({
   server: {
     handlers: {
       GET: async ({ request }) => {
