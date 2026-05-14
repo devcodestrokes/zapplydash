@@ -2418,6 +2418,15 @@ export async function fetchXero() {
     let ytdExpenses: number | null = null;
     let ytdNetProfit: number | null = null;
 
+    // OpEx breakdown buckets — populated below from P&L expense rows
+    const opexBucketsX: Record<
+      string,
+      { ym: string; team: number; agencies: number; content: number; software: number; rent: number; other: number }
+    > = {};
+    const opexDetailMapX: Record<string, Record<string, number>> = {
+      team: {}, agencies: {}, content: {}, software: {}, rent: {}, other: {},
+    };
+
     const plReport = plData?.Reports?.[0];
     if (plReport) {
       const rows: any[] = plReport.Rows ?? [];
@@ -2425,6 +2434,21 @@ export async function fetchXero() {
       // colLabels: ["", "Apr 25", "May 25", ..., "YTD"] OR just one period column
       const colLabels: string[] = (headerRow?.Cells ?? []).map((c: any) => String(c.Value ?? ""));
       const ytdCol = colLabels.findIndex((l) => /ytd/i.test(l));
+
+      // Convert Xero column header label like "Apr 25" → { mk:"Apr '25", ym:"2025-04" }
+      const MONTHS_MAP: Record<string, string> = {
+        jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",
+        jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12",
+      };
+      const colLabelToMonth = (label: string): { mk: string; ym: string } | null => {
+        const m = /^([A-Za-z]{3,9})\s+(\d{2}(?:\d{2})?)$/.exec(String(label).trim());
+        if (!m) return null;
+        const monAbbr = m[1].slice(0, 3);
+        const mm = MONTHS_MAP[monAbbr.toLowerCase()];
+        if (!mm) return null;
+        const yr = m[2].length === 2 ? m[2] : m[2].slice(2);
+        return { mk: `${monAbbr.charAt(0).toUpperCase() + monAbbr.slice(1).toLowerCase()} '${yr}`, ym: `20${yr}-${mm}` };
+      };
 
       const extractCols = (cells: any[]): { byMonth: Record<string, number>; ytd: number } => {
         const byMonth: Record<string, number> = {};
