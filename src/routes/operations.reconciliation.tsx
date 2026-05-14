@@ -50,13 +50,24 @@ function ReconciliationPage() {
     const refunds    = lastMonth?.refunds   != null ? -Math.abs(Number(lastMonth.refunds))   : null;
     const discounts  = lastMonth?.discounts != null ? -Math.abs(Number(lastMonth.discounts)) : null;
 
-    // Shopify payment processing: estimate ~2.9% of net (rev - refunds - discounts) when not provided.
+    // Shopify payment processing: prefer Jortt P&L "Fees" (Shopify/Mollie/Paypal Fees)
+    // when available — that's the actual booked cost. Fall back to Shopify's
+    // reported fees, then to a 2.9% estimate of net sales.
     const netSales = grossRev != null
       ? grossRev + (refunds ?? 0) + (discounts ?? 0)
       : null;
-    const paymentFees = lastMonth?.paymentFees != null
-      ? -Math.abs(Number(lastMonth.paymentFees))
-      : (netSales != null && netSales > 0 ? -Math.round(netSales * 0.029) : null);
+    const jorttPaymentFees = data?.jortt?.paymentFeesByMonth ?? null;
+    const jorttPaymentFeesLastYm = jorttPaymentFees
+      ? Object.keys(jorttPaymentFees).sort().pop() ?? null
+      : null;
+    const jorttPaymentFeesLast = jorttPaymentFeesLastYm
+      ? Number(jorttPaymentFees[jorttPaymentFeesLastYm]?.total ?? 0)
+      : 0;
+    const paymentFees = jorttPaymentFeesLast > 0
+      ? -Math.abs(jorttPaymentFeesLast)
+      : lastMonth?.paymentFees != null
+        ? -Math.abs(Number(lastMonth.paymentFees))
+        : (netSales != null && netSales > 0 ? -Math.round(netSales * 0.029) : null);
 
     // COGS — estimate via Triple Whale NL gross-profit ratio applied to net revenue
     // (mirrors the P&L table in FinanceDashboard). Fallback to a 0.54 GP ratio
@@ -120,7 +131,7 @@ function ReconciliationPage() {
       { label: "Refunds & returns",       source: "Shopify",      value: refunds,     tone: "neg" },
       { label: "Discounts applied",       source: "Shopify",      value: discounts,   tone: "neg" },
       { label: "Cost of Goods Sold",      source: "Triple Whale", value: cogs,        tone: "neg" },
-      { label: "Payment processing fees", source: "Shopify",      value: paymentFees, tone: "neg" },
+      { label: "Payment processing fees", source: jorttPaymentFeesLast > 0 ? "Jortt" : "Shopify", value: paymentFees, tone: "neg" },
       { label: "Shipping costs",          source: "Jortt",        value: shipping,    tone: "neg" },
       { label: "Ad spend",                source: "Triple Whale", value: adSpend,     tone: "neg" },
       { label: "Operational expenses",    source: "Jortt",        value: opex,        tone: "neg" },
