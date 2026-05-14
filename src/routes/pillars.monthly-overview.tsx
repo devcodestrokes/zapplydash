@@ -32,6 +32,27 @@ function MonthlyOverviewPage() {
   const { user } = useDashboardSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+
+  async function handleRetryXero() {
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      const res = await triggerXeroSyncNow();
+      if (res?.ok) {
+        const fresh = await getDashboardData();
+        setData(fresh);
+        setRetryMsg(null);
+      } else {
+        setRetryMsg(res?.error ?? "Xero sync failed");
+      }
+    } catch (err: any) {
+      setRetryMsg(err?.message ?? "Xero sync failed");
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
