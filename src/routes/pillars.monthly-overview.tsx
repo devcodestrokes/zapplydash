@@ -101,7 +101,36 @@ function MonthlyOverviewPage() {
 
   return (
     <DashboardShell user={user} title="Monthly Overview">
-      <div className="p-6">
+      <div className="p-6 space-y-4">
+        {xeroError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-[13px] text-red-800">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="font-semibold mb-1">Xero sync failed</div>
+                <div className="text-red-700/90 break-words">{xeroError}</div>
+                <div className="mt-2 text-red-700/80">
+                  {opexSource === "jortt"
+                    ? "OpEx is temporarily showing Jortt data as a fallback. Numbers may differ from your Xero P&L."
+                    : "OpEx cannot be displayed until Xero sync succeeds."}
+                </div>
+                {retryMsg && <div className="mt-2 text-red-700">Retry failed: {retryMsg}</div>}
+              </div>
+              <button
+                type="button"
+                onClick={handleRetryXero}
+                disabled={retrying}
+                className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 text-[12px] font-medium text-red-800 hover:bg-red-100 disabled:opacity-60"
+              >
+                {retrying ? "Retrying…" : "Retry Xero sync"}
+              </button>
+            </div>
+          </div>
+        )}
+        {!xeroError && opexSource === "jortt" && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+            OpEx is sourced from <strong>Jortt</strong> — Xero P&amp;L returned no OpEx data yet.
+          </div>
+        )}
         {(shopifyLive || jorttLive) ? (
           <MonthlyView
             opexByMonth={opexByMonth}
