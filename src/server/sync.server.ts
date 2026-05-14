@@ -12,6 +12,7 @@ import {
   fetchTripleWhaleCustomerEconomics,
   fetchTripleWhaleDaily,
   fetchTripleWhaleShippingMonthly,
+  fetchPaymentFeesMonthly,
   fetchJortt,
   fetchJuoRaw,
   fetchLoopRaw,
