@@ -2418,6 +2418,15 @@ export async function fetchXero() {
     let ytdExpenses: number | null = null;
     let ytdNetProfit: number | null = null;
 
+    // OpEx breakdown buckets — populated below from P&L expense rows
+    const opexBucketsX: Record<
+      string,
+      { ym: string; team: number; agencies: number; content: number; software: number; rent: number; other: number }
+    > = {};
+    const opexDetailMapX: Record<string, Record<string, number>> = {
+      team: {}, agencies: {}, content: {}, software: {}, rent: {}, other: {},
+    };
+
     const plReport = plData?.Reports?.[0];
     if (plReport) {
       const rows: any[] = plReport.Rows ?? [];
@@ -2425,6 +2434,21 @@ export async function fetchXero() {
       // colLabels: ["", "Apr 25", "May 25", ..., "YTD"] OR just one period column
       const colLabels: string[] = (headerRow?.Cells ?? []).map((c: any) => String(c.Value ?? ""));
       const ytdCol = colLabels.findIndex((l) => /ytd/i.test(l));
+
+      // Convert Xero column header label like "Apr 25" → { mk:"Apr '25", ym:"2025-04" }
+      const MONTHS_MAP: Record<string, string> = {
+        jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",
+        jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12",
+      };
+      const colLabelToMonth = (label: string): { mk: string; ym: string } | null => {
+        const m = /^([A-Za-z]{3,9})\s+(\d{2}(?:\d{2})?)$/.exec(String(label).trim());
+        if (!m) return null;
+        const monAbbr = m[1].slice(0, 3);
+        const mm = MONTHS_MAP[monAbbr.toLowerCase()];
+        if (!mm) return null;
+        const yr = m[2].length === 2 ? m[2] : m[2].slice(2);
+        return { mk: `${monAbbr.charAt(0).toUpperCase() + monAbbr.slice(1).toLowerCase()} '${yr}`, ym: `20${yr}-${mm}` };
+      };
 
       const extractCols = (cells: any[]): { byMonth: Record<string, number>; ytd: number } => {
         const byMonth: Record<string, number> = {};
@@ -2525,6 +2549,48 @@ export async function fetchXero() {
         }
       };
       walk(rows);
+
+      // ── OpEx breakdown: scan expense Section detail rows per month ──────
+      const scanExpenseSections = (sections: any[]) => {
+        for (const section of sections ?? []) {
+          if (section.RowType !== "Section") continue;
+          const title = String(section.Title ?? "").toLowerCase();
+          const isExpenseSection =
+            title.includes("operating expense") ||
+            title.includes("less operating") ||
+            title.includes("overhead") ||
+            title.includes("administrative") ||
+            title.includes("cost of sales") ||
+            title.includes("cost of goods") ||
+            (title.includes("expense") && !title.includes("non-operating"));
+          if (isExpenseSection) {
+            for (const row of section.Rows ?? []) {
+              if (row.RowType !== "Row" || !Array.isArray(row.Cells) || row.Cells.length < 2) continue;
+              const accountName = String(row.Cells[0]?.Value ?? "").trim();
+              if (!accountName) continue;
+              const cat = bucketFromKeywords(accountName);
+              for (let i = 1; i < row.Cells.length; i++) {
+                if (i === ytdCol) continue;
+                const label = colLabels[i];
+                if (!label) continue;
+                const parsed = colLabelToMonth(label);
+                if (!parsed) continue;
+                const v = xNum(row.Cells[i]);
+                if (!Number.isFinite(v) || v === 0) continue;
+                const amt = Math.abs(v);
+                if (!opexBucketsX[parsed.mk]) {
+                  opexBucketsX[parsed.mk] = { ym: parsed.ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+                }
+                (opexBucketsX[parsed.mk] as any)[cat] += amt;
+                const itemKey = accountName.slice(0, 80);
+                opexDetailMapX[cat][itemKey] = (opexDetailMapX[cat][itemKey] ?? 0) + amt;
+              }
+            }
+          }
+          if (Array.isArray(section.Rows)) scanExpenseSections(section.Rows);
+        }
+      };
+      scanExpenseSections(rows);
 
       // Fallback for Xero P&L variants where the Section title is blank or
       // generic, but the row label carries the useful name (e.g. "Total Income",
@@ -2847,6 +2913,32 @@ export async function fetchXero() {
       })),
     }));
 
+    // ── Finalize OpEx breakdown built from P&L expense rows ────────────────
+    const sortedOpexMonths = Object.keys(opexBucketsX).sort(
+      (a, b) => new Date(opexBucketsX[a].ym + "-01").getTime() - new Date(opexBucketsX[b].ym + "-01").getTime(),
+    );
+    const opexByMonth = sortedOpexMonths.map((m) => {
+      const b = opexBucketsX[m];
+      const total = b.team + b.agencies + b.content + b.software + b.rent + b.other;
+      return { month: m, ...b, total };
+    });
+    const opexCatLabels: Record<string, string> = {
+      team: "Team",
+      agencies: "Agencies",
+      content: "Content samenwerkingen",
+      software: "Software",
+      rent: "Rent & utilities",
+      other: "Other costs",
+    };
+    const opexDetail: Record<string, { label: string; items: Array<{ name: string; amount: number; source?: string }> }> = {};
+    for (const cat of Object.keys(opexDetailMapX)) {
+      const items = Object.entries(opexDetailMapX[cat])
+        .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100, source: "Xero" }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 25);
+      opexDetail[cat] = { label: opexCatLabels[cat] ?? cat, items };
+    }
+
     const live =
       Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
@@ -2866,6 +2958,9 @@ export async function fetchXero() {
       expensesByMonth,
       grossProfitByMonth,
       netProfitByMonth,
+      // OpEx breakdown sourced from Xero P&L expense rows
+      opexByMonth,
+      opexDetail,
       ytdRevenue: ytdRevenue !== null ? Math.round(ytdRevenue) : null,
       ytdExpenses: ytdExpenses !== null ? Math.round(ytdExpenses) : null,
       ytdNetProfit: ytdNetProfit !== null ? Math.round(ytdNetProfit) : null,

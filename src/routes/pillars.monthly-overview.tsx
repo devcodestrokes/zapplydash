@@ -50,9 +50,13 @@ function MonthlyOverviewPage() {
   }
 
   const jorttObj = data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error ? data.jortt : null;
-  const opexByMonth = Array.isArray(jorttObj?.opexByMonth) && jorttObj.opexByMonth.length > 0 ? jorttObj.opexByMonth : null;
-  const opexDetail = jorttObj?.opexDetail ?? null;
-  const jorttLive = !!(jorttObj?.live);
+  const xeroObj = data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error ? data.xero : null;
+  // OpEx is sourced from Xero P&L (preferred). Jortt remains a fallback only if Xero is unavailable.
+  const xeroOpexByMonth = Array.isArray(xeroObj?.opexByMonth) && xeroObj.opexByMonth.length > 0 ? xeroObj.opexByMonth : null;
+  const xeroOpexDetail = xeroObj?.opexDetail ?? null;
+  const opexByMonth = xeroOpexByMonth ?? (Array.isArray(jorttObj?.opexByMonth) && jorttObj.opexByMonth.length > 0 ? jorttObj.opexByMonth : null);
+  const opexDetail = xeroOpexDetail ?? jorttObj?.opexDetail ?? null;
+  const jorttLive = !!(jorttObj?.live) || !!(xeroObj?.live);
   const deniedScopes = Array.isArray(jorttObj?.deniedScopes) ? jorttObj.deniedScopes : [];
   const shopifyMonthly = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
   const twData = (Array.isArray(data?.tripleWhale) ? data.tripleWhale : []).filter((m: any) => m?.live);
