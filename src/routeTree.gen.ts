@@ -36,6 +36,7 @@ import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
 import { Route as ApiPublicNightlySyncRouteImport } from './routes/api.public.nightly-sync'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
+import { Route as ApiDebugRefundsRouteImport } from './routes/api.debug.refunds'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
 import { Route as ApiAuthJorttRouteImport } from './routes/api.auth.jortt'
 import { Route as ApiAuthXeroCallbackRouteImport } from './routes/api.auth.xero.callback'
@@ -176,6 +177,11 @@ const ApiJorttCallbackRoute = ApiJorttCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => ApiJorttRoute,
 } as any)
+const ApiDebugRefundsRoute = ApiDebugRefundsRouteImport.update({
+  id: '/api/debug/refunds',
+  path: '/api/debug/refunds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthXeroRoute = ApiAuthXeroRouteImport.update({
   id: '/api/auth/xero',
   path: '/api/auth/xero',
@@ -216,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
+  '/api/debug/refunds': typeof ApiDebugRefundsRoute
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
+  '/api/debug/refunds': typeof ApiDebugRefundsRoute
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
@@ -281,6 +289,7 @@ export interface FileRoutesById {
   '/pillars/monthly-overview': typeof PillarsMonthlyOverviewRoute
   '/api/auth/jortt': typeof ApiAuthJorttRoute
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
+  '/api/debug/refunds': typeof ApiDebugRefundsRoute
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
     | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
+    | '/api/debug/refunds'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/public/nightly-sync'
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
+    | '/api/debug/refunds'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/public/nightly-sync'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/pillars/monthly-overview'
     | '/api/auth/jortt'
     | '/api/auth/xero'
+    | '/api/debug/refunds'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
     | '/api/public/nightly-sync'
@@ -412,6 +424,7 @@ export interface RootRouteChildren {
   PillarsMonthlyOverviewRoute: typeof PillarsMonthlyOverviewRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
+  ApiDebugRefundsRoute: typeof ApiDebugRefundsRoute
   ApiPublicNightlySyncRoute: typeof ApiPublicNightlySyncRoute
   ApiPublicSyncRoute: typeof ApiPublicSyncRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
@@ -609,6 +622,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiJorttCallbackRouteImport
       parentRoute: typeof ApiJorttRoute
     }
+    '/api/debug/refunds': {
+      id: '/api/debug/refunds'
+      path: '/api/debug/refunds'
+      fullPath: '/api/debug/refunds'
+      preLoaderRoute: typeof ApiDebugRefundsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/xero': {
       id: '/api/auth/xero'
       path: '/api/auth/xero'
@@ -683,6 +703,7 @@ const rootRouteChildren: RootRouteChildren = {
   PillarsMonthlyOverviewRoute: PillarsMonthlyOverviewRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
+  ApiDebugRefundsRoute: ApiDebugRefundsRoute,
   ApiPublicNightlySyncRoute: ApiPublicNightlySyncRoute,
   ApiPublicSyncRoute: ApiPublicSyncRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
