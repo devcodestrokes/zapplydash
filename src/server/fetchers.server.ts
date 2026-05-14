@@ -3208,8 +3208,29 @@ export async function fetchJortt() {
     const ledgerName =
       ex.ledger_account_name ?? ledger?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
+    const haystack = `${desc} ${ledgerName}`.toLowerCase();
+    const ledgerCode = String(ledger?.code ?? ledger?.number ?? "").trim();
+    const ledgerNum = parseInt(ledgerCode, 10);
+
+    // Interest detection (rente / interest / 47xx financial range)
+    const isInterest =
+      /\brente\b|interest|rentekosten|rentelasten/i.test(haystack) ||
+      (Number.isFinite(ledgerNum) && ledgerNum >= 4700 && ledgerNum <= 4799);
+    // Tax detection (vennootschapsbelasting / corporate income tax)
+    const isTax =
+      /vennootschapsbelasting|corporate tax|income tax|inkomstenbelasting/i.test(haystack);
+
+    if (isInterest) {
+      interestByMonth[ym] = (interestByMonth[ym] ?? 0) + amount;
+      continue;
+    }
+    if (isTax) {
+      taxByMonth[ym] = (taxByMonth[ym] ?? 0) + amount;
+      continue;
+    }
+
     const cat: OpExCat =
-      bucketFromLedger(ledger) ?? bucketFromKeywords(`${desc} ${ledgerName}`);
+      bucketFromLedger(ledger) ?? bucketFromKeywords(haystack);
 
     if (!opexBuckets[mk])
       opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
