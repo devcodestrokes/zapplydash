@@ -183,6 +183,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     ["triplewhale", "summary"],
     ["triplewhale", "customer_economics"],
     ["triplewhale", "daily"],
+    ["triplewhale", "shipping_monthly"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
     ["subscription", "repeat_funnel"],
