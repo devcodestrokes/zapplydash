@@ -961,8 +961,8 @@ async function fetchShopifyRefundsForShop(
       return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
     }
     const r = json?.data?.shopifyqlQuery;
-    if (r?.__typename === "ParseError" || r?.parseErrors?.length) {
-      const msg = r?.parseErrors?.[0]?.message ?? "parse_error";
+    if (Array.isArray(r?.parseErrors) && r.parseErrors.length) {
+      const msg = String(r.parseErrors[0]);
       console.warn(`Shopify refunds ${market} parse: ${msg}`);
       return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
     }
