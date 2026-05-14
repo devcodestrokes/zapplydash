@@ -2913,6 +2913,32 @@ export async function fetchXero() {
       })),
     }));
 
+    // ── Finalize OpEx breakdown built from P&L expense rows ────────────────
+    const sortedOpexMonths = Object.keys(opexBucketsX).sort(
+      (a, b) => new Date(opexBucketsX[a].ym + "-01").getTime() - new Date(opexBucketsX[b].ym + "-01").getTime(),
+    );
+    const opexByMonth = sortedOpexMonths.map((m) => {
+      const b = opexBucketsX[m];
+      const total = b.team + b.agencies + b.content + b.software + b.rent + b.other;
+      return { month: m, ...b, total };
+    });
+    const opexCatLabels: Record<string, string> = {
+      team: "Team",
+      agencies: "Agencies",
+      content: "Content samenwerkingen",
+      software: "Software",
+      rent: "Rent & utilities",
+      other: "Other costs",
+    };
+    const opexDetail: Record<string, { label: string; items: Array<{ name: string; amount: number; source?: string }> }> = {};
+    for (const cat of Object.keys(opexDetailMapX)) {
+      const items = Object.entries(opexDetailMapX[cat])
+        .map(([name, amount]) => ({ name, amount: Math.round(amount * 100) / 100, source: "Xero" }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 25);
+      opexDetail[cat] = { label: opexCatLabels[cat] ?? cat, items };
+    }
+
     const live =
       Object.keys(revenueByMonth).length > 0 || totalAssets !== null || cashBalance !== null;
 
