@@ -2284,11 +2284,16 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const grossProfit = tw?.grossProfit ?? null;
       const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
 
-      // Per-market shipping & payment fees (configured in /admin/manual-data).
+      // Per-market shipping & payment fees.
+      // Prefer TRUE shipping cost from Triple Whale (orcabase SQL) when present;
+      // fall back to the per-order rate configured in /admin/manual-data.
       const mc = (marketCosts && marketCosts[m.code]) || null;
       const shippingPerOrder = mc ? Number(mc.shippingPerOrder) || 0 : 0;
       const paymentFeePct = mc ? Number(mc.paymentFeePct) || 0 : 0;
-      const shippingCost = +(orders * shippingPerOrder).toFixed(0);
+      const twShipping = tw && typeof tw.shippingCost === "number" ? tw.shippingCost : null;
+      const shippingCost = twShipping != null
+        ? +twShipping.toFixed(0)
+        : +(orders * shippingPerOrder).toFixed(0);
       const paymentFee = +(revenue * paymentFeePct / 100).toFixed(0);
 
       const contributionMarginAbs = grossProfit != null && adSpend != null
@@ -2784,7 +2789,7 @@ const OpExBreakdownSection = ({ opexByMonth: data = null, opexDetail: detail = n
    VIEW: PILLAR 3 — MONTHLY OVERVIEW
    ========================================================================= */
 
-export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null }: any = {}) => {
+export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpexDetail, jorttLive, shopifyMonthly, twData = [], shopifyRepeatFunnel = null, shippingByMonth = null }: any = {}) => {
   const nlTW = twData.find(t => t.market === "NL" && t.live);
   // Aggregate KPIs across ALL live markets (not just NL).
   const liveTWAll = (twData ?? []).filter((t: any) => t?.live);
@@ -2937,7 +2942,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
           const cogs = Math.round(revenue * (1 - gpRatio));
           const grossProfit = revenue - cogs;
           const adSpend = Math.round(revenue * 0.26);
-          const shipping = 0;
+          const shippingEntry = shippingByMonth && (shippingByMonth as any)[m.month];
+          const shipping = shippingEntry && typeof shippingEntry.total === "number"
+            ? Math.round(shippingEntry.total)
+            : 0;
           const fees = 0;
           const cm = grossProfit - adSpend - shipping - fees;
           const team = o.team ?? 0;
@@ -3934,7 +3942,7 @@ export default function FinanceDashboard({ user = null, liveData = null, connect
           {view === "metrics" && <MetricsView twData={twData} />}
           {view === "daily" && (shopifyLive ? <DailyPnLView dailyData={shopifyToday} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Daily P&L</strong> requires Shopify data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect Shopify</button> to view.</div>)}
           {view === "markets" && (activeMarkets ? <MarketsView liveMarkets={activeMarkets} twData={twData} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Margin per Market</strong> requires Shopify & Triple Whale data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect sources</button> to view.</div>)}
-          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} shopifyRepeatFunnel={safeRepeatFunnel} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
+          {view === "monthly" && ((shopifyLive || jorttLive) ? <MonthlyView opexByMonth={activeOpexByMonth} opexDetail={activeOpexDetail} jorttLive={jorttLive} shopifyMonthly={safeShopifyMonthly} twData={twData} shopifyRepeatFunnel={safeRepeatFunnel} shippingByMonth={liveData?.tripleWhaleShippingMonthly ?? null} /> : <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-[13px] text-amber-800"><strong>Monthly Overview</strong> requires Shopify or Jortt data. <button onClick={() => setView("sync")} className="underline text-amber-700 hover:text-amber-900">Connect a source</button> to view.</div>)}
           {view === "balance" && <BalanceView jorttData={jorttObj} xeroData={xeroObj} shopifyMarkets={activeMarkets} twData={twData} />}
           {view === "forecast" && <ForecastView jorttData={jorttObj} xeroData={xeroObj} shopifyMonthly={safeShopifyMonthly} />}
           {view === "reconciliation" && <ReconciliationView shopifyMarkets={activeMarkets} jorttData={jorttObj} />}

@@ -183,6 +183,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     ["triplewhale", "summary"],
     ["triplewhale", "customer_economics"],
     ["triplewhale", "daily"],
+    ["triplewhale", "shipping_monthly"],
     ["juo", "subscriptions"],
     ["loop", "subscriptions"],
     ["subscription", "repeat_funnel"],
@@ -207,6 +208,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   const tripleWhaleCache = get("triplewhale", "summary");
   const tripleWhaleCustomerEconomicsCache = get("triplewhale", "customer_economics");
   const tripleWhaleDailyCache = get("triplewhale", "daily");
+  const tripleWhaleShippingMonthlyCache = get("triplewhale", "shipping_monthly");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
   const subscriptionRepeatFunnelCache = get("subscription", "repeat_funnel");
@@ -300,6 +302,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     tripleWhale: tripleWhaleCache?.payload ?? null,
     tripleWhaleCustomerEconomics,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
+    tripleWhaleShippingMonthly: tripleWhaleShippingMonthlyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
     subscriptionRepeatFunnel: subscriptionRepeatFunnelCache?.payload ?? null,
