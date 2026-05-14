@@ -3147,6 +3147,9 @@ export async function fetchJortt() {
 
   // Expenses by month + OpEx breakdown from real expenses
   const expensesByMonth: Record<string, number> = {};
+  // Interest / Tax — separate buckets keyed by ISO month "YYYY-MM"
+  const interestByMonth: Record<string, number> = {};
+  const taxByMonth: Record<string, number> = {};
   // monthKey -> { team, agencies, content, software, other }
   const opexBuckets: Record<
     string,
