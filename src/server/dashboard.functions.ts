@@ -302,6 +302,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
     tripleWhale: tripleWhaleCache?.payload ?? null,
     tripleWhaleCustomerEconomics,
     tripleWhaleDaily: tripleWhaleDailyCache?.payload ?? null,
+    tripleWhaleShippingMonthly: tripleWhaleShippingMonthlyCache?.payload ?? null,
     juo: juoCache?.payload ?? null,
     loop: loopCache?.payload ?? null,
     subscriptionRepeatFunnel: subscriptionRepeatFunnelCache?.payload ?? null,
