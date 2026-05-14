@@ -34,6 +34,7 @@ import { Route as ApiShopifyInstallRouteImport } from './routes/api.shopify.inst
 import { Route as ApiShopifyCallbackRouteImport } from './routes/api.shopify.callback'
 import { Route as ApiPublicSyncRouteImport } from './routes/api.public.sync'
 import { Route as ApiPublicNightlySyncRouteImport } from './routes/api.public.nightly-sync'
+import { Route as ApiPublicDebugRefundsRouteImport } from './routes/api.public.debug-refunds'
 import { Route as ApiJorttConnectRouteImport } from './routes/api.jortt.connect'
 import { Route as ApiJorttCallbackRouteImport } from './routes/api.jortt.callback'
 import { Route as ApiAuthXeroRouteImport } from './routes/api.auth.xero'
@@ -166,6 +167,11 @@ const ApiPublicNightlySyncRoute = ApiPublicNightlySyncRouteImport.update({
   path: '/api/public/nightly-sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicDebugRefundsRoute = ApiPublicDebugRefundsRouteImport.update({
+  id: '/api/public/debug-refunds',
+  path: '/api/public/debug-refunds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiJorttConnectRoute = ApiJorttConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/debug-refunds': typeof ApiPublicDebugRefundsRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/debug-refunds': typeof ApiPublicDebugRefundsRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   '/api/auth/xero': typeof ApiAuthXeroRouteWithChildren
   '/api/jortt/callback': typeof ApiJorttCallbackRoute
   '/api/jortt/connect': typeof ApiJorttConnectRoute
+  '/api/public/debug-refunds': typeof ApiPublicDebugRefundsRoute
   '/api/public/nightly-sync': typeof ApiPublicNightlySyncRoute
   '/api/public/sync': typeof ApiPublicSyncRoute
   '/api/shopify/callback': typeof ApiShopifyCallbackRoute
@@ -317,6 +326,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/debug-refunds'
     | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
@@ -349,6 +359,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/debug-refunds'
     | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/api/auth/xero'
     | '/api/jortt/callback'
     | '/api/jortt/connect'
+    | '/api/public/debug-refunds'
     | '/api/public/nightly-sync'
     | '/api/public/sync'
     | '/api/shopify/callback'
@@ -412,6 +424,7 @@ export interface RootRouteChildren {
   PillarsMonthlyOverviewRoute: typeof PillarsMonthlyOverviewRoute
   ApiAuthJorttRoute: typeof ApiAuthJorttRoute
   ApiAuthXeroRoute: typeof ApiAuthXeroRouteWithChildren
+  ApiPublicDebugRefundsRoute: typeof ApiPublicDebugRefundsRoute
   ApiPublicNightlySyncRoute: typeof ApiPublicNightlySyncRoute
   ApiPublicSyncRoute: typeof ApiPublicSyncRoute
   ApiShopifyCallbackRoute: typeof ApiShopifyCallbackRoute
@@ -595,6 +608,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicNightlySyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/debug-refunds': {
+      id: '/api/public/debug-refunds'
+      path: '/api/public/debug-refunds'
+      fullPath: '/api/public/debug-refunds'
+      preLoaderRoute: typeof ApiPublicDebugRefundsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/jortt/connect': {
       id: '/api/jortt/connect'
       path: '/connect'
@@ -683,6 +703,7 @@ const rootRouteChildren: RootRouteChildren = {
   PillarsMonthlyOverviewRoute: PillarsMonthlyOverviewRoute,
   ApiAuthJorttRoute: ApiAuthJorttRoute,
   ApiAuthXeroRoute: ApiAuthXeroRouteWithChildren,
+  ApiPublicDebugRefundsRoute: ApiPublicDebugRefundsRoute,
   ApiPublicNightlySyncRoute: ApiPublicNightlySyncRoute,
   ApiPublicSyncRoute: ApiPublicSyncRoute,
   ApiShopifyCallbackRoute: ApiShopifyCallbackRoute,
@@ -691,3 +712,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

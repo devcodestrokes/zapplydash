@@ -911,68 +911,97 @@ async function fetchTripleWhaleShippingForShop(
   }
 }
 
-// ─── Triple Whale Orcabase SQL — refunded amount per shop ───────────────────
-// POST https://api.triplewhale.com/api/v2/orcabase/api/sql
-// Mirrors the ShopifyQL `FROM payments SHOW refunded_payments` query.
-// Triple Whale's `total_refunds` column on orders_table is already in EUR
-// (TW normalizes all monetary columns to the org's reporting currency).
+// ─── Shopify Admin GraphQL — ShopifyQL Analytics: refunded_payments ────────
+// Equivalent to the Triple Whale Moby query:
+//   FROM payments SHOW refunded_payments SINCE x UNTIL y
+// Endpoint: POST /admin/api/{version}/graphql.json
+// Field:    Query.shopifyqlQuery(query: String!): ShopifyqlResponse
+// Docs:     https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery
+//
+// Returned amount is in the shop's payout currency (NL=EUR, UK=GBP, US=USD).
+// Refunds in Shopify Analytics are negative numbers; we return the absolute
+// EUR-converted value so the UI can render it as a positive refund total.
+async function fetchShopifyRefundsForShop(
+  store: string,
+  market: string,
+  start: string,
+  end: string,
+): Promise<{ refunds: number | null; native: number | null; currency: string; raw?: any; error?: string }> {
+  const token = await getShopifyToken(store);
+  if (!token) return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: "no_token" };
+  const shopifyql = `FROM payments SHOW refunded_payments SINCE ${start} UNTIL ${end}`;
+  const gql = `query($q: String!) {
+    shopifyqlQuery(query: $q) {
+      __typename
+      ... on TableResponse {
+        tableData {
+          columns { name dataType displayName }
+          rowData
+        }
+      }
+      ... on ParseError {
+        parseErrors { code message }
+      }
+    }
+  }`;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15_000);
+    const res = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ query: gql, variables: { q: shopifyql } }),
+      signal: ctrl.signal,
+      cache: "no-store",
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn(`Shopify refunds ${market} ${res.status}: ${text.slice(0, 200)}`);
+      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: `http_${res.status}` };
+    }
+    const json: any = await res.json();
+    if (json.errors?.length) {
+      const msg = json.errors[0]?.message ?? "graphql_error";
+      console.warn(`Shopify refunds ${market} GQL: ${msg}`);
+      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
+    }
+    const r = json?.data?.shopifyqlQuery;
+    if (r?.__typename === "ParseError" || r?.parseErrors?.length) {
+      const msg = r?.parseErrors?.[0]?.message ?? "parse_error";
+      console.warn(`Shopify refunds ${market} parse: ${msg}`);
+      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
+    }
+    const rowData: any[] = r?.tableData?.rowData ?? [];
+    let nativeSum = 0;
+    for (const row of rowData) {
+      const cell = Array.isArray(row) ? row[row.length - 1] : row;
+      const n = toNumber(cell);
+      if (n != null) nativeSum += n;
+    }
+    const native = +Math.abs(nativeSum).toFixed(2);
+    const sourceCurrency = MARKET_CURRENCY[market] ?? "EUR";
+    const fxRate = await getEurRate(sourceCurrency, start, end);
+    const eur = +(native * fxRate).toFixed(2);
+    return { refunds: eur, native, currency: sourceCurrency, raw: rowData };
+  } catch (err: any) {
+    console.warn(`Shopify refunds ${market}:`, err?.message);
+    return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: err?.message ?? "exception" };
+  }
+}
+
+// Back-compat shim — TW row enrichment still calls this name.
 async function fetchTripleWhaleRefundsForShop(
   shop: string,
   market: string,
   start: string,
   end: string,
-  apiKey: string,
+  _apiKey: string,
 ): Promise<number | null> {
-  // Try multiple column names — TW's column is `total_refunds` for most shops
-  // but some accounts expose it as `refunds_amount` or `total_refund`.
-  const candidates = [
-    "SELECT SUM(total_refunds) AS refunds FROM orders_table WHERE platform = 'shopify'",
-    "SELECT SUM(refunds_amount) AS refunds FROM orders_table WHERE platform = 'shopify'",
-    "SELECT SUM(total_refund) AS refunds FROM orders_table WHERE platform = 'shopify'",
-  ];
-  for (const query of candidates) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 15_000);
-      const res = await fetch("https://api.triplewhale.com/api/v2/orcabase/api/sql", {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          period: { startDate: start, endDate: end },
-          shopId: shop,
-          query,
-        }),
-        signal: ctrl.signal,
-        cache: "no-store",
-      }).finally(() => clearTimeout(timer));
-      if (!res.ok) {
-        // 400 typically = unknown column → try next candidate
-        if (res.status === 400) continue;
-        console.warn(`TW refunds ${market} ${res.status}`);
-        return null;
-      }
-      const json: any = await res.json();
-      const rows: any[] =
-        (Array.isArray(json) ? json : null) ??
-        json?.data ?? json?.rows ?? json?.results ?? json?.result?.rows ?? [];
-      const first = rows[0];
-      if (!first) return 0;
-      const raw = first.refunds ?? first.REFUNDS ?? first[Object.keys(first)[0]];
-      const num = toNumber(raw);
-      if (num == null) return null;
-      // Refunds in Shopify are stored as positive amounts; TW returns them as
-      // positive numbers. Keep positive (UI subtracts where appropriate).
-      return +Math.abs(num).toFixed(2);
-    } catch (err: any) {
-      console.warn(`TW refunds ${market}:`, err?.message);
-    }
-  }
-  return null;
+  const r = await fetchShopifyRefundsForShop(shop, market, start, end);
+  return r.refunds;
 }
 
 export async function fetchTripleWhaleRefunds(start: string, end: string) {
-  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
-  if (!apiKey) return null;
   const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
     const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
     return shop ? { market, shop } : null;
@@ -980,7 +1009,25 @@ export async function fetchTripleWhaleRefunds(start: string, end: string) {
   const out: Record<string, number | null> = {};
   await Promise.all(
     planned.map(async ({ market, shop }) => {
-      out[market] = await fetchTripleWhaleRefundsForShop(shop, market, start, end, apiKey);
+      const r = await fetchShopifyRefundsForShop(shop, market, start, end);
+      out[market] = r.refunds;
+    }),
+  );
+  return out;
+}
+
+// Verbose variant — returns native amount, currency, and raw row data so the
+// debug endpoint can show exactly what Shopify ShopifyQL Analytics returned.
+export async function fetchShopifyRefundsBreakdown(start: string, end: string) {
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
+  const out: Record<string, any> = {};
+  await Promise.all(
+    planned.map(async ({ market, shop }) => {
+      const r = await fetchShopifyRefundsForShop(shop, market, start, end);
+      out[market] = { shop, ...r, query: `FROM payments SHOW refunded_payments SINCE ${start} UNTIL ${end}` };
     }),
   );
   return out;
