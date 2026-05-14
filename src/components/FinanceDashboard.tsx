@@ -2942,7 +2942,10 @@ export const MonthlyView = ({ opexByMonth: liveOpexByMonth, opexDetail: liveOpex
           const cogs = Math.round(revenue * (1 - gpRatio));
           const grossProfit = revenue - cogs;
           const adSpend = Math.round(revenue * 0.26);
-          const shipping = 0;
+          const shippingEntry = shippingByMonth && (shippingByMonth as any)[m.month];
+          const shipping = shippingEntry && typeof shippingEntry.total === "number"
+            ? Math.round(shippingEntry.total)
+            : 0;
           const fees = 0;
           const cm = grossProfit - adSpend - shipping - fees;
           const team = o.team ?? 0;
