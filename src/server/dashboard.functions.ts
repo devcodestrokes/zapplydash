@@ -350,7 +350,7 @@ export const triggerSyncNow = createServerFn({ method: "POST" }).middleware([req
 
 export const triggerXeroSyncNow = createServerFn({ method: "POST" }).middleware([requireAllowedUser]).handler(async () => {
   try {
-    const live = await withTimeout(fetchXero(), 90_000, "Xero sync");
+    const live = await withTimeout(fetchXero(), 180_000, "Xero sync");
     await writeCache("xero", "accounting", live);
     return { ok: true, finishedAt: new Date().toISOString(), error: null };
   } catch (err: any) {

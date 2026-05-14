@@ -2302,9 +2302,15 @@ export async function fetchXero() {
 
   // Helper: fetch + log status & body snippet on failure so we can diagnose
   // exactly which Xero endpoint rejects the request (scopes, params, etc).
+  // Per-call timeout so one slow Xero endpoint (Invoices/BankTx) doesn't
+  // starve the parallel batch — P&L (and therefore OpEx) must succeed even
+  // if a sibling endpoint hangs.
+  const XERO_PER_CALL_TIMEOUT_MS = 25_000;
   const xeroFetch = async (label: string, url: string) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), XERO_PER_CALL_TIMEOUT_MS);
     try {
-      const r = await fetch(url, { headers: h, cache: "no-store" });
+      const r = await fetch(url, { headers: h, cache: "no-store", signal: ctrl.signal });
       if (!r.ok) {
         const body = await r.text().catch(() => "");
         const detail = extractXeroError(body).slice(0, 300);
@@ -2314,10 +2320,15 @@ export async function fetchXero() {
       }
       return await r.json();
     } catch (err: any) {
-      const detail = err?.message ?? String(err);
+      const detail =
+        err?.name === "AbortError"
+          ? `timed out after ${XERO_PER_CALL_TIMEOUT_MS}ms`
+          : err?.message ?? String(err);
       endpointErrors.push(`${label} request failed: ${detail}`);
       console.error(`Xero ${label} fetch error:`, detail);
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   };
 
