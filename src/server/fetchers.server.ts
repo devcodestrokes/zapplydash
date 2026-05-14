@@ -932,15 +932,10 @@ async function fetchShopifyRefundsForShop(
   const shopifyql = `FROM payments SHOW refunded_payments SINCE ${start} UNTIL ${end}`;
   const gql = `query($q: String!) {
     shopifyqlQuery(query: $q) {
-      __typename
-      ... on TableResponse {
-        tableData {
-          columns { name dataType displayName }
-          rowData
-        }
-      }
-      ... on ParseError {
-        parseErrors { code message }
+      parseErrors
+      tableData {
+        columns { name dataType displayName }
+        rowData
       }
     }
   }`;
