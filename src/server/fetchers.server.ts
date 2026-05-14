@@ -966,7 +966,7 @@ export async function fetchTripleWhaleShippingMonthly(monthsBack = 12) {
       }),
     );
   }
-  return byMonth;
+  return { ...byMonth, calcVersion: 2 };
 }
 
 export async function fetchTripleWhale(fromDate?: string, toDate?: string, progressKey?: string) {
