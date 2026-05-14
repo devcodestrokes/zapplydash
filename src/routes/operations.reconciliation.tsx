@@ -131,7 +131,7 @@ function ReconciliationPage() {
       { label: "Refunds & returns",       source: "Shopify",      value: refunds,     tone: "neg" },
       { label: "Discounts applied",       source: "Shopify",      value: discounts,   tone: "neg" },
       { label: "Cost of Goods Sold",      source: "Triple Whale", value: cogs,        tone: "neg" },
-      { label: "Payment processing fees", source: "Shopify",      value: paymentFees, tone: "neg" },
+      { label: "Payment processing fees", source: jorttPaymentFeesLast > 0 ? "Jortt" : "Shopify", value: paymentFees, tone: "neg" },
       { label: "Shipping costs",          source: "Jortt",        value: shipping,    tone: "neg" },
       { label: "Ad spend",                source: "Triple Whale", value: adSpend,     tone: "neg" },
       { label: "Operational expenses",    source: "Jortt",        value: opex,        tone: "neg" },
