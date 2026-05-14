@@ -3398,6 +3398,13 @@ export async function fetchJortt() {
   // Interest / Tax — separate buckets keyed by ISO month "YYYY-MM"
   const interestByMonth: Record<string, number> = {};
   const taxByMonth: Record<string, number> = {};
+  // Payment processing fees — sourced from Jortt P&L "Fees" ledger accounts
+  // (Shopify Fees / Mollie Fees / Paypal Fees / generic transactiekosten).
+  // Keyed by ISO month "YYYY-MM" with a per-provider breakdown.
+  const paymentFeesByMonth: Record<
+    string,
+    { shopify: number; mollie: number; paypal: number; other: number; total: number }
+  > = {};
   // monthKey -> { team, agencies, content, software, other }
   const opexBuckets: Record<
     string,
