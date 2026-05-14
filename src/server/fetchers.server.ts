@@ -3484,6 +3484,34 @@ export async function fetchJortt() {
       continue;
     }
 
+    // ── Payment processing fees (Jortt P&L "Fees" category) ─────────────
+    // Match on ledger account name first (Shopify Fees / Mollie Fees / Paypal Fees),
+    // then on description for one-off bookings. Provider attribution comes from
+    // the same haystack so generic "transactiekosten" lands in `other`.
+    const isPaymentFee =
+      /\bfees?\b|transactiekosten|payment\s*fee|processing\s*fee|psp\s*fee/i.test(haystack) &&
+      /(shopify|mollie|paypal|stripe|adyen|klarna|ideal|transactie|payment|psp|processing)/i.test(haystack);
+    if (isPaymentFee) {
+      if (!paymentFeesByMonth[ym]) {
+        paymentFeesByMonth[ym] = { shopify: 0, mollie: 0, paypal: 0, other: 0, total: 0 };
+      }
+      const provider: "shopify" | "mollie" | "paypal" | "other" =
+        /shopify/i.test(haystack) ? "shopify"
+        : /mollie/i.test(haystack) ? "mollie"
+        : /paypal/i.test(haystack) ? "paypal"
+        : "other";
+      paymentFeesByMonth[ym][provider] += amount;
+      paymentFeesByMonth[ym].total += amount;
+      // Still surface them in the OpEx breakdown under a dedicated detail line
+      // so the monthly OpEx total remains complete.
+      if (!opexBuckets[mk])
+        opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
+      opexBuckets[mk].other += amount;
+      const itemName = `Payment fees · ${(desc || provider).trim().slice(0, 60)}`;
+      opexDetailMap.other[itemName] = (opexDetailMap.other[itemName] ?? 0) + amount;
+      continue;
+    }
+
     const cat: OpExCat =
       bucketFromLedger(ledger) ?? bucketFromKeywords(haystack);
 
