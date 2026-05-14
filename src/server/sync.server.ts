@@ -275,6 +275,12 @@ export function refreshStaleInBackground(cache: CacheMap): void {
         payload &&
         !payload.__empty &&
         !payload.__error &&
+        payload.calcVersion !== 2) ||
+      (job.provider === "triplewhale" &&
+        job.key === "shipping_monthly" &&
+        payload &&
+        !payload.__empty &&
+        !payload.__error &&
         payload.calcVersion !== 2);
     if (!entry || age > job.maxAgeMin || needsFreshCalc) {
       void runJob(job);
