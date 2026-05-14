@@ -51,11 +51,19 @@ function MonthlyOverviewPage() {
 
   const jorttObj = data?.jortt && typeof data.jortt === "object" && !data.jortt.__empty && !data.jortt.__error ? data.jortt : null;
   const xeroObj = data?.xero && typeof data.xero === "object" && !data.xero.__empty && !data.xero.__error ? data.xero : null;
+  // Detect Xero failure state so we can warn the user instead of silently falling back to Jortt.
+  const xeroRaw = data?.xero;
+  const xeroError: string | null =
+    xeroRaw && typeof xeroRaw === "object" && xeroRaw.__error
+      ? String(xeroRaw.message ?? "Xero sync failed").slice(0, 500)
+      : null;
   // OpEx is sourced from Xero P&L (preferred). Jortt remains a fallback only if Xero is unavailable.
   const xeroOpexByMonth = Array.isArray(xeroObj?.opexByMonth) && xeroObj.opexByMonth.length > 0 ? xeroObj.opexByMonth : null;
   const xeroOpexDetail = xeroObj?.opexDetail ?? null;
-  const opexByMonth = xeroOpexByMonth ?? (Array.isArray(jorttObj?.opexByMonth) && jorttObj.opexByMonth.length > 0 ? jorttObj.opexByMonth : null);
+  const jorttOpexByMonth = Array.isArray(jorttObj?.opexByMonth) && jorttObj.opexByMonth.length > 0 ? jorttObj.opexByMonth : null;
+  const opexByMonth = xeroOpexByMonth ?? jorttOpexByMonth;
   const opexDetail = xeroOpexDetail ?? jorttObj?.opexDetail ?? null;
+  const opexSource: "xero" | "jortt" | "none" = xeroOpexByMonth ? "xero" : jorttOpexByMonth ? "jortt" : "none";
   const jorttLive = !!(jorttObj?.live) || !!(xeroObj?.live);
   const deniedScopes = Array.isArray(jorttObj?.deniedScopes) ? jorttObj.deniedScopes : [];
   const shopifyMonthly = Array.isArray(data?.shopifyMonthly) ? data.shopifyMonthly : [];
