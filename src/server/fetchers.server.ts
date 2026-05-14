@@ -902,8 +902,9 @@ async function fetchTripleWhaleShippingForShop(
       first.shipping_costs ?? first[Object.keys(first)[0]];
     const num = toNumber(raw);
     if (num == null) return null;
-    const fx = await getEurRate(MARKET_CURRENCY[market] ?? "EUR", start, end);
-    return +(num * fx).toFixed(2);
+    // Triple Whale's shipping_costs column is already normalized to EUR
+    // by TW for all shops — do NOT apply an additional FX conversion.
+    return +num.toFixed(2);
   } catch (err: any) {
     console.warn(`TW shipping ${market}:`, err?.message);
     return null;
