@@ -1197,10 +1197,13 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string, progr
         if (progressKey) markStore(progressKey, market, hasMetrics ? "done" : "error");
         if (!hasMetrics) return { market, flag, live: false };
 
-        // Enrich with true shipping cost from Orcabase SQL endpoint.
-        const shippingCost = await fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey);
+        // Enrich with true shipping cost + refunds from Orcabase SQL endpoint.
+        const [shippingCost, refundsTW] = await Promise.all([
+          fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey),
+          fetchTripleWhaleRefundsForShop(shop, market, start, end, apiKey),
+        ]);
 
-        return { ...row, shippingCost, live: true };
+        return { ...row, shippingCost, refundsTW, live: true };
       } catch (err: any) {
         console.error(`Triple Whale ${market}:`, err.message);
         if (progressKey) markStore(progressKey, market, "error");
