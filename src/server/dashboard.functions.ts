@@ -208,6 +208,7 @@ export const getDashboardData = createServerFn({ method: "GET" }).middleware([re
   const tripleWhaleCache = get("triplewhale", "summary");
   const tripleWhaleCustomerEconomicsCache = get("triplewhale", "customer_economics");
   const tripleWhaleDailyCache = get("triplewhale", "daily");
+  const tripleWhaleShippingMonthlyCache = get("triplewhale", "shipping_monthly");
   const juoCache = get("juo", "subscriptions");
   const loopCache = get("loop", "subscriptions");
   const subscriptionRepeatFunnelCache = get("subscription", "repeat_funnel");
