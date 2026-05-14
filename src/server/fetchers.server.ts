@@ -3665,6 +3665,7 @@ export async function fetchJortt() {
     opexByMonth,
     interestByMonth,
     taxByMonth,
+    paymentFeesByMonth,
     opexDetail,
     cashBalance,
     accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
