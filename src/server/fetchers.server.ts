@@ -860,6 +860,114 @@ async function fetchTripleWhaleGrowthMonths(year: number, monthLabels: string[])
 // Returns 698 metrics for a given shopDomain + period.
 import { startProgress, markStore, finishProgress } from "./progress.server";
 
+// ─── Triple Whale Orcabase SQL — true shipping cost ─────────────────────────
+// POST https://api.triplewhale.com/api/v2/orcabase/api/sql
+// Returns SUM(shipping_costs) per shop in the shop's source currency.
+// We convert to EUR using the standard FX helper.
+async function fetchTripleWhaleShippingForShop(
+  shop: string,
+  market: string,
+  start: string,
+  end: string,
+  apiKey: string,
+): Promise<number | null> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15_000);
+    const res = await fetch("https://api.triplewhale.com/api/v2/orcabase/api/sql", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        period: { startDate: start, endDate: end },
+        shopId: shop,
+        query:
+          "SELECT SUM(shipping_costs) AS shipping_cost FROM orders_table WHERE platform = 'shopify'",
+      }),
+      signal: ctrl.signal,
+      cache: "no-store",
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) {
+      console.warn(`TW shipping ${market} ${res.status}`);
+      return null;
+    }
+    const json: any = await res.json();
+    // Response can be { data: [...] }, { rows: [...] } or { results: [...] }.
+    const rows: any[] =
+      (Array.isArray(json) ? json : null) ??
+      json?.data ?? json?.rows ?? json?.results ?? json?.result?.rows ?? [];
+    const first = rows[0];
+    if (!first) return 0;
+    const raw =
+      first.shipping_cost ?? first.ShippingCost ?? first.SHIPPING_COST ??
+      first.shipping_costs ?? first[Object.keys(first)[0]];
+    const num = toNumber(raw);
+    if (num == null) return null;
+    const fx = await getEurRate(MARKET_CURRENCY[market] ?? "EUR", start, end);
+    return +(num * fx).toFixed(2);
+  } catch (err: any) {
+    console.warn(`TW shipping ${market}:`, err?.message);
+    return null;
+  }
+}
+
+export async function fetchTripleWhaleShipping(start: string, end: string) {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  if (!apiKey) return null;
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
+  const out: Record<string, number | null> = {};
+  await Promise.all(
+    planned.map(async ({ market, shop }) => {
+      out[market] = await fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey);
+    }),
+  );
+  return out;
+}
+
+// Per-month shipping cost for the trailing N months (default 12),
+// keyed by month label "MMM 'YY". Used by Monthly Overview P&L.
+export async function fetchTripleWhaleShippingMonthly(monthsBack = 12) {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  if (!apiKey) return null;
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
+
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const now = new Date();
+  const periods: Array<{ label: string; start: string; end: string }> = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const start = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const endDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const end = `${y}-${String(m + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    const label = `${monthNamesShort[m]} '${String(y).slice(-2)}`;
+    periods.push({ label, start, end });
+  }
+
+  const byMonth: Record<string, { total: number; byMarket: Record<string, number> }> = {};
+  for (const p of periods) byMonth[p.label] = { total: 0, byMarket: {} };
+
+  // Sequential per period to avoid hammering the SQL endpoint.
+  for (const p of periods) {
+    await Promise.all(
+      planned.map(async ({ market, shop }) => {
+        const v = await fetchTripleWhaleShippingForShop(shop, market, p.start, p.end, apiKey);
+        if (v != null) {
+          byMonth[p.label].byMarket[market] = v;
+          byMonth[p.label].total += v;
+        }
+      }),
+    );
+  }
+  return byMonth;
+}
+
 export async function fetchTripleWhale(fromDate?: string, toDate?: string, progressKey?: string) {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
