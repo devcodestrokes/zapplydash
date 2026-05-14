@@ -2284,11 +2284,16 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const grossProfit = tw?.grossProfit ?? null;
       const grossMarginPct = grossProfit != null && revenue > 0 ? +(grossProfit / revenue * 100).toFixed(1) : null;
 
-      // Per-market shipping & payment fees (configured in /admin/manual-data).
+      // Per-market shipping & payment fees.
+      // Prefer TRUE shipping cost from Triple Whale (orcabase SQL) when present;
+      // fall back to the per-order rate configured in /admin/manual-data.
       const mc = (marketCosts && marketCosts[m.code]) || null;
       const shippingPerOrder = mc ? Number(mc.shippingPerOrder) || 0 : 0;
       const paymentFeePct = mc ? Number(mc.paymentFeePct) || 0 : 0;
-      const shippingCost = +(orders * shippingPerOrder).toFixed(0);
+      const twShipping = tw && typeof tw.shippingCost === "number" ? tw.shippingCost : null;
+      const shippingCost = twShipping != null
+        ? +twShipping.toFixed(0)
+        : +(orders * shippingPerOrder).toFixed(0);
       const paymentFee = +(revenue * paymentFeePct / 100).toFixed(0);
 
       const contributionMarginAbs = grossProfit != null && adSpend != null
