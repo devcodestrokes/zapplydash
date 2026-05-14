@@ -929,59 +929,81 @@ async function fetchShopifyRefundsForShop(
 ): Promise<{ refunds: number | null; native: number | null; currency: string; raw?: any; error?: string }> {
   const token = await getShopifyToken(store);
   if (!token) return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: "no_token" };
-  const shopifyql = `FROM payments SHOW refunded_payments SINCE ${start} UNTIL ${end}`;
+  // Mirrors the Shopify "Returns over time" admin report. We try a list of
+  // ShopifyQL queries (newest schema first) and use the first one that
+  // returns rows — Shopify's available metrics differ by store/version.
+  const candidates = [
+    `FROM sales SHOW returns SINCE ${start} UNTIL ${end}`,
+    `FROM orders SHOW returns SINCE ${start} UNTIL ${end}`,
+    `FROM sales SHOW total_returns SINCE ${start} UNTIL ${end}`,
+    `FROM payments SHOW refunded_payments SINCE ${start} UNTIL ${end}`,
+  ];
   const gql = `query($q: String!) {
     shopifyqlQuery(query: $q) {
       parseErrors
       tableData {
         columns { name dataType displayName }
-        rowData
+        rows
       }
     }
   }`;
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15_000);
-    const res = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
-      method: "POST",
-      headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ query: gql, variables: { q: shopifyql } }),
-      signal: ctrl.signal,
-      cache: "no-store",
-    }).finally(() => clearTimeout(timer));
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.warn(`Shopify refunds ${market} ${res.status}: ${text.slice(0, 200)}`);
-      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: `http_${res.status}` };
+  const sourceCurrency = MARKET_CURRENCY[market] ?? "EUR";
+  let lastError: string | undefined;
+  let lastQuery: string | undefined;
+  for (const shopifyql of candidates) {
+    lastQuery = shopifyql;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15_000);
+      const res = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+        method: "POST",
+        headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ query: gql, variables: { q: shopifyql } }),
+        signal: ctrl.signal,
+        cache: "no-store",
+      }).finally(() => clearTimeout(timer));
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        lastError = `http_${res.status}: ${text.slice(0, 160)}`;
+        console.warn(`Shopify refunds ${market} ${shopifyql} → ${lastError}`);
+        continue;
+      }
+      const json: any = await res.json();
+      if (json.errors?.length) {
+        lastError = json.errors[0]?.message ?? "graphql_error";
+        console.warn(`Shopify refunds ${market} ${shopifyql} GQL: ${lastError}`);
+        continue;
+      }
+      const r = json?.data?.shopifyqlQuery;
+      if (Array.isArray(r?.parseErrors) && r.parseErrors.length) {
+        lastError = String(r.parseErrors[0]);
+        // try next candidate query
+        continue;
+      }
+      const rows: any = r?.tableData?.rows ?? [];
+      let nativeSum = 0;
+      const flat = Array.isArray(rows) ? rows : [];
+      for (const row of flat) {
+        const cell = Array.isArray(row) ? row[row.length - 1] : row;
+        const n = toNumber(cell);
+        if (n != null) nativeSum += n;
+      }
+      const native = +Math.abs(nativeSum).toFixed(2);
+      const fxRate = await getEurRate(sourceCurrency, start, end);
+      const eur = +(native * fxRate).toFixed(2);
+      return { refunds: eur, native, currency: sourceCurrency, raw: rows, query: shopifyql } as any;
+    } catch (err: any) {
+      lastError = err?.message ?? "exception";
+      console.warn(`Shopify refunds ${market} ${shopifyql} threw: ${lastError}`);
     }
-    const json: any = await res.json();
-    if (json.errors?.length) {
-      const msg = json.errors[0]?.message ?? "graphql_error";
-      console.warn(`Shopify refunds ${market} GQL: ${msg}`);
-      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
-    }
-    const r = json?.data?.shopifyqlQuery;
-    if (Array.isArray(r?.parseErrors) && r.parseErrors.length) {
-      const msg = String(r.parseErrors[0]);
-      console.warn(`Shopify refunds ${market} parse: ${msg}`);
-      return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: msg };
-    }
-    const rowData: any[] = r?.tableData?.rowData ?? [];
-    let nativeSum = 0;
-    for (const row of rowData) {
-      const cell = Array.isArray(row) ? row[row.length - 1] : row;
-      const n = toNumber(cell);
-      if (n != null) nativeSum += n;
-    }
-    const native = +Math.abs(nativeSum).toFixed(2);
-    const sourceCurrency = MARKET_CURRENCY[market] ?? "EUR";
-    const fxRate = await getEurRate(sourceCurrency, start, end);
-    const eur = +(native * fxRate).toFixed(2);
-    return { refunds: eur, native, currency: sourceCurrency, raw: rowData };
-  } catch (err: any) {
-    console.warn(`Shopify refunds ${market}:`, err?.message);
-    return { refunds: null, native: null, currency: MARKET_CURRENCY[market] ?? "EUR", error: err?.message ?? "exception" };
   }
+  return {
+    refunds: null,
+    native: null,
+    currency: sourceCurrency,
+    error: lastError ?? "all_queries_failed",
+    raw: { triedQuery: lastQuery },
+  };
 }
 
 // Back-compat shim — TW row enrichment still calls this name.
