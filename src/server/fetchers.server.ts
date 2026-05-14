@@ -911,6 +911,81 @@ async function fetchTripleWhaleShippingForShop(
   }
 }
 
+// ─── Triple Whale Orcabase SQL — refunded amount per shop ───────────────────
+// POST https://api.triplewhale.com/api/v2/orcabase/api/sql
+// Mirrors the ShopifyQL `FROM payments SHOW refunded_payments` query.
+// Triple Whale's `total_refunds` column on orders_table is already in EUR
+// (TW normalizes all monetary columns to the org's reporting currency).
+async function fetchTripleWhaleRefundsForShop(
+  shop: string,
+  market: string,
+  start: string,
+  end: string,
+  apiKey: string,
+): Promise<number | null> {
+  // Try multiple column names — TW's column is `total_refunds` for most shops
+  // but some accounts expose it as `refunds_amount` or `total_refund`.
+  const candidates = [
+    "SELECT SUM(total_refunds) AS refunds FROM orders_table WHERE platform = 'shopify'",
+    "SELECT SUM(refunds_amount) AS refunds FROM orders_table WHERE platform = 'shopify'",
+    "SELECT SUM(total_refund) AS refunds FROM orders_table WHERE platform = 'shopify'",
+  ];
+  for (const query of candidates) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15_000);
+      const res = await fetch("https://api.triplewhale.com/api/v2/orcabase/api/sql", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          period: { startDate: start, endDate: end },
+          shopId: shop,
+          query,
+        }),
+        signal: ctrl.signal,
+        cache: "no-store",
+      }).finally(() => clearTimeout(timer));
+      if (!res.ok) {
+        // 400 typically = unknown column → try next candidate
+        if (res.status === 400) continue;
+        console.warn(`TW refunds ${market} ${res.status}`);
+        return null;
+      }
+      const json: any = await res.json();
+      const rows: any[] =
+        (Array.isArray(json) ? json : null) ??
+        json?.data ?? json?.rows ?? json?.results ?? json?.result?.rows ?? [];
+      const first = rows[0];
+      if (!first) return 0;
+      const raw = first.refunds ?? first.REFUNDS ?? first[Object.keys(first)[0]];
+      const num = toNumber(raw);
+      if (num == null) return null;
+      // Refunds in Shopify are stored as positive amounts; TW returns them as
+      // positive numbers. Keep positive (UI subtracts where appropriate).
+      return +Math.abs(num).toFixed(2);
+    } catch (err: any) {
+      console.warn(`TW refunds ${market}:`, err?.message);
+    }
+  }
+  return null;
+}
+
+export async function fetchTripleWhaleRefunds(start: string, end: string) {
+  const apiKey = process.env.TRIPLE_WHALE_API_KEY;
+  if (!apiKey) return null;
+  const planned = TW_SHOPS.map(({ market, envKeys }: any) => {
+    const shop = (envKeys as string[]).map((k) => process.env[k]).find(Boolean);
+    return shop ? { market, shop } : null;
+  }).filter(Boolean) as Array<{ market: string; shop: string }>;
+  const out: Record<string, number | null> = {};
+  await Promise.all(
+    planned.map(async ({ market, shop }) => {
+      out[market] = await fetchTripleWhaleRefundsForShop(shop, market, start, end, apiKey);
+    }),
+  );
+  return out;
+}
+
 export async function fetchTripleWhaleShipping(start: string, end: string) {
   const apiKey = process.env.TRIPLE_WHALE_API_KEY;
   if (!apiKey) return null;
@@ -1122,10 +1197,13 @@ export async function fetchTripleWhale(fromDate?: string, toDate?: string, progr
         if (progressKey) markStore(progressKey, market, hasMetrics ? "done" : "error");
         if (!hasMetrics) return { market, flag, live: false };
 
-        // Enrich with true shipping cost from Orcabase SQL endpoint.
-        const shippingCost = await fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey);
+        // Enrich with true shipping cost + refunds from Orcabase SQL endpoint.
+        const [shippingCost, refundsTW] = await Promise.all([
+          fetchTripleWhaleShippingForShop(shop, market, start, end, apiKey),
+          fetchTripleWhaleRefundsForShop(shop, market, start, end, apiKey),
+        ]);
 
-        return { ...row, shippingCost, live: true };
+        return { ...row, shippingCost, refundsTW, live: true };
       } catch (err: any) {
         console.error(`Triple Whale ${market}:`, err.message);
         if (progressKey) markStore(progressKey, market, "error");

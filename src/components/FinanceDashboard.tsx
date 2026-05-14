@@ -2301,8 +2301,9 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
         : null;
       const contributionMarginPct = contributionMarginAbs != null && revenue > 0
         ? +(contributionMarginAbs / revenue * 100).toFixed(1) : null;
-      // Refund rate per market
-      const refunds = m.refunds ?? 0;
+      // Refund rate per market — prefer Triple Whale ShopifyQL refunded_payments
+      // (orcabase SQL on payments) when available; fall back to Shopify orders.
+      const refunds = (tw && typeof tw.refundsTW === "number") ? tw.refundsTW : (m.refunds ?? 0);
       const grossRevenue = revenue + refunds; // revenue is net-of-refunds
       const refundRate = grossRevenue > 0 ? +(refunds / grossRevenue * 100).toFixed(1) : null;
       // Trend: prev-month rev delta
@@ -2310,6 +2311,7 @@ export const MarketsView = ({ liveMarkets = null, twData = [], dateRange = null,
       const revDeltaPct = prev && prev.revenue > 0 ? +((revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : null;
       return {
         ...m,
+        refunds,
         adSpend,
         grossMargin: grossMarginPct,
         contributionMargin: contributionMarginPct,
