@@ -3147,6 +3147,9 @@ export async function fetchJortt() {
 
   // Expenses by month + OpEx breakdown from real expenses
   const expensesByMonth: Record<string, number> = {};
+  // Interest / Tax — separate buckets keyed by ISO month "YYYY-MM"
+  const interestByMonth: Record<string, number> = {};
+  const taxByMonth: Record<string, number> = {};
   // monthKey -> { team, agencies, content, software, other }
   const opexBuckets: Record<
     string,
@@ -3205,8 +3208,29 @@ export async function fetchJortt() {
     const ledgerName =
       ex.ledger_account_name ?? ledger?.name ?? "";
     const desc = ex.description ?? ex.supplier_name ?? ledgerName ?? "other";
+    const haystack = `${desc} ${ledgerName}`.toLowerCase();
+    const ledgerCode = String(ledger?.code ?? ledger?.number ?? "").trim();
+    const ledgerNum = parseInt(ledgerCode, 10);
+
+    // Interest detection (rente / interest / 47xx financial range)
+    const isInterest =
+      /\brente\b|interest|rentekosten|rentelasten/i.test(haystack) ||
+      (Number.isFinite(ledgerNum) && ledgerNum >= 4700 && ledgerNum <= 4799);
+    // Tax detection (vennootschapsbelasting / corporate income tax)
+    const isTax =
+      /vennootschapsbelasting|corporate tax|income tax|inkomstenbelasting/i.test(haystack);
+
+    if (isInterest) {
+      interestByMonth[ym] = (interestByMonth[ym] ?? 0) + amount;
+      continue;
+    }
+    if (isTax) {
+      taxByMonth[ym] = (taxByMonth[ym] ?? 0) + amount;
+      continue;
+    }
+
     const cat: OpExCat =
-      bucketFromLedger(ledger) ?? bucketFromKeywords(`${desc} ${ledgerName}`);
+      bucketFromLedger(ledger) ?? bucketFromKeywords(haystack);
 
     if (!opexBuckets[mk])
       opexBuckets[mk] = { ym, team: 0, agencies: 0, content: 0, software: 0, rent: 0, other: 0 };
@@ -3356,6 +3380,8 @@ export async function fetchJortt() {
     revenueByMonth,
     expensesByMonth,
     opexByMonth,
+    interestByMonth,
+    taxByMonth,
     opexDetail,
     cashBalance,
     accountsReceivable: accountsReceivable > 0 ? accountsReceivable : null,
@@ -4011,5 +4037,295 @@ export async function fetchSubscriptionRepeatFunnel() {
     rawSubscriptionsFetched: juo.length + loop.length,
     dedupedSubscriptions: totalCohortSize,
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+// ─── Payment processing fees — monthly per provider ─────────────────────────
+// Aggregates true payment processing fees paid to each PSP for the trailing N
+// months. All amounts converted to EUR.
+//
+//   Shopify Payments: /shopify_payments/balance/transactions.json with date
+//                     filter — sum of `fee` per processed_at month, per shop.
+//   PayPal:           /v1/reporting/transactions in 31-day windows, sum of
+//                     transaction_info.fee_amount.value per month.
+//   Mollie:           /v2/settlements with periods[year][month].costs[] — sum
+//                     amountGross across all cost categories per period.
+//   Loop:             Loop's platform fee is billed via Shopify partner billing
+//                     (not exposed via the Loop API). Returned as live:false
+//                     with a clear reason so the UI shows "—".
+
+function buildMonthlyPeriods(monthsBack: number) {
+  const monthNamesShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const now = new Date();
+  const periods: Array<{ label: string; ym: string; year: number; month: number; start: string; end: string }> = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const start = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+    const endDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const end = `${y}-${String(m + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    const label = `${monthNamesShort[m]} '${String(y).slice(-2)}`;
+    const ym = `${y}-${String(m + 1).padStart(2, "0")}`;
+    periods.push({ label, ym, year: y, month: m + 1, start, end });
+  }
+  return periods;
+}
+
+async function fetchShopifyPaymentFeesPerStore(
+  store: string,
+  market: string,
+  startISO: string,
+  endISO: string,
+): Promise<{ feeNative: number; feeEur: number; currency: string } | null> {
+  const token = await getShopifyToken(store);
+  if (!token) return null;
+  const headers = { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
+  const base = `https://${store}/admin/api/${SHOPIFY_API_VERSION}/shopify_payments`;
+
+  let next: string | null =
+    `${base}/balance/transactions.json?processed_at_min=${startISO}T00:00:00Z&processed_at_max=${endISO}T23:59:59Z&limit=250`;
+  let totalFee = 0;
+  let currency = MARKET_CURRENCY[market] ?? "EUR";
+  let pages = 0;
+
+  while (next && pages < 80) {
+    pages++;
+    const res: Response = await fetch(next, { headers });
+    if (res.status === 404) return null; // not on Shopify Payments
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const txs: any[] = json?.transactions ?? [];
+    for (const t of txs) {
+      const f = Number(t?.fee ?? 0);
+      if (Number.isFinite(f) && f !== 0) totalFee += f;
+      if (t?.currency) currency = String(t.currency);
+    }
+    // Pagination via Link header
+    const link: string = res.headers.get("link") ?? res.headers.get("Link") ?? "";
+    const m: RegExpMatchArray | null = link.match(/<([^>]+)>;\s*rel="next"/);
+    next = m ? m[1] : null;
+  }
+
+  const fxRate = await getEurRate(currency, startISO, endISO);
+  return { feeNative: +totalFee.toFixed(2), feeEur: +(totalFee * fxRate).toFixed(2), currency };
+}
+
+async function fetchShopifyPaymentFeesMonthly(monthsBack: number) {
+  const periods = buildMonthlyPeriods(monthsBack);
+  const byMonth: Record<string, { total: number; byMarket: Record<string, number> }> = {};
+  for (const p of periods) byMonth[p.label] = { total: 0, byMarket: {} };
+
+  for (const p of periods) {
+    await Promise.all(
+      SHOPIFY_STORES.map(async (s) => {
+        const store = process.env[s.storeKey];
+        if (!store) return;
+        try {
+          const r = await fetchShopifyPaymentFeesPerStore(store, s.code, p.start, p.end);
+          if (r && r.feeEur > 0) {
+            byMonth[p.label].byMarket[s.code] = +r.feeEur.toFixed(0);
+            byMonth[p.label].total += r.feeEur;
+          }
+        } catch (err: any) {
+          console.warn(`[fees] shopify ${s.code} ${p.label} failed:`, err?.message);
+        }
+      }),
+    );
+    byMonth[p.label].total = +byMonth[p.label].total.toFixed(0);
+  }
+  return byMonth;
+}
+
+async function fetchPaypalPaymentFeesMonthly(monthsBack: number) {
+  const clientId = (process.env.PAYPAL_CLIENT_ID ?? "").trim();
+  const secret = (process.env.PAYPAL_CLIENT_SECRET ?? "").trim();
+  const periods = buildMonthlyPeriods(monthsBack);
+  const result: Record<string, number> = {};
+  for (const p of periods) result[p.label] = 0;
+  if (!clientId || !secret) return { byMonth: result, live: false, reason: "PAYPAL credentials not set" };
+
+  const envPref = (process.env.PAYPAL_ENV ?? "live").toLowerCase();
+  const base = envPref === "sandbox" ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+
+  // Get token
+  let accessToken = "";
+  try {
+    const tr = await fetch(`${base}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${secret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: "grant_type=client_credentials",
+    });
+    if (!tr.ok) return { byMonth: result, live: false, reason: `PayPal token HTTP ${tr.status}` };
+    const tj: any = await tr.json();
+    accessToken = tj?.access_token ?? "";
+  } catch (err: any) {
+    return { byMonth: result, live: false, reason: err?.message ?? "PayPal token failed" };
+  }
+  if (!accessToken) return { byMonth: result, live: false, reason: "PayPal no access token" };
+
+  for (const p of periods) {
+    let pageNum = 1;
+    let totalFeesByCurrency: Record<string, number> = {};
+    while (pageNum <= 20) {
+      const url =
+        `${base}/v1/reporting/transactions?fields=transaction_info` +
+        `&start_date=${p.start}T00:00:00Z&end_date=${p.end}T23:59:59Z` +
+        `&page_size=500&page=${pageNum}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (!res.ok) {
+        if (pageNum === 1) {
+          const txt = await res.text().catch(() => "");
+          console.warn(`[fees] paypal ${p.label} HTTP ${res.status}: ${txt.slice(0, 120)}`);
+        }
+        break;
+      }
+      const j: any = await res.json();
+      const details: any[] = j?.transaction_details ?? [];
+      for (const d of details) {
+        const ti = d?.transaction_info ?? {};
+        const fee = Number(ti?.fee_amount?.value ?? 0);
+        const curr = String(ti?.fee_amount?.currency_code ?? "EUR");
+        if (Number.isFinite(fee) && fee !== 0) {
+          totalFeesByCurrency[curr] = (totalFeesByCurrency[curr] ?? 0) + Math.abs(fee);
+        }
+      }
+      const totalPages = Number(j?.total_pages ?? 1);
+      if (pageNum >= totalPages) break;
+      pageNum++;
+    }
+    let eur = 0;
+    for (const [curr, amt] of Object.entries(totalFeesByCurrency)) {
+      const fx = await getEurRate(curr, p.start, p.end);
+      eur += amt * fx;
+    }
+    result[p.label] = +eur.toFixed(0);
+  }
+  return { byMonth: result, live: true };
+}
+
+async function fetchMolliePaymentFeesMonthly(monthsBack: number) {
+  const key = (process.env.MOLLIE_API_KEY ?? "").trim();
+  const periods = buildMonthlyPeriods(monthsBack);
+  const result: Record<string, number> = {};
+  for (const p of periods) result[p.label] = 0;
+  if (!key) return { byMonth: result, live: false, reason: "MOLLIE_API_KEY not set" };
+
+  // List all settlements (paginated). For trailing N months we'd need the
+  // settlements that overlap that window; we just fetch the first ~5 pages
+  // (250 per page) which covers many months for normal volumes.
+  const headers = { Authorization: `Bearer ${key}`, Accept: "application/json" };
+  let from: string | null = null;
+  let pages = 0;
+  const settlements: any[] = [];
+  while (pages < 6) {
+    pages++;
+    const url: string = `https://api.mollie.com/v2/settlements?limit=250${from ? `&from=${from}` : ""}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      return { byMonth: result, live: false, reason: `Mollie HTTP ${res.status}: ${txt.slice(0, 120)}` };
+    }
+    const j: any = await res.json();
+    const items: any[] = j?._embedded?.settlements ?? [];
+    settlements.push(...items);
+    const next: string | undefined = j?._links?.next?.href;
+    if (!next) break;
+    const u = new URL(next);
+    from = u.searchParams.get("from");
+    if (!from) break;
+  }
+
+  // Aggregate costs per (year, month) from periods{} on each settlement.
+  const totalsByYm: Record<string, number> = {}; // key "YYYY-MM" -> EUR
+  for (const s of settlements) {
+    const settlementCurrency = String(s?.amount?.currency ?? "EUR");
+    const periodsObj: any = s?.periods ?? {};
+    for (const yearKey of Object.keys(periodsObj)) {
+      const months = periodsObj[yearKey];
+      for (const monthKey2 of Object.keys(months ?? {})) {
+        const period = months[monthKey2];
+        const costs: any[] = period?.costs ?? [];
+        let monthCost = 0;
+        for (const c of costs) {
+          const v = Number(c?.amountGross?.value ?? 0);
+          if (Number.isFinite(v)) monthCost += v;
+        }
+        if (monthCost === 0) continue;
+        const ym = `${yearKey}-${String(monthKey2).padStart(2, "0")}`;
+        // FX to EUR if needed
+        const fakeStart = `${ym}-01`;
+        const fakeEnd = `${ym}-28`;
+        const fx = await getEurRate(settlementCurrency, fakeStart, fakeEnd);
+        totalsByYm[ym] = (totalsByYm[ym] ?? 0) + monthCost * fx;
+      }
+    }
+  }
+  for (const p of periods) {
+    const v = totalsByYm[p.ym] ?? 0;
+    result[p.label] = +v.toFixed(0);
+  }
+  return { byMonth: result, live: true };
+}
+
+export async function fetchPaymentFeesMonthly(monthsBack = 12) {
+  const periods = buildMonthlyPeriods(monthsBack);
+  const [shopify, paypal, mollie] = await Promise.all([
+    fetchShopifyPaymentFeesMonthly(monthsBack).catch((err) => {
+      console.error("[fees] shopify failed:", err?.message);
+      return {} as Record<string, { total: number; byMarket: Record<string, number> }>;
+    }),
+    fetchPaypalPaymentFeesMonthly(monthsBack).catch((err) => {
+      console.error("[fees] paypal failed:", err?.message);
+      return { byMonth: {}, live: false, reason: err?.message };
+    }),
+    fetchMolliePaymentFeesMonthly(monthsBack).catch((err) => {
+      console.error("[fees] mollie failed:", err?.message);
+      return { byMonth: {}, live: false, reason: err?.message };
+    }),
+  ]);
+
+  const byMonth: Record<string, {
+    shopify: number;
+    shopifyByMarket: Record<string, number>;
+    paypal: number;
+    mollie: number;
+    loop: number;
+    total: number;
+  }> = {};
+  for (const p of periods) {
+    const sh = (shopify as any)[p.label] ?? { total: 0, byMarket: {} };
+    const pp = (paypal as any).byMonth?.[p.label] ?? 0;
+    const mo = (mollie as any).byMonth?.[p.label] ?? 0;
+    const lo = 0; // Loop billed via Shopify partner billing — not in Loop API
+    byMonth[p.label] = {
+      shopify: sh.total ?? 0,
+      shopifyByMarket: sh.byMarket ?? {},
+      paypal: pp,
+      mollie: mo,
+      loop: lo,
+      total: (sh.total ?? 0) + pp + mo + lo,
+    };
+  }
+
+  return {
+    calcVersion: 1,
+    fetchedAt: new Date().toISOString(),
+    byMonth,
+    providers: {
+      shopify: { live: Object.values(shopify ?? {}).some((v: any) => (v?.total ?? 0) > 0) },
+      paypal: { live: (paypal as any).live, reason: (paypal as any).reason ?? null },
+      mollie: { live: (mollie as any).live, reason: (mollie as any).reason ?? null },
+      loop: {
+        live: false,
+        reason: "Loop platform fee is billed via Shopify partner billing — not exposed in Loop API",
+      },
+    },
   };
 }
