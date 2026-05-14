@@ -130,6 +130,13 @@ const ALL_JOBS: Job[] = [
     fn: () => fetchTripleWhaleShippingMonthly(12),
     maxAgeMin: 720,
   },
+  {
+    name: "payment_fees_monthly",
+    provider: "fees",
+    key: "monthly",
+    fn: () => fetchPaymentFeesMonthly(12),
+    maxAgeMin: 720,
+  },
   { name: "jortt", provider: "jortt", key: "invoices", fn: fetchJortt, maxAgeMin: 60 },
   { name: "juo", provider: "juo", key: "subscriptions", fn: fetchJuoRaw, maxAgeMin: 60 },
   { name: "loop", provider: "loop", key: "subscriptions", fn: fetchLoopFull, maxAgeMin: 60 },
