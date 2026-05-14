@@ -141,7 +141,7 @@ function ReconciliationPage() {
 
   return (
     <DashboardShell user={user} title="Reconciliation">
-      <div className="px-6 py-6 space-y-4 max-w-[1240px]">
+      <div className="px-6 py-6 space-y-4 max-w-[1240px] mx-auto w-full">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
